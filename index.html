@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Factory</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a1a;
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+}
+
+h1 {
+  font-size: 36px;
+  color: #00ff41;
+  text-shadow: 0 0 20px #00ff4160;
+  letter-spacing: 6px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 14px;
+  letter-spacing: 2px;
+  margin-bottom: 40px;
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  max-width: 900px;
+  width: 100%;
+}
+
+.game-card {
+  border: 1px solid #ffffff15;
+  border-radius: 8px;
+  padding: 24px;
+  background: #1a1a2e;
+  transition: all 0.3s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.game-card:hover {
+  border-color: #00ff4150;
+  box-shadow: 0 0 20px #00ff4115;
+  transform: translateY(-2px);
+}
+
+.game-card .number {
+  color: #00ff41;
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.game-card h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.game-card p {
+  color: #888;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.game-card .tag {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.tag.released {
+  background: #00ff4120;
+  color: #00ff41;
+  border: 1px solid #00ff4140;
+}
+
+.tag.coming {
+  background: #ff004020;
+  color: #ff0040;
+  border: 1px solid #ff004040;
+}
+
+.footer {
+  margin-top: 60px;
+  color: #333;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+  <h1>GAME FACTORY</h1>
+  <p class="subtitle">mini web games collection</p>
+
+  <div class="games-grid">
+    <a href="games/001-snake/index.html" class="game-card">
+      <div class="number">#001</div>
+      <h2>Snake</h2>
+      <p>클래식 스네이크 게임. 먹이를 먹으며 성장하고, 벽과 자기 몸을 피하세요.</p>
+      <span class="tag released">PLAY</span>
+    </a>
+
+    <a href="games/002-2048/index.html" class="game-card">
+      <div class="number">#002</div>
+      <h2>2048</h2>
+      <p>숫자 타일을 밀어 합치는 퍼즐 게임. 2048 타일을 만들어 보세요!</p>
+      <span class="tag released">PLAY</span>
+    </a>
+  </div>
+
+  <p class="footer">powered by claude code</p>
+</body>
+</html>
