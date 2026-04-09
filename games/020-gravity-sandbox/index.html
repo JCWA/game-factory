@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>중력 샌드박스</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a1a;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+}
+
+#header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: rgba(10,10,30,0.95);
+  border-bottom: 1px solid rgba(100,100,200,0.2);
+  z-index: 10;
+  flex-shrink: 0;
+}
+#header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#header-info {
+  font-size: 13px;
+  color: #aaa;
+  display: flex;
+  gap: 16px;
+}
+
+canvas {
+  flex: 1;
+  display: block;
+  cursor: crosshair;
+}
+
+#controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(10,10,30,0.95);
+  border-top: 1px solid rgba(100,100,200,0.2);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.ctrl-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ctrl-label {
+  font-size: 12px;
+  color: #888;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(100,100,200,0.3);
+  border-radius: 6px;
+  background: rgba(30,30,60,0.8);
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(50,50,90,0.9); color: #fff; }
+.btn.active {
+  background: rgba(80,60,180,0.6);
+  border-color: #8B5CF6;
+  color: #fff;
+}
+.btn.danger { border-color: rgba(200,60,60,0.4); }
+.btn.danger:hover { background: rgba(200,60,60,0.3); }
+
+/* Challenge modal */
+#modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+}
+#modal-overlay.show { display: flex; }
+#modal {
+  background: #1a1a2e;
+  border: 1px solid rgba(100,100,200,0.3);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+#modal h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #8B5CF6;
+}
+.challenge-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(100,100,200,0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.challenge-item:hover { background: rgba(80,60,180,0.2); }
+.challenge-item.completed { border-color: #22c55e; }
+.challenge-item .ch-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.challenge-item .ch-desc { font-size: 12px; color: #999; }
+.challenge-item .ch-badge { color: #22c55e; font-size: 12px; float: right; }
+
+#challenge-banner {
+  display: none;
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,20,60,0.9);
+  border: 1px solid #8B5CF6;
+  border-radius: 8px;
+  padding: 8px 20px;
+  z-index: 20;
+  font-size: 13px;
+  text-align: center;
+  max-width: 90%;
+}
+#challenge-banner .cb-title { color: #8B5CF6; font-weight: 600; }
+#challenge-banner .cb-status { color: #ccc; margin-top: 4px; font-size: 12px; }
+
+#toast {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(34,197,94,0.9);
+  color: #fff;
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  z-index: 200;
+  animation: toastAnim 2s ease forwards;
+}
+@keyframes toastAnim {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  30% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 500px) {
+  #header h1 { font-size: 15px; }
+  .btn { padding: 5px 8px; font-size: 12px; }
+  .ctrl-label { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🌌 중력 샌드박스</h1>
+  <div id="header-info">
+    <span id="info-count">천체: 0</span>
+    <span id="info-speed">시간: 1x</span>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="challenge-banner">
+  <div class="cb-title" id="cb-title"></div>
+  <div class="cb-status" id="cb-status"></div>
+</div>
+
+<div id="controls">
+  <div class="ctrl-row">
+    <span class="ctrl-label">천체:</span>
+    <button class="btn active" data-type="star" id="btn-star">☀ 항성</button>
+    <button class="btn" data-type="planet" id="btn-planet">🌍 행성</button>
+    <button class="btn" data-type="asteroid" id="btn-asteroid">🪨 소행성</button>
+    <button class="btn" data-type="blackhole" id="btn-blackhole">🕳 블랙홀</button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">속도:</span>
+    <button class="btn" data-speed="0.5">0.5x</button>
+    <button class="btn active" data-speed="1">1x</button>
+    <button class="btn" data-speed="2">2x</button>
+    <button class="btn" data-speed="5">5x</button>
+    <button class="btn" data-speed="10">10x</button>
+  </div>
+  <div class="ctrl-row">
+    <button class="btn" id="btn-play">▶ 시작</button>
+    <button class="btn" id="btn-pause" style="display:none">⏸ 일시정지</button>
+    <button class="btn danger" id="btn-reset">🗑 초기화</button>
+    <button class="btn" id="btn-trail">궤적 ON</button>
+    <button class="btn" id="btn-challenge">🏆 챌린지</button>
+    <button class="btn" id="btn-save">💾 저장</button>
+    <button class="btn" id="btn-load">📂 불러오기</button>
+  </div>
+</div>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>🏆 챌린지 모드</h2>
+    <div id="challenge-list"></div>
+    <div style="text-align:center;margin-top:12px">
+      <button class="btn" id="btn-sandbox">🌌 샌드박스로 돌아가기</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===== Constants & State =====
+const G = 0.5;
+const BODY_TYPES = {
+  star:      { mass: 500, radius: 20, color: '#FFD700', glow: true,  absorb: false },
+  planet:    { mass: 50,  radius: 10, color: '#4A90D9', glow: false, absorb: false },
+  asteroid:  { mass: 5,   radius: 4,  color: '#888888', glow: false, absorb: false },
+  blackhole: { mass: 2000, radius: 15, color: '#000000', glow: true,  absorb: true  }
+};
+const PLANET_COLORS = ['#4A90D9','#D94A4A','#4AD97A','#D9A64A','#9B59B6','#1ABC9C','#E67E22'];
+const TRAIL_MAX = 200;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let bodies = [];
+let particles = [];
+let bgStars = [];
+let running = false;
+let trailOn = true;
+let timeScale = 1;
+let selectedType = 'star';
+let frameCount = 0;
+
+// Camera
+let cam = { x: 0, y: 0, zoom: 1 };
+
+// Drag state
+let dragState = null; // { startWorld, currentWorld }
+let predictedPath = [];
+let predictCounter = 0;
+
+// Pan state
+let panState = null;
+let pinchDist = null;
+
+// Challenge
+let activeChallenge = null;
+let challengeTimer = 0;
+let completedChallenges = JSON.parse(localStorage.getItem('gravitySandbox_completed') || '[]');
+
+const challenges = [
+  {
+    id: 1,
+    title: '안정 궤도',
+    desc: '항성 주위에 행성이 5초간 충돌 없이 공전하게 만드세요.',
+    setup: () => {
+      resetAll();
+      bodies.push(createBody('star', 0, 0, 0, 0));
+    },
+    check: (dt) => {
+      const stars = bodies.filter(b => b.type === 'star');
+      const planets = bodies.filter(b => b.type === 'planet');
+      if (stars.length < 1 || planets.length < 1) { challengeTimer = 0; return false; }
+      challengeTimer += dt;
+      document.getElementById('cb-status').textContent = `안정 유지: ${challengeTimer.toFixed(1)}s / 5.0s`;
+      return challengeTimer >= 5;
+    }
+  },
+  {
+    id: 2,
+    title: '이중 항성계',
+    desc: '두 항성이 서로 공전하며 3초간 유지되게 만드세요.',
+    setup: () => {
+      resetAll();
+    },
+    check: (dt) => {
+      const stars = bodies.filter(b => b.type === 'star');
+      if (stars.length < 2) { challengeTimer = 0; return false; }
+      challengeTimer += dt;
+      document.getElementById('cb-status').textContent = `안정 유지: ${challengeTimer.toFixed(1)}s / 3.0s`;
+      return challengeTimer >= 3;
+    }
+  },
+  {
+    id: 3,
+    title: '블랙홀 먹이주기',
+    desc: '블랙홀이 3개 이상의 천체를 흡수하게 만드세요.',
+    setup: () => {
+      resetAll();
+      bodies.push(createBody('blackhole', 0, 0, 0, 0));
+      this._absorbed = 0;
+    },
+    check: () => {
+      document.getElementById('cb-status').textContent = `흡수: ${challenge3Absorbed} / 3`;
+      return challenge3Absorbed >= 3;
+    }
+  },
+  {
+    id: 4,
+    title: '슬링샷',
+    desc: '소행성을 항성 중력으로 가속해 화면 밖(1500px)으로 날려보내세요.',
+    setup: () => {
+      resetAll();
+      bodies.push(createBody('star', 0, 0, 0, 0));
+    },
+    check: () => {
+      const ast = bodies.filter(b => b.type === 'asteroid');
+      for (const a of ast) {
+        const d = Math.sqrt(a.x*a.x + a.y*a.y);
+        document.getElementById('cb-status').textContent = `최대 거리: ${d.toFixed(0)}px`;
+        if (d > 1500) return true;
+      }
+      if (ast.length === 0) document.getElementById('cb-status').textContent = '소행성을 배치하세요';
+      return false;
+    }
+  },
+  {
+    id: 5,
+    title: '태양계',
+    desc: '항성 1개와 행성 3개를 배치하고 8초간 유지하세요.',
+    setup: () => { resetAll(); },
+    check: (dt) => {
+      const stars = bodies.filter(b => b.type === 'star');
+      const planets = bodies.filter(b => b.type === 'planet');
+      if (stars.length < 1 || planets.length < 3) { challengeTimer = 0; return false; }
+      challengeTimer += dt;
+      document.getElementById('cb-status').textContent = `안정 유지: ${challengeTimer.toFixed(1)}s / 8.0s`;
+      return challengeTimer >= 8;
+    }
+  }
+];
+
+let challenge3Absorbed = 0;
+
+// ===== Utilities =====
+function createBody(type, x, y, vx, vy) {
+  const t = BODY_TYPES[type];
+  let color = t.color;
+  if (type === 'planet') color = PLANET_COLORS[Math.floor(Math.random() * PLANET_COLORS.length)];
+  return {
+    type, x, y, vx: vx||0, vy: vy||0,
+    mass: t.mass, radius: t.radius,
+    color, glow: t.glow, absorb: t.absorb,
+    trail: [], id: Math.random().toString(36).slice(2)
+  };
+}
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - canvas.width/2) / cam.zoom + cam.x,
+    y: (sy - canvas.height/2) / cam.zoom + cam.y
+  };
+}
+
+function worldToScreen(wx, wy) {
+  return {
+    x: (wx - cam.x) * cam.zoom + canvas.width/2,
+    y: (wy - cam.y) * cam.zoom + canvas.height/2
+  };
+}
+
+// ===== Physics =====
+function updatePhysics(bs, dt) {
+  for (let i = 0; i < bs.length; i++) {
+    let ax = 0, ay = 0;
+    for (let j = 0; j < bs.length; j++) {
+      if (i === j) continue;
+      const dx = bs[j].x - bs[i].x;
+      const dy = bs[j].y - bs[i].y;
+      const distSq = dx*dx + dy*dy;
+      const dist = Math.sqrt(distSq);
+      if (dist < 0.1) continue;
+      const safeDist = Math.max(dist, bs[i].radius + bs[j].radius);
+      const force = G * bs[j].mass / (safeDist * safeDist);
+      ax += force * dx / dist;
+      ay += force * dy / dist;
+    }
+    bs[i].vx += ax * dt;
+    bs[i].vy += ay * dt;
+  }
+  for (const b of bs) {
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+  }
+}
+
+function handleCollisions() {
+  const toRemove = new Set();
+  for (let i = 0; i < bodies.length; i++) {
+    if (toRemove.has(i)) continue;
+    for (let j = i+1; j < bodies.length; j++) {
+      if (toRemove.has(j)) continue;
+      const a = bodies[i], b = bodies[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+
+      // Blackhole absorption
+      if (a.absorb && dist < a.radius * 3) {
+        mergeInto(i, j, toRemove);
+        continue;
+      }
+      if (b.absorb && dist < b.radius * 3) {
+        mergeInto(j, i, toRemove);
+        continue;
+      }
+
+      if (dist < a.radius + b.radius) {
+        if (a.mass >= b.mass) mergeInto(i, j, toRemove);
+        else mergeInto(j, i, toRemove);
+      }
+    }
+  }
+  if (toRemove.size > 0) {
+    const indices = [...toRemove].sort((a,b) => b-a);
+    for (const idx of indices) bodies.splice(idx, 1);
+  }
+}
+
+function mergeInto(keepIdx, removeIdx, toRemove) {
+  const a = bodies[keepIdx], b = bodies[removeIdx];
+  // Spawn particles
+  spawnCollisionParticles(b.x, b.y, b.color);
+  // Momentum conservation
+  const totalMass = a.mass + b.mass;
+  a.vx = (a.mass*a.vx + b.mass*b.vx) / totalMass;
+  a.vy = (a.mass*a.vy + b.mass*b.vy) / totalMass;
+  // Center of mass position
+  a.x = (a.mass*a.x + b.mass*b.x) / totalMass;
+  a.y = (a.mass*a.y + b.mass*b.y) / totalMass;
+  a.mass = totalMass;
+  a.radius = Math.sqrt(a.radius*a.radius + b.radius*b.radius);
+  toRemove.add(removeIdx);
+
+  if (activeChallenge && activeChallenge.id === 3 && a.absorb) {
+    challenge3Absorbed++;
+  }
+}
+
+function spawnCollisionParticles(x, y, color) {
+  for (let i = 0; i < 30; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      color,
+      radius: 1 + Math.random() * 2
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt * 16;
+    p.y += p.vy * dt * 16;
+    p.vx *= 0.98;
+    p.vy *= 0.98;
+    p.life -= dt * 1.5;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// ===== Orbit Prediction =====
+function predictOrbit(newBody) {
+  const clones = bodies.map(b => ({...b}));
+  clones.push({...newBody});
+  const path = [];
+  const dt = 0.3;
+  for (let step = 0; step < 100; step++) {
+    updatePhysics(clones, dt);
+    const nb = clones[clones.length - 1];
+    path.push({ x: nb.x, y: nb.y });
+  }
+  return path;
+}
+
+// ===== Background Stars =====
+function initBgStars() {
+  bgStars = [];
+  for (let i = 0; i < 200; i++) {
+    bgStars.push({
+      x: Math.random() * 4000 - 2000,
+      y: Math.random() * 4000 - 2000,
+      size: 0.5 + Math.random() * 1.5,
+      twinkle: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 0.5 // parallax factor
+    });
+  }
+}
+
+// ===== Rendering =====
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Background stars with parallax
+  for (const s of bgStars) {
+    const parallax = s.speed;
+    const sx = (s.x - cam.x * parallax) * cam.zoom + canvas.width/2;
+    const sy = (s.y - cam.y * parallax) * cam.zoom + canvas.height/2;
+    // Wrap around
+    const wx = ((sx % canvas.width) + canvas.width) % canvas.width;
+    const wy = ((sy % canvas.height) + canvas.height) % canvas.height;
+    const alpha = 0.4 + 0.4 * Math.sin(s.twinkle + frameCount * 0.03);
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(wx, wy, s.size, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.translate(-cam.x, -cam.y);
+
+  // Trails
+  if (trailOn) {
+    for (const b of bodies) {
+      if (b.trail.length < 2) continue;
+      ctx.beginPath();
+      for (let i = 0; i < b.trail.length; i++) {
+        const alpha = i / b.trail.length * 0.5;
+        ctx.strokeStyle = b.color;
+        ctx.globalAlpha = alpha;
+        if (i === 0) ctx.moveTo(b.trail[i].x, b.trail[i].y);
+        else ctx.lineTo(b.trail[i].x, b.trail[i].y);
+      }
+      ctx.lineWidth = 1 / cam.zoom;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Bodies
+  for (const b of bodies) {
+    drawBody(b);
+  }
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Drag arrow & prediction
+  if (dragState) {
+    const start = dragState.startWorld;
+    const cur = dragState.currentWorld;
+    // Arrow
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2 / cam.zoom;
+    ctx.setLineDash([5/cam.zoom, 5/cam.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(start.x - (cur.x - start.x), start.y - (cur.y - start.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    const ax = start.x - (cur.x - start.x);
+    const ay = start.y - (cur.y - start.y);
+    const adx = ax - start.x, ady = ay - start.y;
+    const alen = Math.sqrt(adx*adx + ady*ady);
+    if (alen > 5) {
+      const angle = Math.atan2(ady, adx);
+      const hs = 8 / cam.zoom;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - hs*Math.cos(angle - 0.4), ay - hs*Math.sin(angle - 0.4));
+      ctx.lineTo(ax - hs*Math.cos(angle + 0.4), ay - hs*Math.sin(angle + 0.4));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Preview body
+    const previewType = BODY_TYPES[selectedType];
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = selectedType === 'planet' ? '#4A90D9' : previewType.color;
+    if (selectedType === 'blackhole') {
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, previewType.radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = '#8B00FF';
+      ctx.lineWidth = 3 / cam.zoom;
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, previewType.radius * 2, 0, Math.PI*2);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, previewType.radius, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Predicted orbit
+    if (predictedPath.length > 1) {
+      ctx.strokeStyle = 'rgba(150,150,255,0.4)';
+      ctx.lineWidth = 1.5 / cam.zoom;
+      ctx.setLineDash([4/cam.zoom, 4/cam.zoom]);
+      ctx.beginPath();
+      ctx.moveTo(predictedPath[0].x, predictedPath[0].y);
+      for (let i = 1; i < predictedPath.length; i++) {
+        ctx.lineTo(predictedPath[i].x, predictedPath[i].y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawBody(b) {
+  ctx.save();
+  if (b.glow && b.type !== 'blackhole') {
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = b.color;
+  }
+
+  if (b.type === 'blackhole') {
+    // Event horizon ring
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#8B00FF';
+    ctx.strokeStyle = '#8B00FF';
+    ctx.lineWidth = 3 / cam.zoom;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius * 2, 0, Math.PI*2);
+    ctx.stroke();
+    // Inner ring
+    ctx.strokeStyle = 'rgba(139,0,255,0.4)';
+    ctx.lineWidth = 2 / cam.zoom;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius * 2.8, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Black center
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+    ctx.fill();
+
+    if (b.type === 'star') {
+      // Corona effect
+      ctx.shadowBlur = 0;
+      const grad = ctx.createRadialGradient(b.x, b.y, b.radius * 0.8, b.x, b.y, b.radius * 1.6);
+      grad.addColorStop(0, 'rgba(255,215,0,0.3)');
+      grad.addColorStop(1, 'rgba(255,150,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius * 1.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ===== Resize =====
+function resize() {
+  canvas.width = canvas.clientWidth * window.devicePixelRatio;
+  canvas.height = canvas.clientHeight * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  canvas.style.width = canvas.clientWidth + 'px';
+}
+
+// ===== Main Loop =====
+function tick() {
+  frameCount++;
+  const rawDt = 1/60;
+
+  if (running) {
+    const steps = timeScale >= 5 ? Math.ceil(timeScale / 2) : 1;
+    const subDt = rawDt * timeScale / steps;
+    for (let s = 0; s < steps; s++) {
+      updatePhysics(bodies, subDt);
+      handleCollisions();
+      updateParticles(subDt);
+    }
+
+    // Record trails
+    for (const b of bodies) {
+      b.trail.push({ x: b.x, y: b.y });
+      if (b.trail.length > TRAIL_MAX) b.trail.shift();
+    }
+
+    // Challenge check
+    if (activeChallenge) {
+      const ch = challenges.find(c => c.id === activeChallenge.id);
+      if (ch && ch.check(rawDt * timeScale)) {
+        completeChallenge(ch.id);
+      }
+    }
+  } else {
+    updateParticles(rawDt);
+  }
+
+  // Update prediction during drag
+  if (dragState && frameCount % 10 === 0) {
+    const s = dragState.startWorld;
+    const c = dragState.currentWorld;
+    const vx = -(c.x - s.x) * 0.05;
+    const vy = -(c.y - s.y) * 0.05;
+    const nb = createBody(selectedType, s.x, s.y, vx, vy);
+    predictedPath = predictOrbit(nb);
+  }
+
+  render();
+  document.getElementById('info-count').textContent = `천체: ${bodies.length}`;
+  requestAnimationFrame(tick);
+}
+
+// ===== Input Handling =====
+let pointers = new Map();
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (e.touches) {
+    return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+  }
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) {
+    // Right click pan
+    panState = { sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y };
+    return;
+  }
+  const pos = getCanvasPos(e);
+  const w = screenToWorld(pos.x, pos.y);
+  dragState = { startWorld: w, currentWorld: {...w} };
+  predictedPath = [];
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (panState) {
+    const dx = e.clientX - panState.sx;
+    const dy = e.clientY - panState.sy;
+    cam.x = panState.cx - dx / cam.zoom;
+    cam.y = panState.cy - dy / cam.zoom;
+    return;
+  }
+  if (dragState) {
+    const pos = getCanvasPos(e);
+    dragState.currentWorld = screenToWorld(pos.x, pos.y);
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (panState) { panState = null; return; }
+  if (dragState) {
+    placeBody();
+    dragState = null;
+    predictedPath = [];
+  }
+});
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.9 : 1.1;
+  cam.zoom = Math.max(0.1, Math.min(5, cam.zoom * factor));
+}, { passive: false });
+
+// Touch
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    // Pinch start
+    dragState = null;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchDist = Math.sqrt(dx*dx + dy*dy);
+    panState = {
+      sx: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+      sy: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      cx: cam.x, cy: cam.y
+    };
+    return;
+  }
+  if (e.touches.length === 1) {
+    const pos = getCanvasPos(e);
+    const w = screenToWorld(pos.x, pos.y);
+    dragState = { startWorld: w, currentWorld: {...w} };
+    predictedPath = [];
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const newDist = Math.sqrt(dx*dx + dy*dy);
+    if (pinchDist) {
+      const factor = newDist / pinchDist;
+      cam.zoom = Math.max(0.1, Math.min(5, cam.zoom * factor));
+      pinchDist = newDist;
+    }
+    if (panState) {
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      cam.x = panState.cx - (mx - panState.sx) / cam.zoom;
+      cam.y = panState.cy - (my - panState.sy) / cam.zoom;
+      panState.sx = mx;
+      panState.sy = my;
+      panState.cx = cam.x;
+      panState.cy = cam.y;
+    }
+    dragState = null;
+    return;
+  }
+  if (dragState && e.touches.length === 1) {
+    const pos = getCanvasPos(e);
+    dragState.currentWorld = screenToWorld(pos.x, pos.y);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    pinchDist = null;
+    panState = null;
+    if (dragState) {
+      placeBody();
+      dragState = null;
+      predictedPath = [];
+    }
+  }
+}, { passive: false });
+
+function placeBody() {
+  if (!dragState) return;
+  const s = dragState.startWorld;
+  const c = dragState.currentWorld;
+  const vx = -(c.x - s.x) * 0.05;
+  const vy = -(c.y - s.y) * 0.05;
+  const b = createBody(selectedType, s.x, s.y, vx, vy);
+  bodies.push(b);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === '1') selectType('star');
+  else if (e.key === '2') selectType('planet');
+  else if (e.key === '3') selectType('asteroid');
+  else if (e.key === '4') selectType('blackhole');
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+});
+
+// ===== UI Controls =====
+function selectType(type) {
+  selectedType = type;
+  document.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+}
+
+document.querySelectorAll('[data-type]').forEach(btn => {
+  btn.addEventListener('click', () => selectType(btn.dataset.type));
+});
+
+document.querySelectorAll('[data-speed]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    timeScale = parseFloat(btn.dataset.speed);
+    document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('info-speed').textContent = `시간: ${timeScale}x`;
+  });
+});
+
+function togglePlay() {
+  running = !running;
+  document.getElementById('btn-play').style.display = running ? 'none' : '';
+  document.getElementById('btn-pause').style.display = running ? '' : 'none';
+  if (running && activeChallenge) challengeTimer = 0;
+}
+
+document.getElementById('btn-play').addEventListener('click', togglePlay);
+document.getElementById('btn-pause').addEventListener('click', togglePlay);
+
+function resetAll() {
+  bodies = [];
+  particles = [];
+  running = false;
+  challengeTimer = 0;
+  challenge3Absorbed = 0;
+  document.getElementById('btn-play').style.display = '';
+  document.getElementById('btn-pause').style.display = 'none';
+}
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (activeChallenge) {
+    const ch = challenges.find(c => c.id === activeChallenge.id);
+    if (ch) { ch.setup(); return; }
+  }
+  resetAll();
+});
+
+document.getElementById('btn-trail').addEventListener('click', function() {
+  trailOn = !trailOn;
+  this.textContent = trailOn ? '궤적 ON' : '궤적 OFF';
+  this.classList.toggle('active', trailOn);
+  if (!trailOn) bodies.forEach(b => b.trail = []);
+});
+
+// Save / Load
+document.getElementById('btn-save').addEventListener('click', () => {
+  const data = {
+    bodies: bodies.map(b => ({
+      type: b.type, x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+      mass: b.mass, radius: b.radius, color: b.color
+    })),
+    cam: { ...cam },
+    timeScale
+  };
+  localStorage.setItem('gravitySandbox_save', JSON.stringify(data));
+  showToast('저장 완료!');
+});
+
+document.getElementById('btn-load').addEventListener('click', () => {
+  const raw = localStorage.getItem('gravitySandbox_save');
+  if (!raw) { showToast('저장된 데이터 없음'); return; }
+  const data = JSON.parse(raw);
+  resetAll();
+  activeChallenge = null;
+  document.getElementById('challenge-banner').style.display = 'none';
+  cam = data.cam || { x: 0, y: 0, zoom: 1 };
+  timeScale = data.timeScale || 1;
+  document.querySelectorAll('[data-speed]').forEach(b =>
+    b.classList.toggle('active', parseFloat(b.dataset.speed) === timeScale));
+  document.getElementById('info-speed').textContent = `시간: ${timeScale}x`;
+  for (const bd of data.bodies) {
+    const t = BODY_TYPES[bd.type];
+    bodies.push({
+      type: bd.type, x: bd.x, y: bd.y, vx: bd.vx, vy: bd.vy,
+      mass: bd.mass, radius: bd.radius, color: bd.color,
+      glow: t.glow, absorb: t.absorb,
+      trail: [], id: Math.random().toString(36).slice(2)
+    });
+  }
+  showToast('불러오기 완료!');
+});
+
+// ===== Challenges =====
+function renderChallengeList() {
+  const list = document.getElementById('challenge-list');
+  list.innerHTML = '';
+  for (const ch of challenges) {
+    const done = completedChallenges.includes(ch.id);
+    const div = document.createElement('div');
+    div.className = 'challenge-item' + (done ? ' completed' : '');
+    div.innerHTML = `
+      <span class="ch-badge">${done ? '✅ 완료' : ''}</span>
+      <div class="ch-title">${ch.id}. ${ch.title}</div>
+      <div class="ch-desc">${ch.desc}</div>
+    `;
+    div.addEventListener('click', () => startChallenge(ch));
+    list.appendChild(div);
+  }
+}
+
+function startChallenge(ch) {
+  activeChallenge = ch;
+  challengeTimer = 0;
+  challenge3Absorbed = 0;
+  ch.setup();
+  document.getElementById('modal-overlay').classList.remove('show');
+  document.getElementById('challenge-banner').style.display = 'block';
+  document.getElementById('cb-title').textContent = `챌린지: ${ch.title}`;
+  document.getElementById('cb-status').textContent = ch.desc;
+}
+
+function completeChallenge(id) {
+  if (!completedChallenges.includes(id)) {
+    completedChallenges.push(id);
+    localStorage.setItem('gravitySandbox_completed', JSON.stringify(completedChallenges));
+  }
+  activeChallenge = null;
+  running = false;
+  document.getElementById('btn-play').style.display = '';
+  document.getElementById('btn-pause').style.display = 'none';
+  document.getElementById('challenge-banner').style.display = 'none';
+  showToast('🎉 챌린지 클리어!');
+}
+
+document.getElementById('btn-challenge').addEventListener('click', () => {
+  renderChallengeList();
+  document.getElementById('modal-overlay').classList.add('show');
+});
+
+document.getElementById('btn-sandbox').addEventListener('click', () => {
+  activeChallenge = null;
+  document.getElementById('challenge-banner').style.display = 'none';
+  document.getElementById('modal-overlay').classList.remove('show');
+});
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay'))
+    document.getElementById('modal-overlay').classList.remove('show');
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.animation = 'none';
+  t.offsetHeight; // reflow
+  t.style.animation = 'toastAnim 2s ease forwards';
+  setTimeout(() => t.style.display = 'none', 2000);
+}
+
+// ===== Init =====
+function init() {
+  // Proper canvas sizing
+  function doResize() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  doResize();
+  window.addEventListener('resize', doResize);
+
+  initBgStars();
+
+  // Set trail button active
+  document.getElementById('btn-trail').classList.add('active');
+
+  requestAnimationFrame(tick);
+}
+
+init();
+</script>
+</body>
+</html>

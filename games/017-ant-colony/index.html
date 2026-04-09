@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>개미 왕국</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #2a1a0a;
+  color: #e0d0b0;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  touch-action: none;
+  user-select: none;
+}
+#gameCanvas {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  cursor: grab;
+}
+#gameCanvas:active { cursor: grabbing; }
+
+/* Top HUD */
+#topBar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(30, 15, 5, 0.85);
+  border-bottom: 2px solid #5a3a1a;
+  z-index: 10;
+  font-size: 14px;
+}
+#topBar .title {
+  font-weight: bold;
+  font-size: 16px;
+}
+#topBar .stats {
+  display: flex;
+  gap: 16px;
+}
+#topBar .stat { white-space: nowrap; }
+
+/* Queen HP bar */
+#hpBar {
+  position: absolute;
+  bottom: 70px; left: 0; right: 0;
+  padding: 6px 16px;
+  background: rgba(30, 15, 5, 0.85);
+  border-top: 1px solid #5a3a1a;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+#hpBarInner {
+  flex: 1;
+  height: 14px;
+  background: #3a2010;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid #6a4a2a;
+}
+#hpFill {
+  height: 100%;
+  background: linear-gradient(90deg, #d44, #e66);
+  border-radius: 7px;
+  transition: width 0.3s;
+}
+
+/* Bottom controls */
+#bottomBar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 8px 12px;
+  background: rgba(30, 15, 5, 0.9);
+  border-top: 2px solid #5a3a1a;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.role-btn {
+  padding: 8px 14px;
+  border: 2px solid #6a4a2a;
+  border-radius: 8px;
+  background: #3a2515;
+  color: #e0d0b0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.role-btn:hover { background: #5a3a20; }
+.role-btn.active { border-color: #ffa; background: #5a4020; box-shadow: 0 0 8px rgba(255,255,150,0.3); }
+.role-btn.produce {
+  background: #2a5a2a;
+  border-color: #4a8a4a;
+}
+.role-btn.produce:hover { background: #3a7a3a; }
+.role-btn.produce:disabled { opacity: 0.4; cursor: not-allowed; }
+#bottomStats {
+  font-size: 12px;
+  color: #b0a080;
+  white-space: nowrap;
+}
+
+/* Game Over / Start overlay */
+.overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.overlay h1 { font-size: 32px; margin-bottom: 12px; }
+.overlay p { font-size: 16px; margin-bottom: 6px; color: #ccc; }
+.overlay .score-line { font-size: 20px; color: #ffa; margin: 10px 0; }
+.overlay button {
+  margin-top: 20px;
+  padding: 14px 40px;
+  font-size: 18px;
+  border: 2px solid #8a6a3a;
+  border-radius: 10px;
+  background: #5a3a1a;
+  color: #e0d0b0;
+  cursor: pointer;
+}
+.overlay button:hover { background: #7a5a2a; }
+
+/* Wave warning */
+#waveWarning {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 24px;
+  background: rgba(180, 30, 30, 0.9);
+  border: 2px solid #f44;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 20;
+  display: none;
+  animation: pulse 0.5s infinite alternate;
+}
+@keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+
+/* Role indicator */
+#roleIndicator {
+  position: absolute;
+  top: 50px;
+  right: 16px;
+  padding: 6px 12px;
+  background: rgba(30,15,5,0.85);
+  border: 1px solid #6a4a2a;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 15;
+  display: none;
+}
+
+/* Tooltip */
+#tooltip {
+  position: absolute;
+  padding: 6px 10px;
+  background: rgba(20,10,5,0.95);
+  border: 1px solid #8a6a3a;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 30;
+  display: none;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+@media (max-width: 500px) {
+  #topBar { padding: 6px 10px; font-size: 12px; }
+  #topBar .title { font-size: 14px; }
+  .role-btn { padding: 6px 10px; font-size: 12px; }
+  #bottomStats { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="topBar">
+  <span class="title">🐜 개미 왕국</span>
+  <div class="stats">
+    <span class="stat" id="foodDisplay">식량: 0</span>
+    <span class="stat" id="timeDisplay">시간: 0:00</span>
+    <span class="stat" id="scoreDisplay">점수: 0</span>
+  </div>
+</div>
+
+<div id="hpBar">
+  <span>여왕 HP:</span>
+  <div id="hpBarInner"><div id="hpFill" style="width:100%"></div></div>
+  <span id="hpText">100%</span>
+</div>
+
+<div id="bottomBar">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <button class="role-btn" data-role="gather" onclick="selectRole('gather')">🌾 채집: <span id="gatherCount">0</span></button>
+    <button class="role-btn" data-role="scout" onclick="selectRole('scout')">🔍 정찰: <span id="scoutCount">0</span></button>
+    <button class="role-btn" data-role="soldier" onclick="selectRole('soldier')">⚔️ 병정: <span id="soldierCount">0</span></button>
+    <button class="role-btn produce" id="produceBtn" onclick="produceAnt()">+ 개미 생산 (10)</button>
+  </div>
+  <div id="bottomStats">총 개미: 0 | 소비: 0/s | 수입: 0/s</div>
+</div>
+
+<div id="waveWarning">⚠️ 적 침공!</div>
+<div id="roleIndicator"></div>
+<div id="tooltip"></div>
+
+<!-- Start screen -->
+<div class="overlay" id="startOverlay">
+  <h1>🐜 개미 왕국</h1>
+  <p>여왕개미가 되어 군집을 성장시키세요!</p>
+  <p style="font-size:13px;color:#999;">채집으로 식량을 모으고, 정찰로 영토를 넓히고,<br>병정으로 침입자를 막으세요.</p>
+  <p style="font-size:12px;color:#888;margin-top:10px;">PC: 1/2/3 역할 선택, 클릭 이동 지시, 드래그 카메라<br>모바일: 하단 버튼으로 역할 선택, 터치 이동</p>
+  <button onclick="startGame()">게임 시작</button>
+  <p id="highScoreStart" style="margin-top:14px;color:#aaa;font-size:13px;"></p>
+</div>
+
+<!-- Game Over screen -->
+<div class="overlay" id="gameOverOverlay" style="display:none;">
+  <h1>👑 게임 오버</h1>
+  <div class="score-line" id="finalScore"></div>
+  <p id="goAnts"></p>
+  <p id="goExplored"></p>
+  <p id="goTime"></p>
+  <p id="goHighScore" style="color:#ffa;margin-top:8px;"></p>
+  <button onclick="startGame()">다시 시작</button>
+</div>
+
+<script>
+// ===== Constants =====
+const MAP_W = 2000, MAP_H = 2000;
+const CELL = 10; // pheromone grid cell size
+const GRID_W = MAP_W / CELL, GRID_H = MAP_H / CELL;
+const NEST_X = MAP_W / 2, NEST_Y = MAP_H / 2;
+const NEST_R = 40;
+const MAX_ANTS = 200;
+const ANT_COST = 10;
+const FOOD_CONSUME_INTERVAL = 1000; // ms per consumption tick
+const WAVE_INTERVAL = 30000; // 30 seconds
+const FOG_REVEAL_R = 60;
+const ANT_SPEED = 1.2;
+const SOLDIER_SPEED = 1.0;
+const SCOUT_SPEED = 1.5;
+const PHEROMONE_DECAY = 0.995;
+const COMBAT_INTERVAL = 1000;
+
+// ===== Canvas setup =====
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Offscreen canvases
+const fogCanvas = document.createElement('canvas');
+const fogCtx = fogCanvas.getContext('2d');
+const pheroCanvas = document.createElement('canvas');
+const pheroCtx = pheroCanvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+  fogCanvas.width = MAP_W;
+  fogCanvas.height = MAP_H;
+  pheroCanvas.width = GRID_W;
+  pheroCanvas.height = GRID_H;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ===== Game State =====
+let game = null;
+let selectedRole = null;
+let animFrame = null;
+let lastTime = 0;
+
+function newGame() {
+  return {
+    ants: [],
+    enemies: [],
+    foods: [],
+    pheromones: new Float32Array(GRID_W * GRID_H),
+    fog: new Uint8Array(GRID_W * GRID_H), // 0=hidden, 1=revealed
+    queenHP: 100,
+    maxQueenHP: 100,
+    food: 50,
+    time: 0,
+    score: 0,
+    waveTimer: WAVE_INTERVAL,
+    waveNum: 0,
+    running: true,
+    camera: { x: NEST_X - W/2, y: NEST_Y - H/2, zoom: 1 },
+    lastConsume: 0,
+    lastCombat: 0,
+    particles: [],
+    popups: [],
+    exploredCells: 0,
+    totalAntsMade: 0,
+  };
+}
+
+// ===== Fog of War =====
+function revealFog(wx, wy, r) {
+  const cx = Math.floor(wx / CELL), cy = Math.floor(wy / CELL);
+  const cr = Math.ceil(r / CELL);
+  let revealed = 0;
+  for (let dy = -cr; dy <= cr; dy++) {
+    for (let dx = -cr; dx <= cr; dx++) {
+      if (dx*dx + dy*dy > cr*cr) continue;
+      const gx = cx + dx, gy = cy + dy;
+      if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) continue;
+      const idx = gy * GRID_W + gx;
+      if (!game.fog[idx]) {
+        game.fog[idx] = 1;
+        revealed++;
+      }
+    }
+  }
+  game.exploredCells += revealed;
+}
+
+// ===== Food Sources =====
+function spawnFood() {
+  const count = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < count; i++) {
+    addFoodSource();
+  }
+}
+
+function addFoodSource() {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 150 + Math.random() * 800;
+  const x = NEST_X + Math.cos(angle) * dist;
+  const y = NEST_Y + Math.sin(angle) * dist;
+  if (x < 30 || x > MAP_W - 30 || y < 30 || y > MAP_H - 30) return;
+  const types = ['berry', 'bug', 'leaf', 'seed'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const amount = type === 'bug' ? 30 + Math.random()*20 : 15 + Math.random()*15;
+  game.foods.push({
+    x, y, type, amount: Math.floor(amount), maxAmount: Math.floor(amount),
+    r: type === 'bug' ? 10 : 7
+  });
+}
+
+// ===== Ant Creation =====
+function createAnt(role) {
+  const angle = Math.random() * Math.PI * 2;
+  const r = 10 + Math.random() * 15;
+  return {
+    x: NEST_X + Math.cos(angle) * r,
+    y: NEST_Y + Math.sin(angle) * r,
+    role: role,
+    target: null,
+    carrying: 0,
+    hp: role === 'soldier' ? 10 : 5,
+    maxHp: role === 'soldier' ? 10 : 5,
+    state: 'idle',
+    angle: Math.random() * Math.PI * 2,
+    idleTimer: 0,
+    combatTimer: 0,
+    wanderAngle: Math.random() * Math.PI * 2,
+    born: game.time,
+  };
+}
+
+function produceAnt() {
+  if (game.food < ANT_COST || game.ants.length >= MAX_ANTS || !game.running) return;
+  game.food -= ANT_COST;
+  const role = selectedRole || 'gather';
+  const ant = createAnt(role);
+  game.ants.push(ant);
+  game.totalAntsMade++;
+  addParticle(NEST_X, NEST_Y, '#ff8', 'pop');
+  addPopup(NEST_X, NEST_Y - 20, '+1 ' + getRoleName(role));
+  updateUI();
+}
+
+function selectRole(role) {
+  if (selectedRole === role) {
+    selectedRole = null;
+  } else {
+    selectedRole = role;
+  }
+  document.querySelectorAll('.role-btn[data-role]').forEach(b => {
+    b.classList.toggle('active', b.dataset.role === selectedRole);
+  });
+  const ind = document.getElementById('roleIndicator');
+  if (selectedRole) {
+    ind.textContent = '선택: ' + getRoleName(selectedRole) + ' (맵 클릭으로 이동 지시)';
+    ind.style.display = 'block';
+  } else {
+    ind.style.display = 'none';
+  }
+}
+
+function getRoleName(r) {
+  return r === 'gather' ? '채집' : r === 'scout' ? '정찰' : '병정';
+}
+
+// ===== Enemy Spawning =====
+function spawnWave() {
+  game.waveNum++;
+  const count = Math.min(2 + Math.floor(game.waveNum * 0.8), 8);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 600 + Math.random() * 300;
+    const ex = NEST_X + Math.cos(angle) * dist;
+    const ey = NEST_Y + Math.sin(angle) * dist;
+    const isSpider = Math.random() < 0.3 + game.waveNum * 0.05;
+    game.enemies.push({
+      x: ex, y: ey,
+      type: isSpider ? 'spider' : 'beetle',
+      hp: isSpider ? 30 : 15,
+      maxHp: isSpider ? 30 : 15,
+      atk: isSpider ? 5 : 3,
+      speed: isSpider ? 0.5 : 0.7,
+      r: isSpider ? 8 : 6,
+      target: { x: NEST_X, y: NEST_Y },
+      combatTimer: 0,
+      fightingAnt: null,
+    });
+  }
+  // Show warning
+  const warn = document.getElementById('waveWarning');
+  warn.textContent = `⚠️ ${game.waveNum}차 침공! (${count}마리)`;
+  warn.style.display = 'block';
+  setTimeout(() => warn.style.display = 'none', 3000);
+}
+
+// ===== Pheromone =====
+function addPheromone(wx, wy, val) {
+  const gx = Math.floor(wx / CELL), gy = Math.floor(wy / CELL);
+  if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) return;
+  game.pheromones[gy * GRID_W + gx] = Math.min(game.pheromones[gy * GRID_W + gx] + val, 10);
+}
+
+function getPheromone(wx, wy) {
+  const gx = Math.floor(wx / CELL), gy = Math.floor(wy / CELL);
+  if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) return 0;
+  return game.pheromones[gy * GRID_W + gx];
+}
+
+function decayPheromones() {
+  for (let i = 0; i < game.pheromones.length; i++) {
+    game.pheromones[i] *= PHEROMONE_DECAY;
+    if (game.pheromones[i] < 0.01) game.pheromones[i] = 0;
+  }
+}
+
+// ===== Particles & Popups =====
+function addParticle(x, y, color, type) {
+  for (let i = 0; i < 6; i++) {
+    game.particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 3,
+      vy: (Math.random() - 0.5) * 3,
+      life: 30,
+      maxLife: 30,
+      color, type
+    });
+  }
+}
+
+function addPopup(x, y, text) {
+  game.popups.push({ x, y, text, life: 60, maxLife: 60 });
+}
+
+// ===== Ant AI Update =====
+function updateAnt(ant, dt) {
+  if (ant.hp <= 0) return;
+
+  // Reveal fog around ant
+  if (ant.role === 'scout') {
+    revealFog(ant.x, ant.y, FOG_REVEAL_R * 1.5);
+  } else {
+    revealFog(ant.x, ant.y, FOG_REVEAL_R * 0.5);
+  }
+
+  const speed = ant.role === 'scout' ? SCOUT_SPEED : ant.role === 'soldier' ? SOLDIER_SPEED : ANT_SPEED;
+
+  switch (ant.role) {
+    case 'gather':
+      updateGatherer(ant, speed, dt);
+      break;
+    case 'scout':
+      updateScout(ant, speed, dt);
+      break;
+    case 'soldier':
+      updateSoldier(ant, speed, dt);
+      break;
+  }
+
+  // Clamp to map
+  ant.x = Math.max(5, Math.min(MAP_W - 5, ant.x));
+  ant.y = Math.max(5, Math.min(MAP_H - 5, ant.y));
+}
+
+function updateGatherer(ant, speed, dt) {
+  if (ant.state === 'fighting') return;
+
+  if (ant.carrying > 0) {
+    // Return to nest
+    ant.state = 'returning';
+    const dx = NEST_X - ant.x, dy = NEST_Y - ant.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < NEST_R) {
+      game.food += ant.carrying;
+      ant.carrying = 0;
+      ant.state = 'idle';
+      ant.target = null;
+    } else {
+      ant.angle = Math.atan2(dy, dx);
+      ant.x += Math.cos(ant.angle) * speed;
+      ant.y += Math.sin(ant.angle) * speed;
+      addPheromone(ant.x, ant.y, 0.5);
+    }
+    return;
+  }
+
+  // Has a specific target from player click?
+  if (ant.target) {
+    const dx = ant.target.x - ant.x, dy = ant.target.y - ant.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 10) {
+      ant.target = null;
+      ant.state = 'idle';
+    } else {
+      ant.angle = Math.atan2(dy, dx);
+      ant.x += Math.cos(ant.angle) * speed;
+      ant.y += Math.sin(ant.angle) * speed;
+      ant.state = 'moving';
+    }
+  }
+
+  // Look for nearby food
+  let nearestFood = null, nearestDist = 80;
+  for (const f of game.foods) {
+    if (f.amount <= 0) continue;
+    const d = Math.hypot(f.x - ant.x, f.y - ant.y);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearestFood = f;
+    }
+  }
+
+  if (nearestFood) {
+    if (nearestDist < nearestFood.r + 3) {
+      // Pick up food
+      const take = Math.min(3, nearestFood.amount);
+      nearestFood.amount -= take;
+      ant.carrying = take;
+      ant.state = 'returning';
+      addPheromone(ant.x, ant.y, 2);
+    } else {
+      // Move toward food
+      ant.angle = Math.atan2(nearestFood.y - ant.y, nearestFood.x - ant.x);
+      ant.x += Math.cos(ant.angle) * speed;
+      ant.y += Math.sin(ant.angle) * speed;
+      ant.state = 'moving';
+    }
+    return;
+  }
+
+  // Follow pheromones or wander
+  if (!ant.target && ant.state !== 'moving') {
+    ant.idleTimer++;
+    if (ant.idleTimer > 30) {
+      // Check pheromone gradient
+      let bestDir = ant.wanderAngle;
+      let bestVal = 0;
+      for (let a = 0; a < 8; a++) {
+        const dir = (a / 8) * Math.PI * 2;
+        const cx = ant.x + Math.cos(dir) * 20;
+        const cy = ant.y + Math.sin(dir) * 20;
+        const v = getPheromone(cx, cy);
+        if (v > bestVal && Math.random() < 0.7) {
+          bestVal = v;
+          bestDir = dir;
+        }
+      }
+      if (bestVal > 0.1) {
+        ant.wanderAngle = bestDir;
+      } else {
+        ant.wanderAngle += (Math.random() - 0.5) * 1.0;
+      }
+      ant.idleTimer = 0;
+    }
+    ant.angle = ant.wanderAngle;
+    ant.x += Math.cos(ant.angle) * speed * 0.6;
+    ant.y += Math.sin(ant.angle) * speed * 0.6;
+    ant.state = 'idle';
+
+    // Tendency to not stray too far without target
+    const distNest = Math.hypot(ant.x - NEST_X, ant.y - NEST_Y);
+    if (distNest > 500) {
+      ant.wanderAngle = Math.atan2(NEST_Y - ant.y, NEST_X - ant.x) + (Math.random()-0.5)*1.5;
+    }
+  }
+}
+
+function updateScout(ant, speed, dt) {
+  if (ant.state === 'fighting') return;
+
+  if (ant.target) {
+    const dx = ant.target.x - ant.x, dy = ant.target.y - ant.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 15) {
+      ant.target = null;
+      ant.state = 'idle';
+    } else {
+      ant.angle = Math.atan2(dy, dx);
+      ant.x += Math.cos(ant.angle) * speed;
+      ant.y += Math.sin(ant.angle) * speed;
+      ant.state = 'moving';
+      return;
+    }
+  }
+
+  // Prefer unexplored areas
+  ant.idleTimer++;
+  if (ant.idleTimer > 40) {
+    // Find direction with most unexplored
+    let bestDir = ant.wanderAngle;
+    let bestScore = -1;
+    for (let a = 0; a < 12; a++) {
+      const dir = (a / 12) * Math.PI * 2;
+      let score = 0;
+      for (let d = 30; d < 120; d += 20) {
+        const cx = Math.floor((ant.x + Math.cos(dir) * d) / CELL);
+        const cy = Math.floor((ant.y + Math.sin(dir) * d) / CELL);
+        if (cx >= 0 && cx < GRID_W && cy >= 0 && cy < GRID_H) {
+          if (!game.fog[cy * GRID_W + cx]) score++;
+        }
+      }
+      if (score > bestScore || (score === bestScore && Math.random() < 0.3)) {
+        bestScore = score;
+        bestDir = dir;
+      }
+    }
+    ant.wanderAngle = bestDir + (Math.random() - 0.5) * 0.5;
+    ant.idleTimer = 0;
+  }
+
+  ant.angle = ant.wanderAngle;
+  ant.x += Math.cos(ant.angle) * speed;
+  ant.y += Math.sin(ant.angle) * speed;
+  ant.state = 'idle';
+
+  // Bounce off edges
+  if (ant.x < 30 || ant.x > MAP_W - 30) ant.wanderAngle = Math.PI - ant.wanderAngle;
+  if (ant.y < 30 || ant.y > MAP_H - 30) ant.wanderAngle = -ant.wanderAngle;
+}
+
+function updateSoldier(ant, speed, dt) {
+  // Look for nearby enemies
+  let nearestEnemy = null, nearestDist = 150;
+  for (const e of game.enemies) {
+    if (e.hp <= 0) continue;
+    const d = Math.hypot(e.x - ant.x, e.y - ant.y);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearestEnemy = e;
+    }
+  }
+
+  if (nearestEnemy) {
+    if (nearestDist < 12) {
+      ant.state = 'fighting';
+      // Combat handled in combat system
+    } else {
+      ant.angle = Math.atan2(nearestEnemy.y - ant.y, nearestEnemy.x - ant.x);
+      ant.x += Math.cos(ant.angle) * speed * 1.3;
+      ant.y += Math.sin(ant.angle) * speed * 1.3;
+      ant.state = 'moving';
+    }
+    return;
+  }
+
+  ant.state = 'idle';
+
+  if (ant.target) {
+    const dx = ant.target.x - ant.x, dy = ant.target.y - ant.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 15) {
+      ant.target = null;
+    } else {
+      ant.angle = Math.atan2(dy, dx);
+      ant.x += Math.cos(ant.angle) * speed;
+      ant.y += Math.sin(ant.angle) * speed;
+      ant.state = 'moving';
+      return;
+    }
+  }
+
+  // Patrol around nest
+  ant.idleTimer++;
+  if (ant.idleTimer > 60) {
+    ant.wanderAngle += (Math.random() - 0.5) * 2;
+    ant.idleTimer = 0;
+  }
+  const distNest = Math.hypot(ant.x - NEST_X, ant.y - NEST_Y);
+  if (distNest > 200) {
+    ant.wanderAngle = Math.atan2(NEST_Y - ant.y, NEST_X - ant.x) + (Math.random()-0.5)*1;
+  }
+  ant.angle = ant.wanderAngle;
+  ant.x += Math.cos(ant.angle) * speed * 0.5;
+  ant.y += Math.sin(ant.angle) * speed * 0.5;
+}
+
+// ===== Enemy AI =====
+function updateEnemy(enemy, dt) {
+  if (enemy.hp <= 0) return;
+
+  // Check if fighting an ant
+  let fightingAnt = null;
+  for (const ant of game.ants) {
+    if (ant.hp <= 0 || ant.role !== 'soldier') continue;
+    const d = Math.hypot(ant.x - enemy.x, ant.y - enemy.y);
+    if (d < 15) {
+      fightingAnt = ant;
+      break;
+    }
+  }
+
+  if (fightingAnt) {
+    // Stay and fight
+    return;
+  }
+
+  // Move toward nest
+  const dx = NEST_X - enemy.x, dy = NEST_Y - enemy.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > 5) {
+    const angle = Math.atan2(dy, dx);
+    enemy.x += Math.cos(angle) * enemy.speed;
+    enemy.y += Math.sin(angle) * enemy.speed;
+  }
+
+  // Damage queen if at nest
+  if (dist < NEST_R + 10) {
+    enemy.combatTimer += 16;
+    if (enemy.combatTimer >= COMBAT_INTERVAL) {
+      enemy.combatTimer = 0;
+      game.queenHP -= enemy.atk;
+      addParticle(NEST_X, NEST_Y, '#f44', 'hit');
+      addPopup(NEST_X, NEST_Y - 30, `-${enemy.atk} HP`);
+      if (game.queenHP <= 0) {
+        game.queenHP = 0;
+        gameOver();
+      }
+    }
+  }
+}
+
+// ===== Combat System =====
+function updateCombat(dt) {
+  for (const ant of game.ants) {
+    if (ant.hp <= 0 || ant.role !== 'soldier') continue;
+    for (const enemy of game.enemies) {
+      if (enemy.hp <= 0) continue;
+      const d = Math.hypot(ant.x - enemy.x, ant.y - enemy.y);
+      if (d < 15) {
+        ant.state = 'fighting';
+        ant.combatTimer += 16;
+        if (ant.combatTimer >= COMBAT_INTERVAL) {
+          ant.combatTimer = 0;
+          enemy.hp -= 2; // soldier attack
+          addParticle(enemy.x, enemy.y, '#ff0', 'hit');
+          if (enemy.hp <= 0) {
+            addParticle(enemy.x, enemy.y, '#f80', 'pop');
+            addPopup(enemy.x, enemy.y - 10, '처치!');
+            ant.state = 'idle';
+          }
+        }
+        // Enemy fights back
+        enemy.combatTimer += 16;
+        if (enemy.combatTimer >= COMBAT_INTERVAL) {
+          enemy.combatTimer = 0;
+          ant.hp -= enemy.atk;
+          addParticle(ant.x, ant.y, '#f00', 'hit');
+          if (ant.hp <= 0) {
+            addPopup(ant.x, ant.y - 10, '전사');
+          }
+        }
+      }
+    }
+  }
+}
+
+// ===== Main Update =====
+function update(dt) {
+  if (!game || !game.running) return;
+
+  game.time += dt;
+
+  // Update ants
+  for (const ant of game.ants) {
+    updateAnt(ant, dt);
+  }
+
+  // Remove dead ants
+  game.ants = game.ants.filter(a => a.hp > 0);
+
+  // Update enemies
+  for (const enemy of game.enemies) {
+    updateEnemy(enemy, dt);
+  }
+
+  // Combat
+  updateCombat(dt);
+
+  // Remove dead enemies
+  game.enemies = game.enemies.filter(e => e.hp > 0);
+
+  // Decay pheromones every ~500ms
+  if (Math.floor(game.time / 500) !== Math.floor((game.time - dt) / 500)) {
+    decayPheromones();
+  }
+
+  // Food consumption
+  if (game.time - game.lastConsume >= FOOD_CONSUME_INTERVAL) {
+    game.lastConsume = game.time;
+    const consumption = Math.ceil(game.ants.length * 0.2);
+    game.food -= consumption;
+    if (game.food < 0) {
+      // Starvation: ants start dying
+      game.food = 0;
+      if (game.ants.length > 0) {
+        const victim = game.ants[Math.floor(Math.random() * game.ants.length)];
+        victim.hp = 0;
+        addPopup(victim.x, victim.y, '아사');
+      }
+    }
+  }
+
+  // Wave spawning
+  game.waveTimer -= dt;
+  if (game.waveTimer <= 0) {
+    game.waveTimer = WAVE_INTERVAL;
+    spawnWave();
+  }
+
+  // Respawn food sources
+  const activeFoods = game.foods.filter(f => f.amount > 0).length;
+  if (activeFoods < 4 && Math.random() < 0.01) {
+    addFoodSource();
+  }
+
+  // Remove depleted food
+  game.foods = game.foods.filter(f => f.amount > 0);
+
+  // Update particles
+  game.particles = game.particles.filter(p => {
+    p.life--;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.95;
+    p.vy *= 0.95;
+    return p.life > 0;
+  });
+
+  // Update popups
+  game.popups = game.popups.filter(p => {
+    p.life--;
+    p.y -= 0.5;
+    return p.life > 0;
+  });
+
+  // Calculate score
+  const antScore = game.ants.length * 10;
+  const exploreScore = Math.floor(game.exploredCells / 10);
+  const timeScore = Math.floor(game.time / 1000);
+  game.score = antScore + exploreScore + timeScore;
+
+  updateUI();
+}
+
+// ===== Rendering =====
+function render() {
+  ctx.clearRect(0, 0, W, H);
+
+  const cam = game.camera;
+  const zoom = cam.zoom;
+
+  ctx.save();
+  ctx.translate(-cam.x * zoom, -cam.y * zoom);
+  ctx.scale(zoom, zoom);
+
+  // Ground
+  ctx.fillStyle = '#6B4226';
+  ctx.fillRect(0, 0, MAP_W, MAP_H);
+
+  // Ground texture dots
+  ctx.fillStyle = '#5a3818';
+  for (let x = 0; x < MAP_W; x += 40) {
+    for (let y = 0; y < MAP_H; y += 40) {
+      const hash = ((x * 7 + y * 13) % 17);
+      if (hash < 6) {
+        ctx.fillRect(x + (hash * 3) % 20, y + (hash * 7) % 20, 2, 2);
+      }
+    }
+  }
+
+  // Pheromone trails
+  renderPheromones();
+
+  // Food sources
+  for (const f of game.foods) {
+    if (!isFogRevealed(f.x, f.y)) continue;
+    const ratio = f.amount / f.maxAmount;
+    ctx.globalAlpha = 0.5 + ratio * 0.5;
+    if (f.type === 'berry') {
+      ctx.fillStyle = '#e44';
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r * ratio + 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#a22';
+      ctx.beginPath();
+      ctx.arc(f.x - 1, f.y - 1, f.r * ratio * 0.5 + 1, 0, Math.PI*2);
+      ctx.fill();
+    } else if (f.type === 'bug') {
+      ctx.fillStyle = '#aa6';
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y, f.r, f.r * 0.6, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#886';
+      ctx.beginPath();
+      ctx.arc(f.x - 5, f.y, 3, 0, Math.PI*2);
+      ctx.fill();
+    } else if (f.type === 'leaf') {
+      ctx.fillStyle = '#5a2';
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y, f.r, f.r * 0.5, 0.5, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#da4';
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r * 0.6 + 1, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Nest
+  ctx.fillStyle = '#4a2a10';
+  ctx.beginPath();
+  ctx.arc(NEST_X, NEST_Y, NEST_R, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#6a4a20';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(NEST_X, NEST_Y, NEST_R, 0, Math.PI*2);
+  ctx.stroke();
+  // Nest entrance
+  ctx.fillStyle = '#2a1505';
+  ctx.beginPath();
+  ctx.arc(NEST_X, NEST_Y, 12, 0, Math.PI*2);
+  ctx.fill();
+  // Tunnels decoration
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    ctx.strokeStyle = '#3a2010';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(NEST_X + Math.cos(a)*12, NEST_Y + Math.sin(a)*12);
+    ctx.lineTo(NEST_X + Math.cos(a)*35, NEST_Y + Math.sin(a)*35);
+    ctx.stroke();
+  }
+  // Queen
+  drawAnt(NEST_X, NEST_Y, Math.PI/2, '#8B4513', 4, true);
+
+  // Ants
+  for (const ant of game.ants) {
+    const color = ant.role === 'gather' ? '#1a1a1a' : ant.role === 'scout' ? '#3a3a5a' : '#4a1a1a';
+    drawAnt(ant.x, ant.y, ant.angle, color, 2, false);
+    if (ant.carrying > 0) {
+      ctx.fillStyle = '#da4';
+      ctx.beginPath();
+      ctx.arc(ant.x - Math.cos(ant.angle)*3, ant.y - Math.sin(ant.angle)*3, 1.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Enemies
+  for (const e of game.enemies) {
+    drawEnemy(e);
+  }
+
+  // Particles
+  for (const p of game.particles) {
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Popups
+  for (const p of game.popups) {
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.text, p.x, p.y);
+    ctx.globalAlpha = 1;
+  }
+
+  // Fog of war
+  renderFog();
+
+  ctx.restore();
+}
+
+function drawAnt(x, y, angle, color, size, isQueen) {
+  const s = isQueen ? size * 1.5 : size;
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+
+  // Body (3 segments: head, thorax, abdomen)
+  ctx.fillStyle = color;
+
+  // Abdomen
+  ctx.beginPath();
+  ctx.arc(x - ca * s * 1.5, y - sa * s * 1.5, s * 0.9, 0, Math.PI*2);
+  ctx.fill();
+
+  // Thorax
+  ctx.beginPath();
+  ctx.arc(x, y, s * 0.7, 0, Math.PI*2);
+  ctx.fill();
+
+  // Head
+  ctx.beginPath();
+  ctx.arc(x + ca * s * 1.3, y + sa * s * 1.3, s * 0.6, 0, Math.PI*2);
+  ctx.fill();
+
+  // Legs
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.5;
+  const perp = angle + Math.PI/2;
+  for (let i = -1; i <= 1; i++) {
+    const lx = x + ca * i * s * 0.8;
+    const ly = y + sa * i * s * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(lx + Math.cos(perp) * s * 1.2, ly + Math.sin(perp) * s * 1.2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(lx - Math.cos(perp) * s * 1.2, ly - Math.sin(perp) * s * 1.2);
+    ctx.stroke();
+  }
+
+  if (isQueen) {
+    // Crown
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.arc(x + ca * s * 1.3, y + sa * s * 1.3 - s * 1.2, s * 0.4, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Antennae
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.5;
+  const headX = x + ca * s * 1.3, headY = y + sa * s * 1.3;
+  ctx.beginPath();
+  ctx.moveTo(headX, headY);
+  ctx.lineTo(headX + Math.cos(angle - 0.5) * s * 1.5, headY + Math.sin(angle - 0.5) * s * 1.5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(headX, headY);
+  ctx.lineTo(headX + Math.cos(angle + 0.5) * s * 1.5, headY + Math.sin(angle + 0.5) * s * 1.5);
+  ctx.stroke();
+}
+
+function drawEnemy(e) {
+  if (e.type === 'spider') {
+    // Spider body
+    ctx.fillStyle = '#8b0000';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#a00';
+    ctx.beginPath();
+    ctx.arc(e.x + 3, e.y, e.r * 0.5, 0, Math.PI*2);
+    ctx.fill();
+    // Legs
+    ctx.strokeStyle = '#600';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      const legLen = e.r * 2;
+      const midX = e.x + Math.cos(a) * legLen * 0.6;
+      const midY = e.y + Math.sin(a) * legLen * 0.6 - 3;
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(e.x + Math.cos(a) * legLen, e.y + Math.sin(a) * legLen);
+      ctx.stroke();
+    }
+    // Eyes
+    ctx.fillStyle = '#f44';
+    ctx.beginPath();
+    ctx.arc(e.x + 5, e.y - 2, 1.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(e.x + 5, e.y + 2, 1.5, 0, Math.PI*2);
+    ctx.fill();
+  } else {
+    // Beetle
+    ctx.fillStyle = '#4a0a0a';
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, e.r, e.r * 0.7, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Shell line
+    ctx.strokeStyle = '#600';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(e.x - e.r, e.y);
+    ctx.lineTo(e.x + e.r * 0.3, e.y);
+    ctx.stroke();
+    // Head
+    ctx.fillStyle = '#3a0808';
+    ctx.beginPath();
+    ctx.arc(e.x + e.r * 0.8, e.y, e.r * 0.4, 0, Math.PI*2);
+    ctx.fill();
+    // Legs
+    ctx.strokeStyle = '#5a1a1a';
+    ctx.lineWidth = 0.8;
+    for (let i = -1; i <= 1; i++) {
+      const lx = e.x + i * e.r * 0.5;
+      ctx.beginPath(); ctx.moveTo(lx, e.y); ctx.lineTo(lx + 2, e.y - e.r * 1.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx, e.y); ctx.lineTo(lx + 2, e.y + e.r * 1.2); ctx.stroke();
+    }
+  }
+
+  // HP bar
+  if (e.hp < e.maxHp) {
+    const barW = e.r * 2;
+    ctx.fillStyle = '#400';
+    ctx.fillRect(e.x - barW/2, e.y - e.r - 6, barW, 3);
+    ctx.fillStyle = '#f44';
+    ctx.fillRect(e.x - barW/2, e.y - e.r - 6, barW * (e.hp / e.maxHp), 3);
+  }
+}
+
+function renderPheromones() {
+  for (let gy = 0; gy < GRID_H; gy++) {
+    for (let gx = 0; gx < GRID_W; gx++) {
+      const val = game.pheromones[gy * GRID_W + gx];
+      if (val < 0.1) continue;
+      if (!game.fog[gy * GRID_W + gx]) continue;
+      const alpha = Math.min(val / 5, 0.6);
+      ctx.fillStyle = `rgba(100, 150, 255, ${alpha})`;
+      ctx.fillRect(gx * CELL, gy * CELL, CELL, CELL);
+    }
+  }
+}
+
+function isFogRevealed(wx, wy) {
+  const gx = Math.floor(wx / CELL), gy = Math.floor(wy / CELL);
+  if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) return false;
+  return game.fog[gy * GRID_W + gx] === 1;
+}
+
+function renderFog() {
+  // Only render fog cells visible on screen
+  const cam = game.camera;
+  const startGX = Math.max(0, Math.floor(cam.x / CELL));
+  const startGY = Math.max(0, Math.floor(cam.y / CELL));
+  const endGX = Math.min(GRID_W, Math.ceil((cam.x + W / cam.zoom) / CELL));
+  const endGY = Math.min(GRID_H, Math.ceil((cam.y + H / cam.zoom) / CELL));
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  for (let gy = startGY; gy < endGY; gy++) {
+    for (let gx = startGX; gx < endGX; gx++) {
+      if (!game.fog[gy * GRID_W + gx]) {
+        ctx.fillRect(gx * CELL, gy * CELL, CELL, CELL);
+      }
+    }
+  }
+}
+
+// ===== UI Updates =====
+function updateUI() {
+  document.getElementById('foodDisplay').textContent = '식량: ' + Math.floor(game.food);
+  const secs = Math.floor(game.time / 1000);
+  const mins = Math.floor(secs / 60);
+  const s = secs % 60;
+  document.getElementById('timeDisplay').textContent = '시간: ' + mins + ':' + (s < 10 ? '0' : '') + s;
+  document.getElementById('scoreDisplay').textContent = '점수: ' + game.score;
+
+  const hpPct = Math.max(0, game.queenHP / game.maxQueenHP * 100);
+  document.getElementById('hpFill').style.width = hpPct + '%';
+  document.getElementById('hpText').textContent = Math.floor(hpPct) + '%';
+
+  const gc = game.ants.filter(a => a.role === 'gather').length;
+  const sc = game.ants.filter(a => a.role === 'scout').length;
+  const mc = game.ants.filter(a => a.role === 'soldier').length;
+  document.getElementById('gatherCount').textContent = gc;
+  document.getElementById('scoutCount').textContent = sc;
+  document.getElementById('soldierCount').textContent = mc;
+
+  const consume = Math.ceil(game.ants.length * 0.2);
+  // Estimate income from gatherers carrying food
+  const gatherersReturning = game.ants.filter(a => a.role === 'gather' && a.carrying > 0).length;
+  const income = gatherersReturning * 3;
+  document.getElementById('bottomStats').textContent =
+    `총 개미: ${game.ants.length} | 소비: ${consume}/s | 수입: ~${income}/s`;
+
+  const btn = document.getElementById('produceBtn');
+  btn.disabled = game.food < ANT_COST || game.ants.length >= MAX_ANTS;
+}
+
+// ===== Camera Controls =====
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let lastPinchDist = 0;
+let touchStartTime = 0;
+let touchMoved = false;
+
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  dragStart = { x: e.clientX, y: e.clientY };
+  touchMoved = false;
+  touchStartTime = Date.now();
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchMoved = true;
+  game.camera.x -= dx / game.camera.zoom;
+  game.camera.y -= dy / game.camera.zoom;
+  dragStart = { x: e.clientX, y: e.clientY };
+  clampCamera();
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (!touchMoved && game && game.running && selectedRole) {
+    // Click on map to direct ants
+    const worldX = (e.clientX) / game.camera.zoom + game.camera.x;
+    const worldY = (e.clientY) / game.camera.zoom + game.camera.y;
+    directAnts(worldX, worldY, selectedRole);
+  }
+  isDragging = false;
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+  const oldZoom = game.camera.zoom;
+  game.camera.zoom = Math.max(0.3, Math.min(3, game.camera.zoom * zoomFactor));
+
+  // Zoom toward cursor
+  const wx = e.clientX / oldZoom + game.camera.x;
+  const wy = e.clientY / oldZoom + game.camera.y;
+  game.camera.x = wx - e.clientX / game.camera.zoom;
+  game.camera.y = wy - e.clientY / game.camera.zoom;
+  clampCamera();
+}, { passive: false });
+
+// Touch controls
+let touches = [];
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  touches = Array.from(e.touches);
+  if (touches.length === 1) {
+    isDragging = true;
+    dragStart = { x: touches[0].clientX, y: touches[0].clientY };
+    touchMoved = false;
+    touchStartTime = Date.now();
+  } else if (touches.length === 2) {
+    isDragging = false;
+    lastPinchDist = Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const ts = Array.from(e.touches);
+  if (ts.length === 1 && isDragging) {
+    const dx = ts[0].clientX - dragStart.x;
+    const dy = ts[0].clientY - dragStart.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchMoved = true;
+    game.camera.x -= dx / game.camera.zoom;
+    game.camera.y -= dy / game.camera.zoom;
+    dragStart = { x: ts[0].clientX, y: ts[0].clientY };
+    clampCamera();
+  } else if (ts.length === 2) {
+    const dist = Math.hypot(
+      ts[0].clientX - ts[1].clientX,
+      ts[0].clientY - ts[1].clientY
+    );
+    if (lastPinchDist > 0) {
+      const scale = dist / lastPinchDist;
+      game.camera.zoom = Math.max(0.3, Math.min(3, game.camera.zoom * scale));
+      clampCamera();
+    }
+    lastPinchDist = dist;
+  }
+  touches = ts;
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 0 && !touchMoved && game && game.running && selectedRole) {
+    const t = touches[0];
+    if (t) {
+      const worldX = t.clientX / game.camera.zoom + game.camera.x;
+      const worldY = t.clientY / game.camera.zoom + game.camera.y;
+      directAnts(worldX, worldY, selectedRole);
+    }
+  }
+  isDragging = false;
+  lastPinchDist = 0;
+  touches = Array.from(e.touches);
+}, { passive: false });
+
+function clampCamera() {
+  if (!game) return;
+  game.camera.x = Math.max(-100, Math.min(MAP_W - W / game.camera.zoom + 100, game.camera.x));
+  game.camera.y = Math.max(-100, Math.min(MAP_H - H / game.camera.zoom + 100, game.camera.y));
+}
+
+function directAnts(wx, wy, role) {
+  const ants = game.ants.filter(a => a.role === role);
+  for (const ant of ants) {
+    ant.target = { x: wx + (Math.random()-0.5)*30, y: wy + (Math.random()-0.5)*30 };
+    ant.state = 'moving';
+  }
+  addParticle(wx, wy, '#ff8', 'pop');
+}
+
+// ===== Keyboard =====
+document.addEventListener('keydown', (e) => {
+  if (!game || !game.running) return;
+  if (e.key === '1') selectRole('gather');
+  else if (e.key === '2') selectRole('scout');
+  else if (e.key === '3') selectRole('soldier');
+  else if (e.key === ' ' || e.key === 'p') { e.preventDefault(); produceAnt(); }
+});
+
+// ===== Game Loop =====
+function gameLoop(timestamp) {
+  if (!game) return;
+  const dt = Math.min(timestamp - lastTime, 50);
+  lastTime = timestamp;
+
+  if (game.running) {
+    update(dt);
+    render();
+  }
+
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+// ===== Start / Game Over =====
+function startGame() {
+  document.getElementById('startOverlay').style.display = 'none';
+  document.getElementById('gameOverOverlay').style.display = 'none';
+
+  game = newGame();
+  selectedRole = null;
+  document.querySelectorAll('.role-btn[data-role]').forEach(b => b.classList.remove('active'));
+  document.getElementById('roleIndicator').style.display = 'none';
+
+  // Reveal around nest
+  revealFog(NEST_X, NEST_Y, 100);
+
+  // Spawn initial food
+  spawnFood();
+
+  // Start with 5 gatherer ants
+  for (let i = 0; i < 5; i++) {
+    game.ants.push(createAnt('gather'));
+    game.totalAntsMade++;
+  }
+
+  // Center camera on nest
+  game.camera.x = NEST_X - W / 2;
+  game.camera.y = NEST_Y - H / 2;
+
+  updateUI();
+
+  if (animFrame) cancelAnimationFrame(animFrame);
+  lastTime = performance.now();
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function gameOver() {
+  game.running = false;
+
+  const score = game.score;
+  const highScore = loadHighScore();
+  const isNew = score > highScore;
+  if (isNew) saveHighScore(score);
+
+  document.getElementById('finalScore').textContent = '최종 점수: ' + score;
+  document.getElementById('goAnts').textContent = '최대 개미 수: ' + game.totalAntsMade;
+  document.getElementById('goExplored').textContent = '탐색 영역: ' + Math.floor(game.exploredCells / 10) + ' 칸';
+  const secs = Math.floor(game.time / 1000);
+  document.getElementById('goTime').textContent = '생존 시간: ' + Math.floor(secs/60) + '분 ' + (secs%60) + '초';
+  document.getElementById('goHighScore').textContent = isNew
+    ? '🎉 새로운 최고 점수!'
+    : '최고 점수: ' + Math.max(score, highScore);
+  document.getElementById('gameOverOverlay').style.display = 'flex';
+}
+
+// ===== localStorage =====
+function saveHighScore(score) {
+  try { localStorage.setItem('antColony_highScore', score); } catch(e) {}
+}
+function loadHighScore() {
+  try { return parseInt(localStorage.getItem('antColony_highScore') || '0'); } catch(e) { return 0; }
+}
+
+// Show high score on start screen
+const hs = loadHighScore();
+if (hs > 0) {
+  document.getElementById('highScoreStart').textContent = '최고 점수: ' + hs;
+}
+</script>
+</body>
+</html>

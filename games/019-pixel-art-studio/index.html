@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🎨 픽셀 아트 스튜디오</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#1e1e2e;--panel:#313244;--surface:#45475a;--text:#cdd6f4;
+  --subtext:#a6adc8;--accent:#cba6f7;--accent2:#f5c2e7;
+  --red:#f38ba8;--green:#a6e3a1;--blue:#89b4fa;--yellow:#f9e2af;
+  --border:#585b70;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:13px;touch-action:none;user-select:none;}
+button{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;font-family:inherit;}
+button:hover{background:var(--accent);color:var(--bg);}
+button.active{background:var(--accent);color:var(--bg);font-weight:bold;}
+input[type=range]{accent-color:var(--accent);width:100%;}
+input[type=color]{width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;}
+
+#app{display:grid;grid-template-rows:auto 1fr auto auto;height:100vh;width:100vw;}
+
+/* Header */
+#header{display:flex;align-items:center;gap:12px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+#header h1{font-size:15px;white-space:nowrap;}
+#header select,#header span{font-size:12px;}
+#header select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;}
+
+/* Main area */
+#main{display:grid;grid-template-columns:48px 1fr 160px;overflow:hidden;min-height:0;}
+
+/* Toolbar */
+#toolbar{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:6px 0;gap:2px;overflow-y:auto;}
+.tool-btn{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:16px;border:none;border-radius:6px;background:transparent;color:var(--text);cursor:pointer;position:relative;}
+.tool-btn:hover{background:var(--surface);}
+.tool-btn.active{background:var(--accent);color:var(--bg);}
+.tool-btn .shortcut{position:absolute;bottom:1px;right:2px;font-size:8px;opacity:.5;}
+.tool-sep{width:28px;height:1px;background:var(--border);margin:4px 0;}
+
+/* Canvas area */
+#canvas-area{position:relative;overflow:hidden;background:#11111b;display:flex;align-items:center;justify-content:center;}
+#canvas-wrap{position:relative;}
+#bg-canvas,#main-canvas,#overlay-canvas{position:absolute;top:0;left:0;image-rendering:pixelated;}
+#overlay-canvas{pointer-events:none;}
+
+/* Right panel */
+#right-panel{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:6px;}
+.panel-title{font-size:11px;color:var(--subtext);text-transform:uppercase;letter-spacing:1px;margin:6px 0 4px;padding:0 4px;}
+.layer-item{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:4px;cursor:pointer;font-size:11px;}
+.layer-item.active{background:var(--surface);}
+.layer-item .layer-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.layer-item button{padding:2px 4px;font-size:10px;}
+.vis-btn{background:none!important;border:none!important;font-size:14px!important;padding:0!important;cursor:pointer;}
+.opacity-slider{width:100%;margin:2px 0;}
+#preview-canvas{width:100%;aspect-ratio:1;background:#11111b;border:1px solid var(--border);border-radius:4px;image-rendering:pixelated;}
+
+/* Palette */
+#palette-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--border);flex-wrap:wrap;}
+#palette-colors{display:flex;flex-wrap:wrap;gap:2px;}
+.pal-color{width:22px;height:22px;border:2px solid transparent;border-radius:3px;cursor:pointer;}
+.pal-color.active{border-color:var(--accent);box-shadow:0 0 4px var(--accent);}
+.pal-color.transparent-swatch{background:repeating-conic-gradient(#666 0% 25%,#999 0% 50%) 50%/10px 10px;}
+#current-color-display{width:32px;height:32px;border:2px solid var(--border);border-radius:4px;}
+#symmetry-btns{display:flex;gap:2px;margin-left:auto;}
+
+/* Frame bar */
+#frame-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--border);overflow-x:auto;}
+#frame-list{display:flex;gap:4px;}
+.frame-thumb{width:40px;height:40px;border:2px solid var(--border);border-radius:4px;cursor:pointer;image-rendering:pixelated;background:#11111b;}
+.frame-thumb.active{border-color:var(--accent);}
+.frame-thumb canvas{width:100%;height:100%;image-rendering:pixelated;}
+
+/* Mobile */
+@media(max-width:700px){
+  #main{grid-template-columns:1fr;grid-template-rows:1fr;}
+  #toolbar{flex-direction:row;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--border);padding:4px 6px;order:-1;}
+  #right-panel{display:none;}
+  #right-panel.show{display:flex;position:absolute;right:0;top:0;bottom:0;width:180px;z-index:10;}
+  .tool-btn{width:32px;height:32px;font-size:14px;}
+}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:260px;max-width:90vw;}
+.modal h3{margin-bottom:12px;}
+.modal button{margin:4px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div id="header">
+    <h1>🎨 픽셀 스튜디오</h1>
+    <span>캔버스:</span>
+    <select id="canvas-size">
+      <option value="16">16×16</option>
+      <option value="32" selected>32×32</option>
+      <option value="64">64×64</option>
+    </select>
+    <span id="zoom-label">줌: 12x</span>
+    <button id="btn-undo" title="실행 취소 (Z)">↩ 취소</button>
+    <button id="btn-redo" title="다시 실행 (Shift+Z)">↪ 다시</button>
+    <button id="btn-clear">🗑 지우기</button>
+    <button id="btn-export">💾 내보내기</button>
+    <button id="btn-toggle-panel" style="display:none;">☰ 패널</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <button class="tool-btn active" data-tool="pencil" title="연필 (B)">✏️<span class="shortcut">B</span></button>
+      <button class="tool-btn" data-tool="eraser" title="지우개 (E)">🧹<span class="shortcut">E</span></button>
+      <button class="tool-btn" data-tool="fill" title="채우기 (G)">🪣<span class="shortcut">G</span></button>
+      <button class="tool-btn" data-tool="line" title="라인 (L)">📏<span class="shortcut">L</span></button>
+      <button class="tool-btn" data-tool="rect" title="사각형 (R)">⬜<span class="shortcut">R</span></button>
+      <button class="tool-btn" data-tool="circle" title="원 (C)">⭕<span class="shortcut">C</span></button>
+      <button class="tool-btn" data-tool="eyedropper" title="스포이드 (I)">💉<span class="shortcut">I</span></button>
+      <button class="tool-btn" data-tool="move" title="선택/이동 (M)">✥<span class="shortcut">M</span></button>
+      <div class="tool-sep"></div>
+    </div>
+
+    <!-- Canvas -->
+    <div id="canvas-area">
+      <div id="canvas-wrap">
+        <canvas id="bg-canvas"></canvas>
+        <canvas id="main-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div id="right-panel">
+      <div class="panel-title">레이어</div>
+      <div id="layer-list"></div>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <button id="btn-add-layer" style="flex:1;">+ 레이어</button>
+        <button id="btn-del-layer">🗑</button>
+        <button id="btn-layer-up">▲</button>
+        <button id="btn-layer-down">▼</button>
+      </div>
+      <div class="panel-title" style="margin-top:8px;">투명도</div>
+      <input type="range" id="layer-opacity" class="opacity-slider" min="0" max="100" value="100">
+      <div class="panel-title" style="margin-top:8px;">어니언 스킨</div>
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;">
+        <input type="checkbox" id="onion-skin"> 이전 프레임 표시
+      </label>
+      <div class="panel-title" style="margin-top:8px;">미리보기</div>
+      <canvas id="preview-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Palette -->
+  <div id="palette-bar">
+    <div id="palette-colors"></div>
+    <div id="current-color-display"></div>
+    <input type="color" id="color-picker" value="#ffffff" title="커스텀 색상">
+    <button id="btn-add-color" title="팔레트에 추가">+</button>
+    <div id="symmetry-btns">
+      <span style="font-size:11px;color:var(--subtext);margin-right:2px;">대칭:</span>
+      <button id="sym-x" class="tool-btn" style="width:28px;height:24px;font-size:11px;" title="좌우 대칭">X</button>
+      <button id="sym-y" class="tool-btn" style="width:28px;height:24px;font-size:11px;" title="상하 대칭">Y</button>
+    </div>
+  </div>
+
+  <!-- Frame bar -->
+  <div id="frame-bar">
+    <span style="font-size:11px;color:var(--subtext);white-space:nowrap;">프레임:</span>
+    <div id="frame-list"></div>
+    <button id="btn-add-frame">+</button>
+    <button id="btn-del-frame">−</button>
+    <button id="btn-play">▶ 재생</button>
+    <span id="fps-label" style="font-size:11px;color:var(--subtext);">FPS:</span>
+    <input type="range" id="fps-slider" min="1" max="24" value="8" style="width:60px;">
+    <span id="fps-val" style="font-size:11px;">8</span>
+  </div>
+</div>
+
+<script>
+// ========== STATE ==========
+const DEFAULT_PALETTE = [
+  null, // transparent
+  '#1e1e2e','#313244','#45475a','#585b70','#a6adc8','#cdd6f4','#ffffff',
+  '#f38ba8','#fab387','#f9e2af','#a6e3a1','#94e2d5','#89b4fa','#cba6f7','#f5c2e7'
+];
+
+let state = {
+  width: 32, height: 32,
+  frames: [], // each frame = { layers: [ {name, visible, opacity, data:[]} ] }
+  activeFrame: 0,
+  activeLayer: 0,
+  zoom: 12,
+  tool: 'pencil',
+  color: {r:255,g:255,b:255,a:255},
+  palette: [...DEFAULT_PALETTE],
+  symmetryX: false, symmetryY: false,
+  onionSkin: false,
+  undoStack: [], redoStack: [],
+  panX: 0, panY: 0
+};
+
+// ========== DOM ==========
+const $ = s => document.querySelector(s);
+const bgCanvas = $('#bg-canvas'), mainCanvas = $('#main-canvas'), overlayCanvas = $('#overlay-canvas');
+const bgCtx = bgCanvas.getContext('2d'), ctx = mainCanvas.getContext('2d'), ovCtx = overlayCanvas.getContext('2d');
+const previewCanvas = $('#preview-canvas'), prevCtx = previewCanvas.getContext('2d');
+const canvasArea = $('#canvas-area'), canvasWrap = $('#canvas-wrap');
+
+// ========== INIT ==========
+function createEmptyLayerData(w, h) { return new Array(w * h).fill(null); }
+function createLayer(name, w, h) { return { name, visible: true, opacity: 1.0, data: createEmptyLayerData(w, h) }; }
+function createFrame(w, h) { return { layers: [createLayer('레이어 1', w, h)] }; }
+function deepCloneFrame(frame) {
+  return { layers: frame.layers.map(l => ({ ...l, data: [...l.data] })) };
+}
+
+function initProject(w, h) {
+  state.width = w; state.height = h;
+  state.frames = [createFrame(w, h)];
+  state.activeFrame = 0; state.activeLayer = 0;
+  state.undoStack = []; state.redoStack = [];
+  state.panX = 0; state.panY = 0;
+  autoZoom();
+  resizeCanvases();
+  render();
+  updateUI();
+}
+
+function autoZoom() {
+  const area = canvasArea.getBoundingClientRect();
+  const maxW = (area.width - 20) / state.width;
+  const maxH = (area.height - 20) / state.height;
+  state.zoom = Math.max(1, Math.min(32, Math.floor(Math.min(maxW, maxH))));
+}
+
+// ========== CANVAS SIZING ==========
+function resizeCanvases() {
+  const pw = state.width * state.zoom, ph = state.height * state.zoom;
+  [bgCanvas, mainCanvas, overlayCanvas].forEach(c => { c.width = pw; c.height = ph; c.style.width = pw + 'px'; c.style.height = ph + 'px'; });
+  canvasWrap.style.width = pw + 'px'; canvasWrap.style.height = ph + 'px';
+  previewCanvas.width = state.width; previewCanvas.height = state.height;
+  drawBg();
+  render();
+}
+
+// ========== CHECKERBOARD BG ==========
+function drawBg() {
+  const z = state.zoom, w = state.width, h = state.height;
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  const s = Math.max(z / 2, 4);
+  for (let y = 0; y < h * z; y += s) {
+    for (let x = 0; x < w * z; x += s) {
+      const cx = Math.floor(x / s), cy = Math.floor(y / s);
+      bgCtx.fillStyle = (cx + cy) % 2 === 0 ? '#2a2a3a' : '#22222e';
+      bgCtx.fillRect(x, y, s, s);
+    }
+  }
+}
+
+// ========== RENDER ==========
+function getFrame(fi) { return state.frames[fi === undefined ? state.activeFrame : fi]; }
+function getLayers() { return getFrame().layers; }
+function getActiveLayerData() { return getLayers()[state.activeLayer].data; }
+
+function colorToCSS(c) { return c ? `rgba(${c.r},${c.g},${c.b},${c.a / 255})` : 'rgba(0,0,0,0)'; }
+function colorsEqual(a, b) {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
+}
+function parseHex(hex) {
+  if (!hex) return null;
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return {r, g, b, a:255};
+}
+
+function renderFrame(targetCtx, frameIdx, w, h, scale, showOnion) {
+  const tw = w * scale, th = h * scale;
+  targetCtx.clearRect(0, 0, tw, th);
+  // onion skin
+  if (showOnion && state.onionSkin && frameIdx > 0) {
+    targetCtx.globalAlpha = 0.3;
+    renderFrameLayers(targetCtx, state.frames[frameIdx - 1].layers, w, h, scale);
+    targetCtx.globalAlpha = 1.0;
+  }
+  renderFrameLayers(targetCtx, state.frames[frameIdx].layers, w, h, scale);
+}
+
+function renderFrameLayers(targetCtx, layers, w, h, scale) {
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
+    if (!layer.visible) continue;
+    targetCtx.globalAlpha = layer.opacity;
+    for (let i = 0; i < layer.data.length; i++) {
+      const c = layer.data[i];
+      if (!c) continue;
+      const px = i % w, py = Math.floor(i / w);
+      targetCtx.fillStyle = colorToCSS(c);
+      targetCtx.fillRect(px * scale, py * scale, scale, scale);
+    }
+  }
+  targetCtx.globalAlpha = 1.0;
+}
+
+function render() {
+  renderFrame(ctx, state.activeFrame, state.width, state.height, state.zoom, true);
+  drawGrid();
+  renderPreview();
+  updateFrameThumbs();
+}
+
+function drawGrid() {
+  if (state.zoom < 4) return;
+  const z = state.zoom, w = state.width, h = state.height;
+  ovCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  ovCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ovCtx.lineWidth = 0.5;
+  for (let x = 0; x <= w; x++) { ovCtx.beginPath(); ovCtx.moveTo(x*z, 0); ovCtx.lineTo(x*z, h*z); ovCtx.stroke(); }
+  for (let y = 0; y <= h; y++) { ovCtx.beginPath(); ovCtx.moveTo(0, y*z); ovCtx.lineTo(w*z, y*z); ovCtx.stroke(); }
+}
+
+function renderPreview() {
+  prevCtx.clearRect(0, 0, state.width, state.height);
+  renderFrameLayers(prevCtx, getLayers(), state.width, state.height, 1);
+}
+
+// ========== UNDO/REDO ==========
+function pushUndo(action) {
+  state.undoStack.push(action);
+  if (state.undoStack.length > 50) state.undoStack.shift();
+  state.redoStack = [];
+}
+function undo() {
+  if (!state.undoStack.length) return;
+  const action = state.undoStack.pop();
+  applyAction(action, true);
+  state.redoStack.push(action);
+  render(); updateUI();
+}
+function redo() {
+  if (!state.redoStack.length) return;
+  const action = state.redoStack.pop();
+  applyAction(action, false);
+  state.undoStack.push(action);
+  render(); updateUI();
+}
+function applyAction(action, isUndo) {
+  const layers = state.frames[action.frameIndex].layers;
+  for (const ch of (isUndo ? [...action.changes].reverse() : action.changes)) {
+    if (ch.layerIndex < layers.length) {
+      layers[ch.layerIndex].data[ch.y * state.width + ch.x] = isUndo ? ch.oldColor : ch.newColor;
+    }
+  }
+}
+
+// ========== DRAWING ==========
+let drawing = false, drawChanges = [], shapeStart = null, lastDrawPt = null;
+
+function getPixelCoord(e) {
+  const rect = mainCanvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left), cy = (e.clientY - rect.top);
+  return { x: Math.floor(cx / state.zoom), y: Math.floor(cy / state.zoom) };
+}
+
+function setPixel(x, y, color, layerIdx) {
+  if (x < 0 || x >= state.width || y < 0 || y >= state.height) return;
+  const li = layerIdx !== undefined ? layerIdx : state.activeLayer;
+  const layer = getLayers()[li];
+  if (!layer) return;
+  const idx = y * state.width + x;
+  const oldColor = layer.data[idx] ? {...layer.data[idx]} : null;
+  const newColor = color ? {...color} : null;
+  if (colorsEqual(oldColor, newColor)) return;
+  layer.data[idx] = newColor;
+  drawChanges.push({ layerIndex: li, x, y, oldColor, newColor });
+}
+
+function applySymmetric(x, y, color, li) {
+  setPixel(x, y, color, li);
+  if (state.symmetryX) setPixel(state.width - 1 - x, y, color, li);
+  if (state.symmetryY) setPixel(x, state.height - 1 - y, color, li);
+  if (state.symmetryX && state.symmetryY) setPixel(state.width - 1 - x, state.height - 1 - y, color, li);
+}
+
+function drawLine(x0, y0, x1, y1, color, li) {
+  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  while (true) {
+    applySymmetric(x0, y0, color, li);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; x0 += sx; }
+    if (e2 < dx) { err += dx; y0 += sy; }
+  }
+}
+
+function drawRect(x0, y0, x1, y1, color, li) {
+  const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+  const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+  for (let x = minX; x <= maxX; x++) { applySymmetric(x, minY, color, li); applySymmetric(x, maxY, color, li); }
+  for (let y = minY + 1; y < maxY; y++) { applySymmetric(minX, y, color, li); applySymmetric(maxX, y, color, li); }
+}
+
+function drawCircle(cx, cy, x1, y1, color, li) {
+  const rx = Math.abs(x1 - cx), ry = Math.abs(y1 - cy);
+  if (rx === 0 && ry === 0) { applySymmetric(cx, cy, color, li); return; }
+  // Midpoint ellipse
+  let x = 0, y = ry;
+  let px = 0, py = 2 * rx * rx * y;
+  let p = ry * ry - rx * rx * ry + 0.25 * rx * rx;
+  while (px < py) {
+    applySymmetric(cx + x, cy + y, color, li); applySymmetric(cx - x, cy + y, color, li);
+    applySymmetric(cx + x, cy - y, color, li); applySymmetric(cx - x, cy - y, color, li);
+    x++; px += 2 * ry * ry;
+    if (p < 0) { p += ry * ry + px; } else { y--; py -= 2 * rx * rx; p += ry * ry + px - py; }
+  }
+  p = ry * ry * (x + 0.5) * (x + 0.5) + rx * rx * (y - 1) * (y - 1) - rx * rx * ry * ry;
+  while (y >= 0) {
+    applySymmetric(cx + x, cy + y, color, li); applySymmetric(cx - x, cy + y, color, li);
+    applySymmetric(cx + x, cy - y, color, li); applySymmetric(cx - x, cy - y, color, li);
+    y--; py -= 2 * rx * rx;
+    if (p > 0) { p += rx * rx - py; } else { x++; px += 2 * ry * ry; p += rx * rx - py + px; }
+  }
+}
+
+function floodFill(startX, startY, newColor) {
+  const layer = getLayers()[state.activeLayer];
+  const w = state.width, h = state.height;
+  const targetColor = layer.data[startY * w + startX] ? {...layer.data[startY * w + startX]} : null;
+  if (colorsEqual(targetColor, newColor)) return;
+  const visited = new Set();
+  const queue = [[startX, startY]];
+  visited.add(startY * w + startX);
+  while (queue.length) {
+    const [x, y] = queue.shift();
+    setPixel(x, y, newColor, state.activeLayer);
+    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+      const ni = ny * w + nx;
+      if (visited.has(ni)) continue;
+      const pc = layer.data[ni] ? {...layer.data[ni]} : null;
+      if (colorsEqual(pc, targetColor)) {
+        visited.add(ni);
+        queue.push([nx, ny]);
+      }
+    }
+  }
+}
+
+function eyedrop(x, y) {
+  const layers = getLayers();
+  for (let li = layers.length - 1; li >= 0; li--) {
+    if (!layers[li].visible) continue;
+    const c = layers[li].data[y * state.width + x];
+    if (c) { state.color = {...c}; updateColorDisplay(); return; }
+  }
+}
+
+// Move layer content
+let moveStart = null, moveSnapshot = null;
+function startMove(x, y) {
+  moveStart = {x, y};
+  moveSnapshot = [...getActiveLayerData()];
+}
+function doMove(x, y) {
+  if (!moveStart || !moveSnapshot) return;
+  const dx = x - moveStart.x, dy = y - moveStart.y;
+  const w = state.width, h = state.height;
+  const layer = getLayers()[state.activeLayer];
+  const newData = new Array(w * h).fill(null);
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const sx = px - dx, sy = py - dy;
+      if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+        newData[py * w + px] = moveSnapshot[sy * w + sx];
+      }
+    }
+  }
+  // Record changes
+  for (let i = 0; i < w * h; i++) {
+    const px = i % w, py = Math.floor(i / w);
+    const oldC = layer.data[i]; const newC = newData[i];
+    if (!colorsEqual(oldC, newC)) {
+      drawChanges.push({ layerIndex: state.activeLayer, x: px, y: py, oldColor: oldC ? {...oldC} : null, newColor: newC ? {...newC} : null });
+    }
+    layer.data[i] = newC;
+  }
+}
+
+// For shape preview during drag
+let tempLayerBackup = null;
+
+function onPointerDown(e) {
+  if (e.button === 2) { // right click = eyedropper
+    e.preventDefault();
+    const p = getPixelCoord(e);
+    eyedrop(p.x, p.y);
+    return;
+  }
+  if (e.button !== 0) return;
+  drawing = true;
+  drawChanges = [];
+  const p = getPixelCoord(e);
+  const c = state.tool === 'eraser' ? null : {...state.color};
+
+  if (state.tool === 'pencil' || state.tool === 'eraser') {
+    applySymmetric(p.x, p.y, c);
+    lastDrawPt = p;
+  } else if (state.tool === 'fill') {
+    floodFill(p.x, p.y, c);
+  } else if (state.tool === 'eyedropper') {
+    eyedrop(p.x, p.y);
+    drawing = false;
+  } else if (state.tool === 'line' || state.tool === 'rect' || state.tool === 'circle') {
+    shapeStart = p;
+    tempLayerBackup = [...getActiveLayerData()];
+  } else if (state.tool === 'move') {
+    startMove(p.x, p.y);
+  }
+  render();
+  mainCanvas.setPointerCapture(e.pointerId);
+}
+
+function onPointerMove(e) {
+  if (!drawing) return;
+  const p = getPixelCoord(e);
+  const c = state.tool === 'eraser' ? null : {...state.color};
+
+  if (state.tool === 'pencil' || state.tool === 'eraser') {
+    if (lastDrawPt) {
+      drawLine(lastDrawPt.x, lastDrawPt.y, p.x, p.y, c);
+    } else {
+      applySymmetric(p.x, p.y, c);
+    }
+    lastDrawPt = p;
+    render();
+  } else if (state.tool === 'line' || state.tool === 'rect' || state.tool === 'circle') {
+    // Restore backup and draw shape preview
+    const layer = getLayers()[state.activeLayer];
+    layer.data = [...tempLayerBackup];
+    drawChanges = [];
+    if (state.tool === 'line') drawLine(shapeStart.x, shapeStart.y, p.x, p.y, c);
+    else if (state.tool === 'rect') drawRect(shapeStart.x, shapeStart.y, p.x, p.y, c);
+    else if (state.tool === 'circle') drawCircle(shapeStart.x, shapeStart.y, p.x, p.y, c);
+    render();
+  } else if (state.tool === 'move') {
+    const layer = getLayers()[state.activeLayer];
+    // Reset first
+    layer.data = [...moveSnapshot];
+    drawChanges = [];
+    doMove(p.x, p.y);
+    render();
+  }
+}
+
+function onPointerUp(e) {
+  if (!drawing) return;
+  drawing = false;
+  if (state.tool === 'line' || state.tool === 'rect' || state.tool === 'circle') {
+    // Final shape: rebuild changes from backup
+    const layer = getLayers()[state.activeLayer];
+    const finalData = [...layer.data];
+    drawChanges = [];
+    for (let i = 0; i < finalData.length; i++) {
+      const old = tempLayerBackup[i]; const nw = finalData[i];
+      if (!colorsEqual(old, nw)) {
+        const px = i % state.width, py = Math.floor(i / state.width);
+        drawChanges.push({ layerIndex: state.activeLayer, x: px, y: py, oldColor: old ? {...old} : null, newColor: nw ? {...nw} : null });
+      }
+    }
+    tempLayerBackup = null;
+    shapeStart = null;
+  }
+  if (state.tool === 'move') {
+    moveStart = null; moveSnapshot = null;
+  }
+  if (drawChanges.length > 0) {
+    pushUndo({ frameIndex: state.activeFrame, changes: drawChanges });
+  }
+  drawChanges = [];
+  lastDrawPt = null;
+  render();
+}
+
+mainCanvas.addEventListener('pointerdown', onPointerDown);
+mainCanvas.addEventListener('pointermove', onPointerMove);
+mainCanvas.addEventListener('pointerup', onPointerUp);
+mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ========== ZOOM (wheel + pinch) ==========
+canvasArea.addEventListener('wheel', e => {
+  e.preventDefault();
+  const oldZoom = state.zoom;
+  if (e.deltaY < 0) state.zoom = Math.min(32, state.zoom + 1);
+  else state.zoom = Math.max(1, state.zoom - 1);
+  if (state.zoom !== oldZoom) {
+    resizeCanvases();
+    $('#zoom-label').textContent = `줌: ${state.zoom}x`;
+  }
+}, {passive: false});
+
+let pinchDist = 0;
+canvasArea.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchDist = Math.hypot(dx, dy);
+  }
+}, {passive: true});
+canvasArea.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const nd = Math.hypot(dx, dy);
+    if (nd - pinchDist > 20) { state.zoom = Math.min(32, state.zoom + 1); pinchDist = nd; resizeCanvases(); $('#zoom-label').textContent = `줌: ${state.zoom}x`; }
+    else if (pinchDist - nd > 20) { state.zoom = Math.max(1, state.zoom - 1); pinchDist = nd; resizeCanvases(); $('#zoom-label').textContent = `줌: ${state.zoom}x`; }
+  }
+}, {passive: false});
+
+// ========== KEYBOARD SHORTCUTS ==========
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const key = e.key.toLowerCase();
+  if (key === 'b') selectTool('pencil');
+  else if (key === 'e') selectTool('eraser');
+  else if (key === 'g') selectTool('fill');
+  else if (key === 'l') selectTool('line');
+  else if (key === 'r') selectTool('rect');
+  else if (key === 'c') selectTool('circle');
+  else if (key === 'i') selectTool('eyedropper');
+  else if (key === 'm') selectTool('move');
+  else if (key === 'z' && !e.ctrlKey && !e.metaKey && e.shiftKey) redo();
+  else if (key === 'z' && !e.ctrlKey && !e.metaKey) undo();
+  else if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey) { e.preventDefault(); redo(); }
+  else if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); }
+});
+
+// ========== TOOL SELECTION ==========
+function selectTool(tool) {
+  state.tool = tool;
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+}
+document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.addEventListener('click', () => selectTool(b.dataset.tool)));
+
+// ========== PALETTE ==========
+function updatePalette() {
+  const container = $('#palette-colors');
+  container.innerHTML = '';
+  state.palette.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'pal-color' + (isCurrentColor(c) ? ' active' : '');
+    if (c === null) {
+      el.classList.add('transparent-swatch');
+      el.title = '투명';
+    } else {
+      el.style.background = c;
+    }
+    el.addEventListener('click', () => {
+      if (c === null) {
+        state.tool = 'eraser';
+        selectTool('eraser');
+      } else {
+        state.color = parseHex(c);
+        updateColorDisplay();
+      }
+      updatePalette();
+    });
+    container.appendChild(el);
+  });
+}
+
+function isCurrentColor(hex) {
+  if (!hex) return false;
+  const c = parseHex(hex);
+  return c && c.r === state.color.r && c.g === state.color.g && c.b === state.color.b;
+}
+
+function updateColorDisplay() {
+  $('#current-color-display').style.background = colorToCSS(state.color);
+  $('#color-picker').value = '#' + [state.color.r, state.color.g, state.color.b].map(v => v.toString(16).padStart(2,'0')).join('');
+  updatePalette();
+}
+
+$('#color-picker').addEventListener('input', e => {
+  state.color = parseHex(e.target.value);
+  updateColorDisplay();
+  if (state.tool === 'eraser') selectTool('pencil');
+});
+
+$('#btn-add-color').addEventListener('click', () => {
+  const hex = '#' + [state.color.r, state.color.g, state.color.b].map(v => v.toString(16).padStart(2,'0')).join('');
+  if (!state.palette.includes(hex)) {
+    state.palette.push(hex);
+    updatePalette();
+  }
+});
+
+// ========== SYMMETRY ==========
+$('#sym-x').addEventListener('click', () => { state.symmetryX = !state.symmetryX; $('#sym-x').classList.toggle('active', state.symmetryX); });
+$('#sym-y').addEventListener('click', () => { state.symmetryY = !state.symmetryY; $('#sym-y').classList.toggle('active', state.symmetryY); });
+
+// ========== LAYERS ==========
+function updateLayerList() {
+  const container = $('#layer-list');
+  container.innerHTML = '';
+  const layers = getLayers();
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const l = layers[i];
+    const div = document.createElement('div');
+    div.className = 'layer-item' + (i === state.activeLayer ? ' active' : '');
+    div.innerHTML = `
+      <button class="vis-btn">${l.visible ? '👁️' : '🚫'}</button>
+      <span class="layer-name">${l.name}</span>
+    `;
+    div.querySelector('.vis-btn').addEventListener('click', e => { e.stopPropagation(); l.visible = !l.visible; render(); updateLayerList(); });
+    div.addEventListener('click', () => { state.activeLayer = i; updateLayerList(); });
+    container.appendChild(div);
+  }
+}
+
+$('#btn-add-layer').addEventListener('click', () => {
+  const layers = getLayers();
+  if (layers.length >= 4) return;
+  layers.push(createLayer(`레이어 ${layers.length + 1}`, state.width, state.height));
+  state.activeLayer = layers.length - 1;
+  render(); updateUI();
+});
+
+$('#btn-del-layer').addEventListener('click', () => {
+  const layers = getLayers();
+  if (layers.length <= 1) return;
+  layers.splice(state.activeLayer, 1);
+  state.activeLayer = Math.min(state.activeLayer, layers.length - 1);
+  render(); updateUI();
+});
+
+$('#btn-layer-up').addEventListener('click', () => {
+  const layers = getLayers();
+  if (state.activeLayer >= layers.length - 1) return;
+  [layers[state.activeLayer], layers[state.activeLayer + 1]] = [layers[state.activeLayer + 1], layers[state.activeLayer]];
+  state.activeLayer++;
+  render(); updateUI();
+});
+
+$('#btn-layer-down').addEventListener('click', () => {
+  const layers = getLayers();
+  if (state.activeLayer <= 0) return;
+  [layers[state.activeLayer], layers[state.activeLayer - 1]] = [layers[state.activeLayer - 1], layers[state.activeLayer]];
+  state.activeLayer--;
+  render(); updateUI();
+});
+
+$('#layer-opacity').addEventListener('input', e => {
+  getLayers()[state.activeLayer].opacity = e.target.value / 100;
+  render();
+});
+
+$('#onion-skin').addEventListener('change', e => { state.onionSkin = e.target.checked; render(); });
+
+// ========== FRAMES ==========
+function updateFrameThumbs() {
+  const container = $('#frame-list');
+  // Keep existing thumbs, update
+  while (container.children.length > state.frames.length) container.lastChild.remove();
+  for (let i = 0; i < state.frames.length; i++) {
+    let wrap = container.children[i];
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'frame-thumb';
+      const c = document.createElement('canvas');
+      c.width = state.width; c.height = state.height;
+      wrap.appendChild(c);
+      container.appendChild(wrap);
+    }
+    wrap.className = 'frame-thumb' + (i === state.activeFrame ? ' active' : '');
+    const fc = wrap.querySelector('canvas');
+    if (fc.width !== state.width) { fc.width = state.width; fc.height = state.height; }
+    const fctx = fc.getContext('2d');
+    fctx.clearRect(0, 0, state.width, state.height);
+    renderFrameLayers(fctx, state.frames[i].layers, state.width, state.height, 1);
+    wrap.onclick = () => { switchFrame(i); };
+  }
+}
+
+function switchFrame(i) {
+  state.activeFrame = i;
+  state.activeLayer = Math.min(state.activeLayer, getLayers().length - 1);
+  render(); updateUI();
+}
+
+$('#btn-add-frame').addEventListener('click', () => {
+  if (state.frames.length >= 12) return;
+  state.frames.push(createFrame(state.width, state.height));
+  switchFrame(state.frames.length - 1);
+});
+
+$('#btn-del-frame').addEventListener('click', () => {
+  if (state.frames.length <= 1) return;
+  state.frames.splice(state.activeFrame, 1);
+  state.activeFrame = Math.min(state.activeFrame, state.frames.length - 1);
+  state.activeLayer = Math.min(state.activeLayer, getLayers().length - 1);
+  render(); updateUI();
+});
+
+// ========== ANIMATION PLAYBACK ==========
+let playing = false, playInterval = null;
+$('#btn-play').addEventListener('click', () => {
+  playing = !playing;
+  $('#btn-play').textContent = playing ? '⏹ 정지' : '▶ 재생';
+  if (playing) {
+    const fps = parseInt($('#fps-slider').value);
+    playInterval = setInterval(() => {
+      state.activeFrame = (state.activeFrame + 1) % state.frames.length;
+      render(); updateUI();
+    }, 1000 / fps);
+  } else {
+    clearInterval(playInterval);
+  }
+});
+$('#fps-slider').addEventListener('input', e => {
+  $('#fps-val').textContent = e.target.value;
+  if (playing) {
+    clearInterval(playInterval);
+    playInterval = setInterval(() => {
+      state.activeFrame = (state.activeFrame + 1) % state.frames.length;
+      render(); updateUI();
+    }, 1000 / parseInt(e.target.value));
+  }
+});
+
+// ========== CANVAS SIZE ==========
+$('#canvas-size').addEventListener('change', e => {
+  if (confirm('캔버스 크기를 변경하면 현재 작업이 초기화됩니다. 계속하시겠습니까?')) {
+    const size = parseInt(e.target.value);
+    initProject(size, size);
+  } else {
+    e.target.value = state.width;
+  }
+});
+
+// ========== CLEAR ==========
+$('#btn-clear').addEventListener('click', () => {
+  if (!confirm('현재 프레임의 모든 레이어를 지우시겠습니까?')) return;
+  const changes = [];
+  getLayers().forEach((layer, li) => {
+    for (let i = 0; i < layer.data.length; i++) {
+      if (layer.data[i]) {
+        const px = i % state.width, py = Math.floor(i / state.width);
+        changes.push({ layerIndex: li, x: px, y: py, oldColor: {...layer.data[i]}, newColor: null });
+        layer.data[i] = null;
+      }
+    }
+  });
+  if (changes.length) pushUndo({ frameIndex: state.activeFrame, changes });
+  render();
+});
+
+// ========== UNDO/REDO BUTTONS ==========
+$('#btn-undo').addEventListener('click', undo);
+$('#btn-redo').addEventListener('click', redo);
+
+// ========== EXPORT ==========
+$('#btn-export').addEventListener('click', showExportModal);
+
+function showExportModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>💾 내보내기</h3>
+      <p style="margin-bottom:12px;font-size:12px;color:var(--subtext);">현재 작품을 이미지로 저장합니다.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button id="exp-png">📷 PNG (현재 프레임)</button>
+        <button id="exp-png-scale">📷 PNG 확대 (현재 프레임, 4x)</button>
+        <button id="exp-sprite">🎞️ 스프라이트 시트 (전체 프레임)</button>
+        <button id="exp-cancel" style="margin-top:8px;">취소</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#exp-cancel').onclick = () => overlay.remove();
+  overlay.querySelector('#exp-png').onclick = () => { exportPNG(1); overlay.remove(); };
+  overlay.querySelector('#exp-png-scale').onclick = () => { exportPNG(4); overlay.remove(); };
+  overlay.querySelector('#exp-sprite').onclick = () => { exportSpriteSheet(); overlay.remove(); };
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+}
+
+function exportPNG(scale) {
+  const c = document.createElement('canvas');
+  c.width = state.width * scale; c.height = state.height * scale;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = false;
+  renderFrameLayers(cx, getLayers(), state.width, state.height, scale);
+  downloadCanvas(c, `pixel-art-${Date.now()}.png`);
+}
+
+function exportSpriteSheet() {
+  const scale = 1;
+  const c = document.createElement('canvas');
+  c.width = state.width * scale * state.frames.length;
+  c.height = state.height * scale;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = false;
+  state.frames.forEach((frame, i) => {
+    cx.save();
+    cx.translate(i * state.width * scale, 0);
+    renderFrameLayers(cx, frame.layers, state.width, state.height, scale);
+    cx.restore();
+  });
+  downloadCanvas(c, `sprite-sheet-${Date.now()}.png`);
+}
+
+function downloadCanvas(canvas, filename) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = filename;
+  a.click();
+}
+
+// ========== SAVE / LOAD (localStorage) ==========
+function saveProject() {
+  try {
+    const data = {
+      width: state.width, height: state.height,
+      frames: state.frames.map(f => ({
+        layers: f.layers.map(l => ({
+          name: l.name, visible: l.visible, opacity: l.opacity,
+          data: l.data.map(c => c ? [c.r, c.g, c.b, c.a] : 0)
+        }))
+      })),
+      activeFrame: state.activeFrame, activeLayer: state.activeLayer,
+      palette: state.palette
+    };
+    localStorage.setItem('pixel-studio-save', JSON.stringify(data));
+  } catch(e) { console.warn('Save failed', e); }
+}
+
+function loadProject() {
+  try {
+    const raw = localStorage.getItem('pixel-studio-save');
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    state.width = data.width; state.height = data.height;
+    state.frames = data.frames.map(f => ({
+      layers: f.layers.map(l => ({
+        name: l.name, visible: l.visible, opacity: l.opacity,
+        data: l.data.map(c => c === 0 ? null : {r:c[0], g:c[1], b:c[2], a:c[3]})
+      }))
+    }));
+    state.activeFrame = data.activeFrame || 0;
+    state.activeLayer = data.activeLayer || 0;
+    if (data.palette) state.palette = data.palette;
+    state.undoStack = []; state.redoStack = [];
+    $('#canvas-size').value = state.width;
+    return true;
+  } catch(e) { console.warn('Load failed', e); return false; }
+}
+
+// Auto-save every 30s
+setInterval(saveProject, 30000);
+window.addEventListener('beforeunload', saveProject);
+
+// ========== MOBILE PANEL TOGGLE ==========
+const toggleBtn = $('#btn-toggle-panel');
+function checkMobile() {
+  const isMobile = window.innerWidth <= 700;
+  toggleBtn.style.display = isMobile ? '' : 'none';
+  if (!isMobile) $('#right-panel').classList.remove('show');
+}
+toggleBtn.addEventListener('click', () => $('#right-panel').classList.toggle('show'));
+window.addEventListener('resize', () => { checkMobile(); autoZoom(); resizeCanvases(); });
+
+// ========== UI UPDATE ==========
+function updateUI() {
+  updateLayerList();
+  updatePalette();
+  updateColorDisplay();
+  updateFrameThumbs();
+  const layer = getLayers()[state.activeLayer];
+  if (layer) $('#layer-opacity').value = layer.opacity * 100;
+  $('#zoom-label').textContent = `줌: ${state.zoom}x`;
+}
+
+// ========== INIT ==========
+function boot() {
+  checkMobile();
+  if (!loadProject()) {
+    initProject(32, 32);
+  } else {
+    autoZoom();
+    resizeCanvases();
+    render();
+    updateUI();
+  }
+}
+boot();
+</script>
+</body>
+</html>
