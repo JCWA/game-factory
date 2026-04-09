@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Dungeon Crawler</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a;
+  color: #ccc;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 8px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 700px;
+  width: 100%;
+}
+#header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 13px;
+  background: #111;
+  padding: 6px 10px;
+  border-radius: 4px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.stat { white-space: nowrap; }
+.stat span { font-weight: bold; }
+.hp span { color: #ff6b6b; }
+.atk span { color: #fbbf24; }
+.def span { color: #38bdf8; }
+.floor span { color: #a78bfa; }
+.exp span { color: #4ade80; }
+.gold span { color: #ffd700; }
+canvas { border: 1px solid #222; border-radius: 4px; image-rendering: pixelated; }
+#log {
+  width: 100%;
+  background: #111;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  height: 80px;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+.log-combat { color: #ff6b6b; }
+.log-item { color: #4ade80; }
+.log-info { color: #888; }
+.log-special { color: #fbbf24; }
+#mobile-pad {
+  display: none;
+  grid-template-columns: repeat(3, 50px);
+  grid-template-rows: repeat(3, 50px);
+  gap: 4px;
+}
+@media (pointer: coarse) { #mobile-pad { display: grid; } }
+.dpad-btn {
+  background: #222;
+  border: 1px solid #444;
+  color: #aaa;
+  font-size: 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.dpad-btn:active { background: #444; }
+.dpad-empty { background: transparent; border: none; }
+#overlay {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  background: rgba(0,0,0,0.85);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 10; gap: 12px;
+}
+#overlay.hidden { display: none; }
+#overlay h2 { color: #a78bfa; font-size: 28px; }
+#overlay p { color: #888; font-size: 13px; text-align: center; line-height: 1.6; }
+.obtn {
+  background: transparent; color: #a78bfa; border: 2px solid #a78bfa;
+  padding: 10px 28px; font-size: 16px; cursor: pointer; border-radius: 4px;
+  font-family: 'Courier New', monospace;
+}
+.obtn:hover { background: #a78bfa20; }
+#inventory {
+  width: 100%;
+  background: #111;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  min-height: 30px;
+}
+#inventory .title { color: #ffd700; font-weight: bold; margin-bottom: 4px; }
+.inv-item { color: #4ade80; cursor: pointer; padding: 2px 4px; display: inline-block; }
+.inv-item:hover { background: #333; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="header">
+    <div class="stat hp">HP: <span id="hp">30/30</span></div>
+    <div class="stat atk">ATK: <span id="atk">5</span></div>
+    <div class="stat def">DEF: <span id="def">2</span></div>
+    <div class="stat floor">Floor: <span id="floor">1</span></div>
+    <div class="stat exp">Lv<span id="lv">1</span> EXP: <span id="exp">0/10</span></div>
+    <div class="stat gold">Gold: <span id="gold">0</span></div>
+  </div>
+  <canvas id="game" width="560" height="400"></canvas>
+  <div id="inventory"><div class="title">인벤토리</div><div id="inv-items">(비어있음)</div></div>
+  <div id="log"></div>
+  <div id="mobile-pad">
+    <div class="dpad-empty"></div>
+    <button class="dpad-btn" data-dir="up">↑</button>
+    <div class="dpad-empty"></div>
+    <button class="dpad-btn" data-dir="left">←</button>
+    <button class="dpad-btn" data-dir="wait">·</button>
+    <button class="dpad-btn" data-dir="right">→</button>
+    <div class="dpad-empty"></div>
+    <button class="dpad-btn" data-dir="down">↓</button>
+    <div class="dpad-empty"></div>
+  </div>
+</div>
+<div id="overlay">
+  <h2>DUNGEON CRAWLER</h2>
+  <p>던전을 탐험하고 계단을 찾아 더 깊이 내려가세요!<br>방향키/WASD로 이동, 적에게 부딪혀 공격</p>
+  <button class="obtn" id="start-btn">탐험 시작</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const logEl = document.getElementById('log');
+const overlayEl = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+
+const TILE = 20;
+const MAP_W = 28, MAP_H = 20;
+canvas.width = MAP_W * TILE;
+canvas.height = MAP_H * TILE;
+
+const TILES = { WALL: 0, FLOOR: 1, STAIR: 2, DOOR: 3 };
+
+const MONSTERS = [
+  { name: '쥐', ch: 'r', color: '#8b7355', hp: 8, atk: 2, def: 0, exp: 3, gold: 2 },
+  { name: '박쥐', ch: 'b', color: '#888', hp: 6, atk: 3, def: 0, exp: 4, gold: 3 },
+  { name: '슬라임', ch: 's', color: '#4ade80', hp: 15, atk: 3, def: 1, exp: 5, gold: 5 },
+  { name: '고블린', ch: 'g', color: '#22c55e', hp: 20, atk: 5, def: 2, exp: 8, gold: 8 },
+  { name: '스켈레톤', ch: 'S', color: '#e2e8f0', hp: 25, atk: 7, def: 3, exp: 12, gold: 12 },
+  { name: '오크', ch: 'O', color: '#65a30d', hp: 40, atk: 8, def: 4, exp: 18, gold: 15 },
+  { name: '트롤', ch: 'T', color: '#059669', hp: 60, atk: 10, def: 5, exp: 25, gold: 20 },
+  { name: '드래곤', ch: 'D', color: '#dc2626', hp: 100, atk: 15, def: 8, exp: 50, gold: 50 }
+];
+
+const ITEMS = [
+  { name: '체력 포션', ch: '!', color: '#ff6b6b', type: 'potion', effect: { hp: 15 } },
+  { name: '큰 체력 포션', ch: '!', color: '#ef4444', type: 'potion', effect: { hp: 30 } },
+  { name: '힘의 스크롤', ch: '?', color: '#fbbf24', type: 'scroll', effect: { atk: 2 } },
+  { name: '보호의 스크롤', ch: '?', color: '#38bdf8', type: 'scroll', effect: { def: 2 } },
+  { name: '경험의 구슬', ch: 'o', color: '#a78bfa', type: 'exp', effect: { exp: 15 } }
+];
+
+let map, visible, explored, player, monsters, items, floor, gameState;
+let turnCount = 0;
+
+// ===== 맵 생성 (BSP) =====
+function generateMap() {
+  map = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILES.WALL));
+  const rooms = [];
+
+  function splitBSP(x, y, w, h, depth) {
+    if (depth <= 0 || w < 6 || h < 6) {
+      const rw = Math.max(3, Math.floor(Math.random() * (w - 4)) + 3);
+      const rh = Math.max(3, Math.floor(Math.random() * (h - 4)) + 3);
+      const rx = x + Math.floor(Math.random() * (w - rw));
+      const ry = y + Math.floor(Math.random() * (h - rh));
+      rooms.push({ x: rx, y: ry, w: rw, h: rh });
+      for (let dy = ry; dy < ry + rh; dy++)
+        for (let dx = rx; dx < rx + rw; dx++)
+          if (dy > 0 && dy < MAP_H-1 && dx > 0 && dx < MAP_W-1)
+            map[dy][dx] = TILES.FLOOR;
+      return;
+    }
+
+    if (w > h) {
+      const split = x + Math.floor(w * (0.3 + Math.random() * 0.4));
+      splitBSP(x, y, split - x, h, depth - 1);
+      splitBSP(split, y, x + w - split, h, depth - 1);
+    } else {
+      const split = y + Math.floor(h * (0.3 + Math.random() * 0.4));
+      splitBSP(x, y, w, split - y, depth - 1);
+      splitBSP(x, split, w, y + h - split, depth - 1);
+    }
+  }
+
+  splitBSP(1, 1, MAP_W - 2, MAP_H - 2, 4);
+
+  // 방 연결
+  for (let i = 0; i < rooms.length - 1; i++) {
+    const a = rooms[i], b = rooms[i + 1];
+    const ax = Math.floor(a.x + a.w / 2), ay = Math.floor(a.y + a.h / 2);
+    const bx = Math.floor(b.x + b.w / 2), by = Math.floor(b.y + b.h / 2);
+
+    let cx = ax, cy = ay;
+    while (cx !== bx) {
+      if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1)
+        map[cy][cx] = TILES.FLOOR;
+      cx += cx < bx ? 1 : -1;
+    }
+    while (cy !== by) {
+      if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1)
+        map[cy][cx] = TILES.FLOOR;
+      cy += cy < by ? 1 : -1;
+    }
+  }
+
+  // 계단 배치 (마지막 방)
+  const lastRoom = rooms[rooms.length - 1];
+  const sx = lastRoom.x + Math.floor(lastRoom.w / 2);
+  const sy = lastRoom.y + Math.floor(lastRoom.h / 2);
+  map[sy][sx] = TILES.STAIR;
+
+  return rooms;
+}
+
+// ===== 시야 (레이캐스트) =====
+function computeVisibility() {
+  visible = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(false));
+  const viewRange = 6;
+
+  for (let angle = 0; angle < 360; angle += 1) {
+    const rad = angle * Math.PI / 180;
+    const dx = Math.cos(rad), dy = Math.sin(rad);
+    let x = player.x + 0.5, y = player.y + 0.5;
+
+    for (let d = 0; d < viewRange; d++) {
+      const mx = Math.floor(x), my = Math.floor(y);
+      if (mx < 0 || mx >= MAP_W || my < 0 || my >= MAP_H) break;
+      visible[my][mx] = true;
+      explored[my][mx] = true;
+      if (map[my][mx] === TILES.WALL) break;
+      x += dx * 0.5;
+      y += dy * 0.5;
+    }
+  }
+}
+
+// ===== 초기화 =====
+function initGame() {
+  floor = 1;
+  player = { x: 0, y: 0, hp: 30, maxHp: 30, atk: 5, def: 2, lv: 1, exp: 0, expNext: 10, gold: 0, inventory: [] };
+  gameState = 'playing';
+  turnCount = 0;
+  logEl.innerHTML = '';
+  enterFloor();
+}
+
+function enterFloor() {
+  const rooms = generateMap();
+  explored = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(false));
+
+  // 플레이어 위치 (첫번째 방)
+  const firstRoom = rooms[0];
+  player.x = firstRoom.x + Math.floor(firstRoom.w / 2);
+  player.y = firstRoom.y + Math.floor(firstRoom.h / 2);
+
+  // 몬스터 배치
+  monsters = [];
+  const monsterCount = 4 + floor * 2;
+  const availableMonsters = MONSTERS.filter((m, i) => i <= Math.min(floor, MONSTERS.length - 1));
+
+  for (let i = 0; i < monsterCount; i++) {
+    const room = rooms[Math.floor(Math.random() * rooms.length)];
+    const mx = room.x + Math.floor(Math.random() * room.w);
+    const my = room.y + Math.floor(Math.random() * room.h);
+    if (map[my][mx] !== TILES.FLOOR) continue;
+    if (mx === player.x && my === player.y) continue;
+
+    const template = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+    const hpMult = 1 + (floor - 1) * 0.2;
+    monsters.push({
+      ...template,
+      hp: Math.floor(template.hp * hpMult),
+      maxHp: Math.floor(template.hp * hpMult),
+      atk: template.atk + Math.floor(floor / 3),
+      x: mx, y: my
+    });
+  }
+
+  // 아이템 배치
+  items = [];
+  const itemCount = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < itemCount; i++) {
+    const room = rooms[Math.floor(Math.random() * rooms.length)];
+    const ix = room.x + Math.floor(Math.random() * room.w);
+    const iy = room.y + Math.floor(Math.random() * room.h);
+    if (map[iy][ix] !== TILES.FLOOR) continue;
+
+    const template = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+    items.push({ ...template, x: ix, y: iy });
+  }
+
+  computeVisibility();
+  addLog(`--- ${floor}층에 도착했다 ---`, 'special');
+  updateUI();
+  draw();
+}
+
+// ===== 턴 =====
+function playerMove(dx, dy) {
+  if (gameState !== 'playing') return;
+
+  const nx = player.x + dx;
+  const ny = player.y + dy;
+
+  if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) return;
+  if (map[ny][nx] === TILES.WALL) return;
+
+  // 몬스터 확인
+  const monster = monsters.find(m => m.x === nx && m.y === ny);
+  if (monster) {
+    combat(monster);
+  } else {
+    player.x = nx;
+    player.y = ny;
+
+    // 계단
+    if (map[ny][nx] === TILES.STAIR) {
+      floor++;
+      addLog(`계단을 내려간다...`, 'info');
+      enterFloor();
+      return;
+    }
+
+    // 아이템 줍기
+    const itemIdx = items.findIndex(i => i.x === nx && i.y === ny);
+    if (itemIdx >= 0) {
+      const item = items[itemIdx];
+      player.inventory.push(item);
+      items.splice(itemIdx, 1);
+      addLog(`${item.name}을(를) 주웠다!`, 'item');
+    }
+  }
+
+  turnCount++;
+  moveMonsters();
+  computeVisibility();
+  updateUI();
+  draw();
+}
+
+function combat(monster) {
+  const playerDmg = Math.max(1, player.atk - monster.def + Math.floor(Math.random() * 3));
+  monster.hp -= playerDmg;
+  addLog(`${monster.name}에게 ${playerDmg} 데미지!`, 'combat');
+
+  if (monster.hp <= 0) {
+    addLog(`${monster.name}을(를) 처치! +${monster.exp}EXP +${monster.gold}G`, 'item');
+    player.exp += monster.exp;
+    player.gold += monster.gold;
+    monsters.splice(monsters.indexOf(monster), 1);
+    checkLevelUp();
+  } else {
+    // 반격
+    const monDmg = Math.max(1, monster.atk - player.def + Math.floor(Math.random() * 2));
+    player.hp -= monDmg;
+    addLog(`${monster.name}의 반격! ${monDmg} 데미지`, 'combat');
+    if (player.hp <= 0) {
+      gameOver();
+    }
+  }
+}
+
+function checkLevelUp() {
+  while (player.exp >= player.expNext) {
+    player.exp -= player.expNext;
+    player.lv++;
+    player.expNext = Math.floor(player.expNext * 1.5);
+    player.maxHp += 5;
+    player.hp = Math.min(player.hp + 10, player.maxHp);
+    player.atk += 1;
+    player.def += 1;
+    addLog(`레벨 ${player.lv} 달성! HP+5 ATK+1 DEF+1`, 'special');
+  }
+}
+
+function moveMonsters() {
+  monsters.forEach(m => {
+    if (!visible[m.y][m.x]) {
+      // 안 보이면 랜덤
+      if (Math.random() < 0.3) {
+        const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+        const d = dirs[Math.floor(Math.random() * dirs.length)];
+        const nx = m.x + d[0], ny = m.y + d[1];
+        if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx] !== TILES.WALL
+            && !monsters.some(om => om !== m && om.x === nx && om.y === ny)) {
+          m.x = nx; m.y = ny;
+        }
+      }
+      return;
+    }
+
+    // 보이면 추적
+    const dx = Math.sign(player.x - m.x);
+    const dy = Math.sign(player.y - m.y);
+    const tries = Math.abs(player.x - m.x) > Math.abs(player.y - m.y)
+      ? [[dx, 0], [0, dy]] : [[0, dy], [dx, 0]];
+
+    for (const [tdx, tdy] of tries) {
+      if (tdx === 0 && tdy === 0) continue;
+      const nx = m.x + tdx, ny = m.y + tdy;
+      if (nx === player.x && ny === player.y) {
+        // 공격
+        const dmg = Math.max(1, m.atk - player.def + Math.floor(Math.random() * 2));
+        player.hp -= dmg;
+        addLog(`${m.name}이(가) 공격! ${dmg} 데미지`, 'combat');
+        if (player.hp <= 0) gameOver();
+        return;
+      }
+      if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H && map[ny][nx] !== TILES.WALL
+          && !monsters.some(om => om !== m && om.x === nx && om.y === ny)) {
+        m.x = nx; m.y = ny;
+        break;
+      }
+    }
+  });
+}
+
+function useItem(idx) {
+  const item = player.inventory[idx];
+  if (!item) return;
+
+  if (item.effect.hp) {
+    const healed = Math.min(item.effect.hp, player.maxHp - player.hp);
+    player.hp += healed;
+    addLog(`${item.name} 사용! HP +${healed}`, 'item');
+  }
+  if (item.effect.atk) {
+    player.atk += item.effect.atk;
+    addLog(`${item.name} 사용! ATK +${item.effect.atk}`, 'item');
+  }
+  if (item.effect.def) {
+    player.def += item.effect.def;
+    addLog(`${item.name} 사용! DEF +${item.effect.def}`, 'item');
+  }
+  if (item.effect.exp) {
+    player.exp += item.effect.exp;
+    addLog(`${item.name} 사용! EXP +${item.effect.exp}`, 'item');
+    checkLevelUp();
+  }
+
+  player.inventory.splice(idx, 1);
+  updateUI();
+  draw();
+}
+
+function gameOver() {
+  gameState = 'dead';
+  overlayEl.classList.remove('hidden');
+  overlayEl.innerHTML = `
+    <h2>사망</h2>
+    <p style="color:#ff6b6b;font-size:18px">${floor}층에서 쓰러졌다...</p>
+    <p>레벨: ${player.lv} | 턴: ${turnCount} | 골드: ${player.gold}</p>
+    <button class="obtn" onclick="location.reload()">다시 도전</button>
+  `;
+}
+
+// ===== 렌더링 =====
+function draw() {
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const px = x * TILE, py = y * TILE;
+
+      if (visible[y][x]) {
+        if (map[y][x] === TILES.WALL) {
+          ctx.fillStyle = '#3a3a4a';
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.strokeStyle = '#4a4a5a';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(px, py, TILE, TILE);
+        } else if (map[y][x] === TILES.FLOOR) {
+          ctx.fillStyle = '#1a1a2a';
+          ctx.fillRect(px, py, TILE, TILE);
+        } else if (map[y][x] === TILES.STAIR) {
+          ctx.fillStyle = '#1a1a2a';
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.fillStyle = '#a78bfa';
+          ctx.font = 'bold 16px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText('▼', px + TILE/2, py + TILE - 3);
+        }
+      } else if (explored[y][x]) {
+        ctx.fillStyle = map[y][x] === TILES.WALL ? '#1a1a22' : '#0e0e16';
+        ctx.fillRect(px, py, TILE, TILE);
+      }
+    }
+  }
+
+  // 아이템
+  items.forEach(item => {
+    if (!visible[item.y][item.x]) return;
+    ctx.fillStyle = item.color;
+    ctx.font = 'bold 14px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.ch, item.x * TILE + TILE/2, item.y * TILE + TILE - 4);
+  });
+
+  // 몬스터
+  monsters.forEach(m => {
+    if (!visible[m.y][m.x]) return;
+    ctx.fillStyle = m.color;
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.ch, m.x * TILE + TILE/2, m.y * TILE + TILE - 3);
+
+    // HP바
+    if (m.hp < m.maxHp) {
+      const barW = TILE - 4;
+      const ratio = m.hp / m.maxHp;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(m.x * TILE + 2, m.y * TILE - 2, barW, 3);
+      ctx.fillStyle = ratio > 0.5 ? '#4ade80' : '#ff6b6b';
+      ctx.fillRect(m.x * TILE + 2, m.y * TILE - 2, barW * ratio, 3);
+    }
+  });
+
+  // 플레이어
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 16px Courier New';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 8;
+  ctx.fillText('@', player.x * TILE + TILE/2, player.y * TILE + TILE - 3);
+  ctx.shadowBlur = 0;
+}
+
+function updateUI() {
+  document.getElementById('hp').textContent = `${player.hp}/${player.maxHp}`;
+  document.getElementById('atk').textContent = player.atk;
+  document.getElementById('def').textContent = player.def;
+  document.getElementById('floor').textContent = floor;
+  document.getElementById('lv').textContent = player.lv;
+  document.getElementById('exp').textContent = `${player.exp}/${player.expNext}`;
+  document.getElementById('gold').textContent = player.gold;
+
+  // 인벤토리
+  const invEl = document.getElementById('inv-items');
+  if (player.inventory.length === 0) {
+    invEl.textContent = '(비어있음)';
+  } else {
+    invEl.innerHTML = player.inventory.map((item, i) =>
+      `<span class="inv-item" onclick="useItem(${i})" style="color:${item.color}">[${item.name}]</span>`
+    ).join(' ');
+  }
+}
+
+function addLog(msg, type) {
+  const line = document.createElement('div');
+  line.className = `log-${type}`;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ===== 입력 =====
+document.addEventListener('keydown', (e) => {
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': playerMove(0, -1); e.preventDefault(); break;
+    case 'ArrowDown': case 's': case 'S': playerMove(0, 1); e.preventDefault(); break;
+    case 'ArrowLeft': case 'a': case 'A': playerMove(-1, 0); e.preventDefault(); break;
+    case 'ArrowRight': case 'd': case 'D': playerMove(1, 0); e.preventDefault(); break;
+    case '.': case ' ': playerMove(0, 0); e.preventDefault(); break;
+  }
+});
+
+// 모바일 D-pad
+document.querySelectorAll('.dpad-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const dir = btn.dataset.dir;
+    switch(dir) {
+      case 'up': playerMove(0, -1); break;
+      case 'down': playerMove(0, 1); break;
+      case 'left': playerMove(-1, 0); break;
+      case 'right': playerMove(1, 0); break;
+      case 'wait': playerMove(0, 0); break;
+    }
+  });
+});
+
+startBtn.addEventListener('click', () => {
+  initGame();
+  overlayEl.classList.add('hidden');
+});
+</script>
+</body>
+</html>
