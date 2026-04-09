@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flappy Bird</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #4ec0ca;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Arial', sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+
+canvas {
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  max-width: 100vw;
+  max-height: 100vh;
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// 캔버스 크기
+const W = 400;
+const H = 600;
+canvas.width = W;
+canvas.height = H;
+
+// 설정
+const GRAVITY = 0.4;
+const JUMP = -7;
+const PIPE_WIDTH = 52;
+const PIPE_GAP = 140;
+const PIPE_SPEED = 2.5;
+const PIPE_INTERVAL = 100; // 프레임
+const GROUND_H = 60;
+
+// 상태
+let bird, pipes, score, bestScore, gameState, frameCount, groundX;
+
+bestScore = parseInt(localStorage.getItem('flappy-best') || '0');
+
+function init() {
+  bird = { x: 80, y: H / 2 - 20, vy: 0, radius: 15, angle: 0 };
+  pipes = [];
+  score = 0;
+  frameCount = 0;
+  groundX = 0;
+  gameState = 'ready'; // ready, playing, dead
+}
+
+// ===== 그리기 =====
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H - GROUND_H);
+  grad.addColorStop(0, '#87CEEB');
+  grad.addColorStop(1, '#4ec0ca');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H - GROUND_H);
+}
+
+function drawClouds() {
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  const offset = (frameCount * 0.3) % (W + 200);
+  [[100, 80, 60], [280, 120, 45], [50, 200, 50], [350, 50, 35]].forEach(([bx, by, size]) => {
+    const cx = ((bx - offset + W + 200) % (W + 200)) - 100;
+    ctx.beginPath();
+    ctx.arc(cx, by, size, 0, Math.PI * 2);
+    ctx.arc(cx + size * 0.6, by - size * 0.3, size * 0.7, 0, Math.PI * 2);
+    ctx.arc(cx - size * 0.5, by - size * 0.1, size * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawGround() {
+  ctx.fillStyle = '#DEB887';
+  ctx.fillRect(0, H - GROUND_H, W, GROUND_H);
+  ctx.fillStyle = '#90EE90';
+  ctx.fillRect(0, H - GROUND_H, W, 15);
+
+  // 스크롤 패턴
+  ctx.strokeStyle = '#C4A46C';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < W + 20; i += 20) {
+    const x = ((i - groundX % 20) + W + 20) % (W + 20) - 20;
+    ctx.beginPath();
+    ctx.moveTo(x, H - GROUND_H + 20);
+    ctx.lineTo(x + 10, H - GROUND_H + 35);
+    ctx.stroke();
+  }
+}
+
+function drawPipe(pipe) {
+  const capH = 24;
+  const capExtra = 4;
+
+  // 윗 파이프
+  ctx.fillStyle = '#73BF2E';
+  ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topH);
+  ctx.fillStyle = '#5DA524';
+  ctx.fillRect(pipe.x + 4, 0, PIPE_WIDTH - 8, pipe.topH - capH);
+  // 윗 캡
+  ctx.fillStyle = '#73BF2E';
+  ctx.fillRect(pipe.x - capExtra, pipe.topH - capH, PIPE_WIDTH + capExtra * 2, capH);
+  ctx.strokeStyle = '#4A8A1A';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pipe.x - capExtra, pipe.topH - capH, PIPE_WIDTH + capExtra * 2, capH);
+
+  // 아랫 파이프
+  const botY = pipe.topH + PIPE_GAP;
+  const botH = H - GROUND_H - botY;
+  ctx.fillStyle = '#73BF2E';
+  ctx.fillRect(pipe.x, botY, PIPE_WIDTH, botH);
+  ctx.fillStyle = '#5DA524';
+  ctx.fillRect(pipe.x + 4, botY + capH, PIPE_WIDTH - 8, botH - capH);
+  // 아랫 캡
+  ctx.fillStyle = '#73BF2E';
+  ctx.fillRect(pipe.x - capExtra, botY, PIPE_WIDTH + capExtra * 2, capH);
+  ctx.strokeStyle = '#4A8A1A';
+  ctx.strokeRect(pipe.x - capExtra, botY, PIPE_WIDTH + capExtra * 2, capH);
+}
+
+function drawBird() {
+  ctx.save();
+  ctx.translate(bird.x, bird.y);
+
+  // 회전 (속도에 따라)
+  bird.angle = Math.max(-25, Math.min(bird.vy * 3, 70));
+  ctx.rotate(bird.angle * Math.PI / 180);
+
+  // 몸통
+  ctx.fillStyle = '#F5C542';
+  ctx.beginPath();
+  ctx.arc(0, 0, bird.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#D4A017';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 배
+  ctx.fillStyle = '#FCE38A';
+  ctx.beginPath();
+  ctx.arc(2, 4, bird.radius * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 눈
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(7, -5, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(9, -5, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 부리
+  ctx.fillStyle = '#E8572A';
+  ctx.beginPath();
+  ctx.moveTo(bird.radius - 2, -2);
+  ctx.lineTo(bird.radius + 10, 2);
+  ctx.lineTo(bird.radius - 2, 6);
+  ctx.closePath();
+  ctx.fill();
+
+  // 날개
+  const wingY = Math.sin(frameCount * 0.3) * 4;
+  ctx.fillStyle = '#E8AD15';
+  ctx.beginPath();
+  ctx.ellipse(-6, wingY, 10, 6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawScore() {
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  ctx.font = 'bold 48px Arial';
+  ctx.textAlign = 'center';
+  ctx.strokeText(score, W / 2, 70);
+  ctx.fillText(score, W / 2, 70);
+}
+
+function drawOverlay(text, sub) {
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  ctx.font = 'bold 40px Arial';
+  ctx.textAlign = 'center';
+  ctx.strokeText(text, W / 2, H / 2 - 30);
+  ctx.fillText(text, W / 2, H / 2 - 30);
+
+  ctx.font = '20px Arial';
+  ctx.lineWidth = 2;
+  ctx.strokeText(sub, W / 2, H / 2 + 15);
+  ctx.fillText(sub, W / 2, H / 2 + 15);
+}
+
+// ===== 로직 =====
+function jump() {
+  if (gameState === 'ready') {
+    gameState = 'playing';
+    bird.vy = JUMP;
+  } else if (gameState === 'playing') {
+    bird.vy = JUMP;
+  } else if (gameState === 'dead') {
+    init();
+  }
+}
+
+function update() {
+  if (gameState !== 'playing') return;
+
+  frameCount++;
+  groundX += PIPE_SPEED;
+
+  // 새 물리
+  bird.vy += GRAVITY;
+  bird.y += bird.vy;
+
+  // 파이프 생성
+  if (frameCount % PIPE_INTERVAL === 0) {
+    const minTop = 60;
+    const maxTop = H - GROUND_H - PIPE_GAP - 60;
+    const topH = Math.floor(Math.random() * (maxTop - minTop)) + minTop;
+    pipes.push({ x: W, topH, scored: false });
+  }
+
+  // 파이프 이동 + 충돌
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    const p = pipes[i];
+    p.x -= PIPE_SPEED;
+
+    // 제거
+    if (p.x + PIPE_WIDTH < -10) {
+      pipes.splice(i, 1);
+      continue;
+    }
+
+    // 점수
+    if (!p.scored && p.x + PIPE_WIDTH < bird.x) {
+      p.scored = true;
+      score++;
+    }
+
+    // 충돌 판정 (사각형 근사)
+    const bL = bird.x - bird.radius + 4;
+    const bR = bird.x + bird.radius - 4;
+    const bT = bird.y - bird.radius + 4;
+    const bB = bird.y + bird.radius - 4;
+
+    const pL = p.x;
+    const pR = p.x + PIPE_WIDTH;
+
+    if (bR > pL && bL < pR) {
+      if (bT < p.topH || bB > p.topH + PIPE_GAP) {
+        die();
+        return;
+      }
+    }
+  }
+
+  // 바닥/천장 충돌
+  if (bird.y + bird.radius > H - GROUND_H || bird.y - bird.radius < 0) {
+    die();
+  }
+}
+
+function die() {
+  gameState = 'dead';
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('flappy-best', bestScore.toString());
+  }
+}
+
+function render() {
+  drawSky();
+  drawClouds();
+  pipes.forEach(drawPipe);
+  drawGround();
+  drawBird();
+  drawScore();
+
+  if (gameState === 'ready') {
+    drawOverlay('FLAPPY BIRD', '클릭 또는 스페이스바');
+  } else if (gameState === 'dead') {
+    drawOverlay('GAME OVER', `점수: ${score}  최고: ${bestScore}`);
+  }
+}
+
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ===== 입력 =====
+document.addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    jump();
+  }
+});
+
+canvas.addEventListener('click', jump);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  jump();
+}, { passive: false });
+
+// 시작
+init();
+loop();
+</script>
+</body>
+</html>
