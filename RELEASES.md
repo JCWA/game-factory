@@ -70,3 +70,10 @@
 - 5종 아이템, 인벤토리, 레벨업
 - 층 진행 + 난이도 상승
 - 경로: `games/010-roguelike/index.html`
+
+### v11.0 — 011 리듬 게임 (2026-04-09)
+- 4레인 리듬 게임, Web Audio API
+- 3곡 선택 (BPM 100/140/170)
+- Perfect/Great/Good/Miss 판정
+- 콤보 시스템, 결과 랭크 (S~D)
+- 경로: `games/011-rhythm/index.html`
