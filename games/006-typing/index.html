@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>타자 게임</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0f0f23;
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 700px;
+  padding: 16px;
+  gap: 12px;
+}
+
+h1 {
+  color: #00d4ff;
+  font-size: 24px;
+  letter-spacing: 3px;
+  text-shadow: 0 0 15px #00d4ff60;
+}
+
+#stats {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  width: 100%;
+  justify-content: center;
+}
+
+.stat-box {
+  background: #1a1a3e;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
+.stat-box span { color: #00d4ff; font-weight: bold; }
+
+#game-area {
+  position: relative;
+  width: 100%;
+  height: 450px;
+  background: #12122a;
+  border: 1px solid #222;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 바닥 경계선 */
+#game-area::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #ff4444, transparent);
+  box-shadow: 0 0 10px #ff4444;
+}
+
+.word {
+  position: absolute;
+  font-size: 18px;
+  font-weight: bold;
+  color: #ccc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: color 0.1s;
+}
+
+.word .matched { color: #00ff41; }
+.word.active { color: #fff; text-shadow: 0 0 8px #00d4ff; }
+.word.danger { color: #ff6666; }
+
+#input-area {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+#word-input {
+  flex: 1;
+  background: #1a1a3e;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #00d4ff;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  outline: none;
+  letter-spacing: 2px;
+}
+
+#word-input:focus { border-color: #00d4ff; }
+
+/* 생명 표시 */
+#lives {
+  font-size: 20px;
+  letter-spacing: 4px;
+}
+
+/* 오버레이 */
+#overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 15, 35, 0.9);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  gap: 16px;
+}
+
+#overlay.hidden { display: none; }
+
+#overlay h2 {
+  color: #00d4ff;
+  font-size: 36px;
+  text-shadow: 0 0 20px #00d4ff60;
+}
+
+#overlay .info {
+  color: #888;
+  font-size: 14px;
+}
+
+#overlay .final {
+  color: #fff;
+  font-size: 24px;
+}
+
+.btn {
+  background: transparent;
+  color: #00d4ff;
+  border: 2px solid #00d4ff;
+  padding: 10px 28px;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+
+.btn:hover {
+  background: #00d4ff20;
+  box-shadow: 0 0 15px #00d4ff40;
+}
+
+/* 콤보 표시 */
+#combo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 40px;
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 0 0 20px #ffd70080;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+#combo.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <h1>TYPING ATTACK</h1>
+  <div id="stats">
+    <div class="stat-box">점수: <span id="score">0</span></div>
+    <div class="stat-box">레벨: <span id="level">1</span></div>
+    <div class="stat-box">콤보: <span id="combo-count">0</span></div>
+    <div class="stat-box" id="lives"></div>
+  </div>
+  <div id="game-area">
+    <div id="combo"></div>
+  </div>
+  <div id="input-area">
+    <input type="text" id="word-input" placeholder="단어를 입력하세요..." autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+</div>
+
+<div id="overlay">
+  <h2>TYPING ATTACK</h2>
+  <p class="info">떨어지는 단어를 입력해서 파괴하세요!</p>
+  <button class="btn" id="start-btn">시작</button>
+</div>
+
+<script>
+// 영어 단어 목록 (난이도별)
+const WORDS = {
+  easy: ['cat','dog','sun','run','red','big','top','hot','cup','map','pen','box','fly','key','hat','egg','ice','jam','leg','net'],
+  medium: ['apple','world','light','dream','stone','magic','river','cloud','brave','flame','quest','ocean','music','happy','tiger','piano','storm','night','power','space'],
+  hard: ['dragon','castle','forest','wizard','knight','galaxy','thunder','crystal','phoenix','shadow','mystic','explore','journey','harmony','destiny','eclipse','mystery','horizon','freedom','victory']
+};
+
+const gameArea = document.getElementById('game-area');
+const wordInput = document.getElementById('word-input');
+const scoreEl = document.getElementById('score');
+const levelEl = document.getElementById('level');
+const comboCountEl = document.getElementById('combo-count');
+const livesEl = document.getElementById('lives');
+const overlayEl = document.getElementById('overlay');
+const comboEl = document.getElementById('combo');
+const startBtn = document.getElementById('start-btn');
+
+let words = [];
+let score, level, lives, combo, maxCombo;
+let spawnTimer, gameLoop;
+let gameRunning = false;
+let bestScore = parseInt(localStorage.getItem('typing-best') || '0');
+
+function init() {
+  words.forEach(w => w.el && w.el.remove());
+  words = [];
+  score = 0;
+  level = 1;
+  lives = 5;
+  combo = 0;
+  maxCombo = 0;
+  updateUI();
+  wordInput.value = '';
+  wordInput.focus();
+}
+
+function updateUI() {
+  scoreEl.textContent = score;
+  levelEl.textContent = level;
+  comboCountEl.textContent = combo;
+  livesEl.textContent = '❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 5 - lives));
+}
+
+function getWordPool() {
+  if (level <= 3) return WORDS.easy;
+  if (level <= 6) return [...WORDS.easy, ...WORDS.medium];
+  return [...WORDS.medium, ...WORDS.hard];
+}
+
+function spawnWord() {
+  if (!gameRunning) return;
+
+  const pool = getWordPool();
+  const text = pool[Math.floor(Math.random() * pool.length)];
+  const el = document.createElement('div');
+  el.classList.add('word');
+  el.textContent = text;
+
+  const areaW = gameArea.clientWidth;
+  const x = Math.random() * (areaW - 120) + 10;
+  el.style.left = x + 'px';
+  el.style.top = '-30px';
+
+  gameArea.appendChild(el);
+
+  const speed = 0.3 + level * 0.08 + Math.random() * 0.15;
+  words.push({ text, el, y: -30, x, speed, matched: 0 });
+}
+
+function update() {
+  if (!gameRunning) return;
+
+  const areaH = gameArea.clientHeight;
+
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i];
+    w.y += w.speed;
+    w.el.style.top = w.y + 'px';
+
+    // 위험 표시
+    if (w.y > areaH * 0.7) {
+      w.el.classList.add('danger');
+    }
+
+    // 바닥 도달
+    if (w.y > areaH) {
+      w.el.remove();
+      words.splice(i, 1);
+      lives--;
+      combo = 0;
+      updateUI();
+
+      if (lives <= 0) {
+        gameOver();
+        return;
+      }
+    }
+  }
+
+  // 레벨업: 10점마다
+  const newLevel = Math.floor(score / 10) + 1;
+  if (newLevel > level) {
+    level = newLevel;
+    updateUI();
+  }
+}
+
+function checkInput() {
+  const input = wordInput.value.toLowerCase().trim();
+  if (!input) return;
+
+  // 현재 입력과 매칭되는 단어 찾기 (가장 아래에 있는 것 우선)
+  let bestMatch = null;
+  let bestY = -1;
+
+  for (const w of words) {
+    if (w.text.startsWith(input)) {
+      // 부분 매칭 표시
+      w.matched = input.length;
+      renderWordMatch(w);
+      w.el.classList.add('active');
+
+      if (w.text === input) {
+        if (w.y > bestY) {
+          bestMatch = w;
+          bestY = w.y;
+        }
+      }
+    } else {
+      w.matched = 0;
+      w.el.classList.remove('active');
+      renderWordMatch(w);
+    }
+  }
+
+  if (bestMatch) {
+    // 단어 완성!
+    const points = bestMatch.text.length + combo;
+    score += points;
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+
+    // 콤보 이펙트
+    if (combo >= 3) {
+      showCombo(combo);
+    }
+
+    bestMatch.el.remove();
+    words.splice(words.indexOf(bestMatch), 1);
+    wordInput.value = '';
+    updateUI();
+
+    // 다른 단어들의 매칭 상태 리셋
+    words.forEach(w => {
+      w.matched = 0;
+      w.el.classList.remove('active');
+      renderWordMatch(w);
+    });
+  }
+}
+
+function renderWordMatch(w) {
+  if (w.matched > 0) {
+    w.el.innerHTML = `<span class="matched">${w.text.slice(0, w.matched)}</span>${w.text.slice(w.matched)}`;
+  } else {
+    w.el.textContent = w.text;
+  }
+}
+
+function showCombo(n) {
+  comboEl.textContent = `${n} COMBO!`;
+  comboEl.classList.add('show');
+  setTimeout(() => comboEl.classList.remove('show'), 800);
+}
+
+function startGame() {
+  init();
+  gameRunning = true;
+  overlayEl.classList.add('hidden');
+
+  // 스폰 타이머
+  function scheduleSpawn() {
+    if (!gameRunning) return;
+    const interval = Math.max(800, 2000 - level * 150);
+    spawnTimer = setTimeout(() => {
+      spawnWord();
+      scheduleSpawn();
+    }, interval);
+  }
+  scheduleSpawn();
+  spawnWord();
+
+  // 게임 루프
+  gameLoop = setInterval(update, 16);
+}
+
+function gameOver() {
+  gameRunning = false;
+  clearTimeout(spawnTimer);
+  clearInterval(gameLoop);
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('typing-best', bestScore.toString());
+  }
+
+  overlayEl.classList.remove('hidden');
+  overlayEl.innerHTML = `
+    <h2>GAME OVER</h2>
+    <p class="final">점수: ${score}</p>
+    <p class="info">최고 점수: ${bestScore} | 최대 콤보: ${maxCombo} | 레벨: ${level}</p>
+    <button class="btn" onclick="location.reload()">다시하기</button>
+  `;
+}
+
+// 입력 이벤트
+wordInput.addEventListener('input', checkInput);
+
+// 시작
+startBtn.addEventListener('click', () => {
+  startGame();
+  wordInput.focus();
+});
+
+// 엔터키로 시작
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !gameRunning) {
+    startGame();
+    wordInput.focus();
+  }
+});
+</script>
+</body>
+</html>
