@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tower Defense</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Arial', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 10px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 660px;
+  width: 100%;
+}
+#header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 14px;
+  padding: 6px 4px;
+  background: #16213e;
+  border-radius: 6px;
+}
+.hstat { padding: 4px 10px; }
+.hstat span { font-weight: bold; }
+.gold span { color: #ffd700; }
+.wave span { color: #00d4ff; }
+.hp span { color: #ff6b6b; }
+canvas { border-radius: 6px; cursor: pointer; }
+#tower-panel {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.tower-btn {
+  flex: 1;
+  min-width: 100px;
+  background: #16213e;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  color: #ccc;
+}
+.tower-btn:hover { border-color: #555; }
+.tower-btn.selected { border-color: #00d4ff; background: #1a2d50; }
+.tower-btn .name { font-weight: bold; font-size: 13px; }
+.tower-btn .cost { color: #ffd700; font-size: 12px; }
+.tower-btn .desc { color: #888; font-size: 11px; margin-top: 2px; }
+.tower-btn .icon { font-size: 22px; }
+#controls {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.ctrl-btn {
+  flex: 1;
+  background: #16213e;
+  border: 2px solid #444;
+  color: #fff;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.ctrl-btn:hover { background: #1a2d50; }
+.ctrl-btn.start { border-color: #00d4ff; color: #00d4ff; }
+.ctrl-btn.sell { border-color: #ff6b6b; color: #ff6b6b; }
+.ctrl-btn.upgrade { border-color: #ffd700; color: #ffd700; }
+#info { font-size: 12px; color: #666; min-height: 18px; text-align: center; }
+#overlay {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  background: rgba(26,26,46,0.9);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 10; gap: 12px;
+}
+#overlay.hidden { display: none; }
+#overlay h2 { color: #00d4ff; font-size: 32px; }
+#overlay p { color: #aaa; }
+.obtn {
+  background: transparent; color: #00d4ff; border: 2px solid #00d4ff;
+  padding: 10px 28px; font-size: 16px; cursor: pointer; border-radius: 6px;
+}
+.obtn:hover { background: #00d4ff20; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="header">
+    <div class="hstat wave">Wave: <span id="wave">0</span></div>
+    <div class="hstat gold">Gold: <span id="gold">200</span></div>
+    <div class="hstat hp">HP: <span id="hp">20</span></div>
+  </div>
+  <canvas id="game"></canvas>
+  <div id="tower-panel">
+    <div class="tower-btn" data-type="archer"><div class="icon">🏹</div><div class="name">아처</div><div class="cost">50G</div><div class="desc">빠른 공격</div></div>
+    <div class="tower-btn" data-type="cannon"><div class="icon">💣</div><div class="name">캐논</div><div class="cost">100G</div><div class="desc">범위 공격</div></div>
+    <div class="tower-btn" data-type="freeze"><div class="icon">❄️</div><div class="name">프리즈</div><div class="cost">75G</div><div class="desc">감속</div></div>
+    <div class="tower-btn" data-type="sniper"><div class="icon">🎯</div><div class="name">스나이퍼</div><div class="cost">150G</div><div class="desc">원거리 고데미지</div></div>
+  </div>
+  <div id="controls">
+    <button class="ctrl-btn start" id="wave-btn">웨이브 시작</button>
+    <button class="ctrl-btn upgrade" id="upgrade-btn">업그레이드</button>
+    <button class="ctrl-btn sell" id="sell-btn">판매</button>
+  </div>
+  <div id="info"></div>
+</div>
+<div id="overlay">
+  <h2>TOWER DEFENSE</h2>
+  <p>타워를 배치하여 적의 침공을 막으세요!</p>
+  <button class="obtn" id="start-btn">시작</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const COLS = 15, ROWS = 12, CELL = 40;
+canvas.width = COLS * CELL;
+canvas.height = ROWS * CELL;
+
+const goldEl = document.getElementById('gold');
+const waveEl = document.getElementById('wave');
+const hpEl = document.getElementById('hp');
+const infoEl = document.getElementById('info');
+const overlayEl = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const waveBtnEl = document.getElementById('wave-btn');
+const upgradeBtnEl = document.getElementById('upgrade-btn');
+const sellBtnEl = document.getElementById('sell-btn');
+const towerBtns = document.querySelectorAll('.tower-btn');
+
+// 경로 (S자)
+const PATH = [
+  [0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],
+  [10,2],[10,3],
+  [9,3],[8,3],[7,3],[6,3],[5,3],[4,3],[3,3],[2,3],
+  [2,4],[2,5],
+  [3,5],[4,5],[5,5],[6,5],[7,5],[8,5],[9,5],[10,5],[11,5],[12,5],
+  [12,6],[12,7],
+  [11,7],[10,7],[9,7],[8,7],[7,7],[6,7],[5,7],[4,7],
+  [4,8],[4,9],
+  [5,9],[6,9],[7,9],[8,9],[9,9],[10,9],[11,9],[12,9],[13,9],[14,9],
+  [14,10]
+];
+
+const pathSet = new Set(PATH.map(p => `${p[0]},${p[1]}`));
+
+const TOWER_DATA = {
+  archer:  { cost: 50,  range: 3, damage: 8,  rate: 30, color: '#4ade80', splash: 0, slow: 0,  projColor: '#4ade80', projSpeed: 6 },
+  cannon:  { cost: 100, range: 2.5, damage: 25, rate: 60, color: '#f97316', splash: 1.2, slow: 0, projColor: '#f97316', projSpeed: 4 },
+  freeze:  { cost: 75,  range: 2.5, damage: 3,  rate: 40, color: '#38bdf8', splash: 0, slow: 0.5, projColor: '#38bdf8', projSpeed: 5 },
+  sniper:  { cost: 150, range: 5, damage: 45, rate: 90, color: '#e879f9', splash: 0, slow: 0,  projColor: '#e879f9', projSpeed: 8 }
+};
+
+const ENEMY_TYPES = {
+  normal: { hp: 60, speed: 1, reward: 10, color: '#ff6b6b', radius: 8 },
+  fast:   { hp: 35, speed: 2, reward: 15, color: '#fbbf24', radius: 6 },
+  tank:   { hp: 200, speed: 0.6, reward: 25, color: '#a855f7', radius: 12 },
+  boss:   { hp: 800, speed: 0.4, reward: 100, color: '#ef4444', radius: 16 }
+};
+
+let towers, enemies, projectiles, gold, baseHp, wave, waveActive, spawnQueue;
+let selectedTowerType, selectedTower, animFrame;
+let gameState = 'setup';
+
+function initGame() {
+  towers = [];
+  enemies = [];
+  projectiles = [];
+  gold = 200;
+  baseHp = 20;
+  wave = 0;
+  waveActive = false;
+  spawnQueue = [];
+  selectedTowerType = null;
+  selectedTower = null;
+  gameState = 'playing';
+  updateUI();
+}
+
+function updateUI() {
+  goldEl.textContent = gold;
+  waveEl.textContent = wave;
+  hpEl.textContent = baseHp;
+}
+
+// ===== 웨이브 =====
+function generateWave(n) {
+  const q = [];
+  const count = 5 + n * 2;
+  const hpMult = 1 + n * 0.15;
+
+  for (let i = 0; i < count; i++) {
+    let type = 'normal';
+    const r = Math.random();
+    if (n >= 3 && r < 0.2) type = 'fast';
+    if (n >= 5 && r < 0.15) type = 'tank';
+    q.push({ type, delay: i * 30 });
+  }
+
+  // 보스 (5웨이브마다)
+  if (n > 0 && n % 5 === 0) {
+    q.push({ type: 'boss', delay: count * 30 + 30 });
+  }
+
+  return { enemies: q, hpMult };
+}
+
+function startWave() {
+  if (waveActive || gameState !== 'playing') return;
+  wave++;
+  waveActive = true;
+  const w = generateWave(wave);
+  let frame = 0;
+
+  const spawner = setInterval(() => {
+    if (gameState !== 'playing') { clearInterval(spawner); return; }
+    const toSpawn = w.enemies.filter(e => e.delay === frame);
+    toSpawn.forEach(e => {
+      const data = ENEMY_TYPES[e.type];
+      enemies.push({
+        type: e.type,
+        hp: Math.floor(data.hp * w.hpMult),
+        maxHp: Math.floor(data.hp * w.hpMult),
+        speed: data.speed,
+        reward: data.reward,
+        color: data.color,
+        radius: data.radius,
+        pathIdx: 0,
+        progress: 0,
+        x: PATH[0][0] * CELL + CELL/2,
+        y: PATH[0][1] * CELL + CELL/2,
+        slowTimer: 0,
+        slowAmount: 0
+      });
+    });
+    frame++;
+    if (frame > w.enemies[w.enemies.length - 1].delay + 10) {
+      clearInterval(spawner);
+    }
+  }, 50);
+
+  waveBtnEl.textContent = `Wave ${wave} 진행중...`;
+  updateUI();
+}
+
+// ===== 적 이동 =====
+function updateEnemies() {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    let speed = e.speed;
+
+    // 감속 처리
+    if (e.slowTimer > 0) {
+      speed *= (1 - e.slowAmount);
+      e.slowTimer--;
+    }
+
+    e.progress += speed * 0.02;
+
+    const idx = Math.floor(e.progress);
+    if (idx >= PATH.length - 1) {
+      // 기지 도달
+      baseHp -= (e.type === 'boss' ? 5 : 1);
+      enemies.splice(i, 1);
+      updateUI();
+      if (baseHp <= 0) gameOver();
+      continue;
+    }
+
+    const frac = e.progress - idx;
+    const curr = PATH[idx], next = PATH[Math.min(idx + 1, PATH.length - 1)];
+    e.x = (curr[0] + (next[0] - curr[0]) * frac) * CELL + CELL/2;
+    e.y = (curr[1] + (next[1] - curr[1]) * frac) * CELL + CELL/2;
+
+    if (e.hp <= 0) {
+      gold += e.reward;
+      enemies.splice(i, 1);
+      updateUI();
+    }
+  }
+
+  // 웨이브 끝 체크
+  if (waveActive && enemies.length === 0 && wave > 0) {
+    // 스폰 큐도 비었는지 확인 (약간 딜레이)
+    setTimeout(() => {
+      if (enemies.length === 0 && gameState === 'playing') {
+        waveActive = false;
+        waveBtnEl.textContent = '다음 웨이브';
+      }
+    }, 1000);
+  }
+}
+
+// ===== 타워 공격 =====
+function updateTowers() {
+  towers.forEach(t => {
+    t.cooldown--;
+    if (t.cooldown > 0) return;
+
+    // 사거리 내 적 찾기 (가장 앞선 적)
+    let target = null, bestProgress = -1;
+    enemies.forEach(e => {
+      const dx = e.x - (t.col * CELL + CELL/2);
+      const dy = e.y - (t.row * CELL + CELL/2);
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist <= t.range * CELL && e.progress > bestProgress) {
+        target = e;
+        bestProgress = e.progress;
+      }
+    });
+
+    if (target) {
+      t.cooldown = t.rate;
+      // 투사체 발사
+      projectiles.push({
+        x: t.col * CELL + CELL/2,
+        y: t.row * CELL + CELL/2,
+        target,
+        damage: t.damage,
+        speed: t.projSpeed,
+        color: t.projColor,
+        splash: t.splash,
+        slow: t.slow
+      });
+    }
+  });
+}
+
+function updateProjectiles() {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+
+    if (!p.target || p.target.hp <= 0) {
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    const dx = p.target.x - p.x;
+    const dy = p.target.y - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    if (dist < 8) {
+      // 명중
+      p.target.hp -= p.damage;
+
+      // 감속
+      if (p.slow > 0) {
+        p.target.slowTimer = 60;
+        p.target.slowAmount = p.slow;
+      }
+
+      // 스플래시
+      if (p.splash > 0) {
+        enemies.forEach(e => {
+          if (e === p.target) return;
+          const sdx = e.x - p.target.x;
+          const sdy = e.y - p.target.y;
+          if (Math.sqrt(sdx*sdx + sdy*sdy) < p.splash * CELL) {
+            e.hp -= Math.floor(p.damage * 0.5);
+          }
+        });
+      }
+
+      projectiles.splice(i, 1);
+    } else {
+      p.x += (dx / dist) * p.speed;
+      p.y += (dy / dist) * p.speed;
+    }
+  }
+}
+
+// ===== 렌더링 =====
+function draw() {
+  ctx.fillStyle = '#2d5a27';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 경로
+  PATH.forEach(([c, r]) => {
+    ctx.fillStyle = '#c4a96a';
+    ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 4, CELL - 4);
+  });
+
+  // 시작/끝 마커
+  ctx.fillStyle = '#00ff00';
+  ctx.fillRect(PATH[0][0] * CELL, PATH[0][1] * CELL, CELL, CELL);
+  ctx.fillStyle = '#ff0000';
+  const last = PATH[PATH.length - 1];
+  ctx.fillRect(last[0] * CELL, last[1] * CELL, CELL, CELL);
+
+  // 그리드 (은은하게)
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(c*CELL,0); ctx.lineTo(c*CELL,canvas.height); ctx.stroke(); }
+  for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(0,r*CELL); ctx.lineTo(canvas.width,r*CELL); ctx.stroke(); }
+
+  // 타워
+  towers.forEach(t => {
+    const cx = t.col * CELL + CELL/2;
+    const cy = t.row * CELL + CELL/2;
+
+    // 선택된 타워 사거리 표시
+    if (selectedTower === t) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, t.range * CELL, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 타워 본체
+    ctx.fillStyle = t.color;
+    ctx.shadowColor = t.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // 레벨 표시
+    if (t.level > 1) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('★'.repeat(t.level - 1), cx, cy + 4);
+    }
+  });
+
+  // 적
+  enemies.forEach(e => {
+    // HP바
+    const barW = e.radius * 2;
+    const hpRatio = e.hp / e.maxHp;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(e.x - barW/2, e.y - e.radius - 8, barW, 4);
+    ctx.fillStyle = hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#fbbf24' : '#ef4444';
+    ctx.fillRect(e.x - barW/2, e.y - e.radius - 8, barW * hpRatio, 4);
+
+    // 본체
+    ctx.fillStyle = e.slowTimer > 0 ? '#88ccff' : e.color;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 보스 외곽선
+    if (e.type === 'boss') {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+
+  // 투사체
+  projectiles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // 배치 미리보기
+  if (selectedTowerType && hoverCell) {
+    const data = TOWER_DATA[selectedTowerType];
+    const cx = hoverCell.col * CELL + CELL/2;
+    const cy = hoverCell.row * CELL + CELL/2;
+    const canPlace = canPlaceTower(hoverCell.col, hoverCell.row);
+
+    ctx.strokeStyle = canPlace ? 'rgba(0,255,0,0.4)' : 'rgba(255,0,0,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, data.range * CELL, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = canPlace ? 'rgba(0,255,0,0.3)' : 'rgba(255,0,0,0.3)';
+    ctx.fillRect(hoverCell.col * CELL, hoverCell.row * CELL, CELL, CELL);
+  }
+}
+
+// ===== 배치 =====
+let hoverCell = null;
+
+function canPlaceTower(col, row) {
+  if (pathSet.has(`${col},${row}`)) return false;
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+  if (towers.some(t => t.col === col && t.row === row)) return false;
+  return true;
+}
+
+function placeTower(col, row) {
+  if (!selectedTowerType) return;
+  const data = TOWER_DATA[selectedTowerType];
+  if (gold < data.cost) { infoEl.textContent = '골드가 부족합니다!'; return; }
+  if (!canPlaceTower(col, row)) return;
+
+  gold -= data.cost;
+  towers.push({
+    type: selectedTowerType,
+    col, row,
+    range: data.range,
+    damage: data.damage,
+    rate: data.rate,
+    cooldown: 0,
+    color: data.color,
+    splash: data.splash,
+    slow: data.slow,
+    projColor: data.projColor,
+    projSpeed: data.projSpeed,
+    level: 1,
+    cost: data.cost
+  });
+  updateUI();
+  infoEl.textContent = `${selectedTowerType} 타워 배치!`;
+}
+
+function upgradeTower() {
+  if (!selectedTower) return;
+  const cost = Math.floor(selectedTower.cost * 0.75 * selectedTower.level);
+  if (gold < cost) { infoEl.textContent = `업그레이드 비용: ${cost}G (부족!)`; return; }
+  if (selectedTower.level >= 3) { infoEl.textContent = '최대 레벨!'; return; }
+
+  gold -= cost;
+  selectedTower.level++;
+  selectedTower.damage = Math.floor(selectedTower.damage * 1.4);
+  selectedTower.range += 0.3;
+  selectedTower.rate = Math.max(10, Math.floor(selectedTower.rate * 0.85));
+  updateUI();
+  infoEl.textContent = `레벨 ${selectedTower.level}로 업그레이드!`;
+}
+
+function sellTower() {
+  if (!selectedTower) return;
+  const refund = Math.floor(selectedTower.cost * 0.6);
+  gold += refund;
+  towers.splice(towers.indexOf(selectedTower), 1);
+  selectedTower = null;
+  updateUI();
+  infoEl.textContent = `타워 판매! +${refund}G`;
+}
+
+function gameOver() {
+  gameState = 'over';
+  overlayEl.classList.remove('hidden');
+  overlayEl.innerHTML = `
+    <h2>GAME OVER</h2>
+    <p style="color:#00d4ff;font-size:24px">Wave ${wave} 도달</p>
+    <p>점수: ${wave * 100 + gold}</p>
+    <button class="obtn" onclick="location.reload()">다시하기</button>
+  `;
+}
+
+// ===== 게임 루프 =====
+function gameLoop() {
+  if (gameState !== 'playing') return;
+  updateEnemies();
+  updateTowers();
+  updateProjectiles();
+  draw();
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+// ===== 입력 =====
+function getCellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX || e.touches[0].clientX) - rect.left;
+  const y = (e.clientY || e.touches[0].clientY) - rect.top;
+  return { col: Math.floor(x * scaleX / CELL), row: Math.floor(y * scaleY / CELL) };
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  hoverCell = getCellFromEvent(e);
+});
+
+canvas.addEventListener('click', (e) => {
+  const cell = getCellFromEvent(e);
+
+  // 기존 타워 선택
+  const clickedTower = towers.find(t => t.col === cell.col && t.row === cell.row);
+  if (clickedTower) {
+    selectedTower = clickedTower;
+    selectedTowerType = null;
+    towerBtns.forEach(b => b.classList.remove('selected'));
+    const data = TOWER_DATA[clickedTower.type];
+    const upgCost = Math.floor(clickedTower.cost * 0.75 * clickedTower.level);
+    infoEl.textContent = `${clickedTower.type} Lv${clickedTower.level} | DMG:${clickedTower.damage} | 업그레이드:${upgCost}G`;
+    return;
+  }
+
+  // 타워 배치
+  if (selectedTowerType) {
+    placeTower(cell.col, cell.row);
+  } else {
+    selectedTower = null;
+    infoEl.textContent = '';
+  }
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  const cell = getCellFromEvent(e);
+  hoverCell = cell;
+  const clickedTower = towers.find(t => t.col === cell.col && t.row === cell.row);
+  if (clickedTower) {
+    selectedTower = clickedTower;
+    selectedTowerType = null;
+    towerBtns.forEach(b => b.classList.remove('selected'));
+  } else if (selectedTowerType) {
+    placeTower(cell.col, cell.row);
+  }
+}, { passive: true });
+
+towerBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const type = btn.dataset.type;
+    if (selectedTowerType === type) {
+      selectedTowerType = null;
+      btn.classList.remove('selected');
+    } else {
+      selectedTowerType = type;
+      selectedTower = null;
+      towerBtns.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      infoEl.textContent = `${type} 타워 선택 — 맵에 클릭하여 배치`;
+    }
+  });
+});
+
+waveBtnEl.addEventListener('click', startWave);
+upgradeBtnEl.addEventListener('click', upgradeTower);
+sellBtnEl.addEventListener('click', sellTower);
+
+startBtn.addEventListener('click', () => {
+  initGame();
+  overlayEl.classList.add('hidden');
+  gameLoop();
+});
+</script>
+</body>
+</html>
