@@ -77,3 +77,10 @@
 - Perfect/Great/Good/Miss 판정
 - 콤보 시스템, 결과 랭크 (S~D)
 - 경로: `games/011-rhythm/index.html`
+
+### v12.0 — 012 미니 RPG 전투 (2026-04-09)
+- 턴제 RPG 전투 시스템
+- 10종 적 (슬라임~마왕), 적 스킬 AI
+- 5종 플레이어 스킬, 3종 아이템
+- 레벨업 성장, 10스테이지 보스전
+- 경로: `games/012-rpg-battle/index.html`

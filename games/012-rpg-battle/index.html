@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mini RPG Battle</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Arial', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 10px;
+}
+#game {
+  max-width: 500px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#battle-scene {
+  background: linear-gradient(180deg, #2d1b69 0%, #16213e 50%, #1a3a1a 100%);
+  border-radius: 10px;
+  padding: 20px;
+  min-height: 280px;
+  position: relative;
+  overflow: hidden;
+}
+/* 적 */
+#enemy-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+#enemy-name { font-size: 14px; color: #ff6b6b; font-weight: bold; }
+#enemy-sprite {
+  font-size: 64px;
+  transition: transform 0.2s;
+  filter: drop-shadow(0 0 10px rgba(255,100,100,0.3));
+}
+#enemy-sprite.shake { animation: shake 0.3s; }
+#enemy-sprite.dead { opacity: 0.3; transform: rotate(90deg); }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+.hp-bar-container {
+  width: 200px;
+  background: #333;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 16px;
+  position: relative;
+}
+.hp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ff6b6b);
+  transition: width 0.5s;
+  border-radius: 10px;
+}
+.hp-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: bold;
+  text-shadow: 0 0 3px #000;
+}
+/* 데미지 텍스트 */
+.damage-text {
+  position: absolute;
+  font-size: 24px;
+  font-weight: bold;
+  pointer-events: none;
+  animation: float-up 1s forwards;
+  z-index: 10;
+}
+@keyframes float-up {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-60px); }
+}
+/* 플레이어 */
+#player-area {
+  background: #16213e;
+  border-radius: 10px;
+  padding: 12px;
+}
+#player-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.player-name { color: #4ade80; font-weight: bold; font-size: 15px; }
+.player-stat span { font-weight: bold; }
+.mp-bar { background: linear-gradient(90deg, #3b82f6, #60a5fa) !important; }
+.exp-bar-container {
+  width: 100%;
+  background: #333;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 8px;
+  margin-top: 4px;
+}
+.exp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #c084fc);
+  transition: width 0.5s;
+}
+/* 메뉴 */
+#action-menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.action-btn {
+  background: #16213e;
+  border: 2px solid #333;
+  color: #ccc;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+.action-btn:hover { border-color: #4ade80; background: #1a2d40; }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-btn .cost { font-size: 11px; color: #60a5fa; }
+/* 스킬 메뉴 */
+#sub-menu {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+#sub-menu.show { display: grid; }
+.sub-btn {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sub-btn:hover { border-color: #4ade80; color: #fff; }
+.sub-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.sub-btn .cost { color: #60a5fa; font-size: 11px; }
+/* 로그 */
+#battle-log {
+  background: #111;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  height: 70px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+.log-player { color: #4ade80; }
+.log-enemy { color: #ff6b6b; }
+.log-heal { color: #60a5fa; }
+.log-level { color: #ffd700; }
+.log-info { color: #666; }
+/* 결과 */
+#overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.8);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 10; gap: 12px;
+}
+#overlay.hidden { display: none; }
+#overlay h2 { font-size: 28px; }
+#overlay p { color: #aaa; }
+.obtn {
+  background: transparent; color: #4ade80; border: 2px solid #4ade80;
+  padding: 10px 28px; font-size: 16px; cursor: pointer; border-radius: 6px;
+}
+.obtn:hover { background: #4ade8020; }
+#stage-info {
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+}
+#stage-info span { color: #ffd700; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="stage-info">Stage <span id="stage">1</span> / 10</div>
+  <div id="battle-scene">
+    <div id="enemy-area">
+      <div id="enemy-name">슬라임</div>
+      <div id="enemy-sprite">🟢</div>
+      <div class="hp-bar-container">
+        <div class="hp-bar" id="enemy-hp-bar"></div>
+        <div class="hp-text" id="enemy-hp-text"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-area">
+    <div id="player-stats">
+      <span class="player-name">용사 <span id="player-lv">Lv.1</span></span>
+      <span class="player-stat">HP: <span id="player-hp" style="color:#ff6b6b">50/50</span></span>
+      <span class="player-stat">MP: <span id="player-mp" style="color:#60a5fa">20/20</span></span>
+    </div>
+    <div class="hp-bar-container" style="height:12px">
+      <div class="hp-bar" id="player-hp-bar"></div>
+    </div>
+    <div class="hp-bar-container" style="height:8px;margin-top:4px">
+      <div class="hp-bar mp-bar" id="player-mp-bar"></div>
+    </div>
+    <div class="exp-bar-container">
+      <div class="exp-bar" id="player-exp-bar"></div>
+    </div>
+  </div>
+  <div id="action-menu">
+    <button class="action-btn" onclick="doAction('attack')">⚔️ 공격</button>
+    <button class="action-btn" onclick="showSkills()">✨ 스킬</button>
+    <button class="action-btn" onclick="showItems()">🎒 아이템</button>
+    <button class="action-btn" onclick="doAction('defend')">🛡️ 방어</button>
+  </div>
+  <div id="sub-menu"></div>
+  <div id="battle-log"></div>
+</div>
+<div id="overlay" class="hidden"></div>
+
+<script>
+const ENEMIES = [
+  { name: '슬라임', sprite: '🟢', hp: 30, atk: 5, def: 1, exp: 8, gold: 5, skills: [] },
+  { name: '고블린', sprite: '👺', hp: 45, atk: 8, def: 2, exp: 12, gold: 8, skills: ['연속공격'] },
+  { name: '스켈레톤', sprite: '💀', hp: 55, atk: 10, def: 4, exp: 18, gold: 12, skills: ['뼈 던지기'] },
+  { name: '오크 전사', sprite: '👹', hp: 80, atk: 12, def: 5, exp: 25, gold: 18, skills: ['분노'] },
+  { name: '다크 위자드', sprite: '🧙', hp: 60, atk: 15, def: 3, exp: 30, gold: 22, skills: ['파이어볼','흡혈'] },
+  { name: '미노타우르스', sprite: '🐂', hp: 120, atk: 14, def: 7, exp: 40, gold: 30, skills: ['돌진','분노'] },
+  { name: '뱀파이어', sprite: '🧛', hp: 90, atk: 16, def: 5, exp: 45, gold: 35, skills: ['흡혈','다크 슬래시'] },
+  { name: '용기사', sprite: '🐉', hp: 150, atk: 18, def: 8, exp: 55, gold: 45, skills: ['화염 브레스','꼬리 공격'] },
+  { name: '리치', sprite: '☠️', hp: 130, atk: 22, def: 6, exp: 65, gold: 55, skills: ['파이어볼','흡혈','저주'] },
+  { name: '마왕', sprite: '😈', hp: 250, atk: 25, def: 10, exp: 100, gold: 100, skills: ['파이어볼','다크 슬래시','메테오'] }
+];
+
+const SKILLS = {
+  '파워 스트라이크': { mp: 5, dmgMult: 1.8, type: 'attack', desc: '강력한 일격' },
+  '더블 슬래시': { mp: 8, hits: 2, dmgMult: 0.9, type: 'multi', desc: '2회 공격' },
+  '파이어볼': { mp: 10, dmgMult: 2.2, type: 'magic', desc: '화염 마법' },
+  '힐': { mp: 8, heal: 0.3, type: 'heal', desc: 'HP 30% 회복' },
+  '버프': { mp: 6, buff: { atk: 3, turns: 3 }, type: 'buff', desc: 'ATK +3 (3턴)' }
+};
+
+const ITEMS_POOL = [
+  { name: '체력 포션', effect: 'hp', value: 30, count: 3 },
+  { name: '마나 포션', effect: 'mp', value: 15, count: 2 },
+  { name: '만능약', effect: 'both', hpVal: 20, mpVal: 10, count: 1 }
+];
+
+let player, enemy, stage, items, battleLog, turnLock, buffs;
+
+function initGame() {
+  player = {
+    lv: 1, hp: 50, maxHp: 50, mp: 20, maxMp: 20,
+    atk: 8, def: 3, exp: 0, expNext: 15, gold: 0
+  };
+  stage = 1;
+  items = ITEMS_POOL.map(i => ({ ...i }));
+  buffs = [];
+  battleLog = document.getElementById('battle-log');
+  battleLog.innerHTML = '';
+  turnLock = false;
+  spawnEnemy();
+}
+
+function spawnEnemy() {
+  const template = ENEMIES[Math.min(stage - 1, ENEMIES.length - 1)];
+  const scale = 1 + (stage - 1) * 0.1;
+  enemy = {
+    ...template,
+    hp: Math.floor(template.hp * scale),
+    maxHp: Math.floor(template.hp * scale),
+    atk: Math.floor(template.atk * scale),
+    def: Math.floor(template.def * scale)
+  };
+  document.getElementById('enemy-name').textContent = `${enemy.name} (Stage ${stage})`;
+  document.getElementById('enemy-sprite').textContent = enemy.sprite;
+  document.getElementById('enemy-sprite').className = '';
+  document.getElementById('stage').textContent = stage;
+  updateUI();
+  addLog(`${enemy.name}이(가) 나타났다!`, 'info');
+}
+
+function updateUI() {
+  document.getElementById('player-hp').textContent = `${player.hp}/${player.maxHp}`;
+  document.getElementById('player-mp').textContent = `${player.mp}/${player.maxMp}`;
+  document.getElementById('player-lv').textContent = `Lv.${player.lv}`;
+  document.getElementById('player-hp-bar').style.width = `${player.hp/player.maxHp*100}%`;
+  document.getElementById('player-mp-bar').style.width = `${player.mp/player.maxMp*100}%`;
+  document.getElementById('player-exp-bar').style.width = `${player.exp/player.expNext*100}%`;
+  document.getElementById('enemy-hp-bar').style.width = `${Math.max(0,enemy.hp)/enemy.maxHp*100}%`;
+  document.getElementById('enemy-hp-text').textContent = `${Math.max(0,enemy.hp)}/${enemy.maxHp}`;
+}
+
+function addLog(msg, type) {
+  const line = document.createElement('div');
+  line.className = `log-${type}`;
+  line.textContent = msg;
+  battleLog.appendChild(line);
+  battleLog.scrollTop = battleLog.scrollHeight;
+}
+
+function showDamage(value, x, y, color) {
+  const el = document.createElement('div');
+  el.className = 'damage-text';
+  el.textContent = value;
+  el.style.color = color;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.getElementById('battle-scene').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function getPlayerAtk() {
+  let atk = player.atk;
+  buffs.forEach(b => { if (b.stat === 'atk') atk += b.value; });
+  return atk;
+}
+
+// ===== 액션 =====
+function doAction(action) {
+  if (turnLock || enemy.hp <= 0) return;
+  turnLock = true;
+  hideSubMenu();
+
+  if (action === 'attack') {
+    const dmg = Math.max(1, getPlayerAtk() - enemy.def + Math.floor(Math.random() * 4));
+    const crit = Math.random() < 0.1;
+    const finalDmg = crit ? dmg * 2 : dmg;
+    enemy.hp -= finalDmg;
+
+    document.getElementById('enemy-sprite').classList.add('shake');
+    setTimeout(() => document.getElementById('enemy-sprite').classList.remove('shake'), 300);
+    showDamage(crit ? `${finalDmg}!` : finalDmg, 200, 80, crit ? '#ffd700' : '#fff');
+    addLog(`용사의 공격! ${finalDmg} 데미지${crit ? ' (크리티컬!)' : ''}`, 'player');
+
+  } else if (action === 'defend') {
+    buffs.push({ stat: 'def_temp', value: player.def, turns: 1 });
+    addLog('용사는 방어 자세를 취했다! (받는 데미지 50%)', 'player');
+  }
+
+  updateUI();
+  setTimeout(() => checkBattleState(), 500);
+}
+
+function useSkill(skillName) {
+  if (turnLock) return;
+  const skill = SKILLS[skillName];
+  if (player.mp < skill.mp) { addLog('MP가 부족하다!', 'info'); return; }
+
+  turnLock = true;
+  hideSubMenu();
+  player.mp -= skill.mp;
+
+  if (skill.type === 'attack' || skill.type === 'magic') {
+    const base = skill.type === 'magic' ? getPlayerAtk() * 1.2 : getPlayerAtk();
+    const dmg = Math.max(1, Math.floor(base * skill.dmgMult) - (skill.type === 'magic' ? 0 : enemy.def));
+    enemy.hp -= dmg;
+    document.getElementById('enemy-sprite').classList.add('shake');
+    setTimeout(() => document.getElementById('enemy-sprite').classList.remove('shake'), 300);
+    showDamage(dmg, 200, 80, skill.type === 'magic' ? '#ff6b6b' : '#ffd700');
+    addLog(`${skillName}! ${dmg} 데미지!`, 'player');
+
+  } else if (skill.type === 'multi') {
+    let total = 0;
+    for (let i = 0; i < skill.hits; i++) {
+      const dmg = Math.max(1, Math.floor(getPlayerAtk() * skill.dmgMult) - enemy.def);
+      total += dmg;
+      enemy.hp -= dmg;
+    }
+    document.getElementById('enemy-sprite').classList.add('shake');
+    setTimeout(() => document.getElementById('enemy-sprite').classList.remove('shake'), 300);
+    showDamage(total, 200, 80, '#fbbf24');
+    addLog(`${skillName}! ${skill.hits}회 총 ${total} 데미지!`, 'player');
+
+  } else if (skill.type === 'heal') {
+    const heal = Math.floor(player.maxHp * skill.heal);
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    showDamage(`+${heal}`, 100, 200, '#4ade80');
+    addLog(`${skillName}! HP ${heal} 회복!`, 'heal');
+
+  } else if (skill.type === 'buff') {
+    buffs.push({ stat: skill.buff.atk ? 'atk' : 'def', value: skill.buff.atk || 0, turns: skill.buff.turns });
+    addLog(`${skillName}! ${skill.desc}`, 'player');
+  }
+
+  updateUI();
+  setTimeout(() => checkBattleState(), 500);
+}
+
+function useItem(idx) {
+  if (turnLock) return;
+  const item = items[idx];
+  if (item.count <= 0) return;
+
+  turnLock = true;
+  hideSubMenu();
+  item.count--;
+
+  if (item.effect === 'hp') {
+    const heal = Math.min(item.value, player.maxHp - player.hp);
+    player.hp += heal;
+    addLog(`${item.name} 사용! HP +${heal}`, 'heal');
+  } else if (item.effect === 'mp') {
+    const heal = Math.min(item.value, player.maxMp - player.mp);
+    player.mp += heal;
+    addLog(`${item.name} 사용! MP +${heal}`, 'heal');
+  } else if (item.effect === 'both') {
+    player.hp = Math.min(player.maxHp, player.hp + item.hpVal);
+    player.mp = Math.min(player.maxMp, player.mp + item.mpVal);
+    addLog(`${item.name} 사용! HP+${item.hpVal} MP+${item.mpVal}`, 'heal');
+  }
+
+  updateUI();
+  setTimeout(() => checkBattleState(), 500);
+}
+
+function checkBattleState() {
+  if (enemy.hp <= 0) {
+    enemyDefeated();
+    return;
+  }
+  enemyTurn();
+}
+
+function enemyTurn() {
+  let dmg;
+  const useSkill = enemy.skills.length > 0 && Math.random() < 0.35;
+
+  if (useSkill) {
+    const skillName = enemy.skills[Math.floor(Math.random() * enemy.skills.length)];
+    dmg = Math.floor(enemy.atk * 1.5) - player.def;
+
+    if (skillName === '흡혈') {
+      dmg = Math.max(1, Math.floor(enemy.atk * 1.2) - player.def);
+      enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(dmg / 2));
+      addLog(`${enemy.name}의 ${skillName}! ${Math.max(1,dmg)} 데미지 + HP회복`, 'enemy');
+    } else if (skillName === '분노') {
+      buffs.push({ stat: 'enemy_atk', value: 3, turns: 2 });
+      addLog(`${enemy.name}이(가) 분노했다! ATK 상승!`, 'enemy');
+      dmg = 0;
+    } else {
+      addLog(`${enemy.name}의 ${skillName}! ${Math.max(1,dmg)} 데미지!`, 'enemy');
+    }
+  } else {
+    let atkBonus = 0;
+    buffs.forEach(b => { if (b.stat === 'enemy_atk') atkBonus += b.value; });
+    dmg = Math.max(1, enemy.atk + atkBonus - player.def + Math.floor(Math.random() * 3));
+    addLog(`${enemy.name}의 공격! ${dmg} 데미지`, 'enemy');
+  }
+
+  // 방어 감소
+  const defending = buffs.some(b => b.stat === 'def_temp');
+  if (defending && dmg > 0) dmg = Math.max(1, Math.floor(dmg * 0.5));
+
+  if (dmg > 0) {
+    player.hp -= dmg;
+    showDamage(dmg, 80, 200, '#ff6b6b');
+  }
+
+  // 버프 턴 감소
+  buffs = buffs.filter(b => { b.turns--; return b.turns > 0; });
+
+  updateUI();
+
+  if (player.hp <= 0) {
+    gameOver();
+  } else {
+    turnLock = false;
+  }
+}
+
+function enemyDefeated() {
+  document.getElementById('enemy-sprite').classList.add('dead');
+  addLog(`${enemy.name}을(를) 처치! +${enemy.exp}EXP +${enemy.gold}G`, 'level');
+  player.exp += enemy.exp;
+  player.gold += enemy.gold;
+
+  // 레벨업
+  while (player.exp >= player.expNext) {
+    player.exp -= player.expNext;
+    player.lv++;
+    player.expNext = Math.floor(player.expNext * 1.4);
+    player.maxHp += 8;
+    player.maxMp += 4;
+    player.hp = player.maxHp;
+    player.mp = player.maxMp;
+    player.atk += 2;
+    player.def += 1;
+    addLog(`레벨 ${player.lv} 달성! 전 스탯 상승!`, 'level');
+  }
+
+  // 포션 보충 (보스전 후)
+  if (stage % 3 === 0) {
+    items.forEach(i => i.count = Math.min(i.count + 1, 5));
+    addLog('아이템이 보충되었다!', 'info');
+  }
+
+  updateUI();
+
+  if (stage >= 10) {
+    victory();
+    return;
+  }
+
+  setTimeout(() => {
+    stage++;
+    spawnEnemy();
+    turnLock = false;
+  }, 1200);
+}
+
+function gameOver() {
+  const overlay = document.getElementById('overlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <h2 style="color:#ff6b6b">패배...</h2>
+    <p style="color:#fff;font-size:18px">Stage ${stage}에서 쓰러졌다</p>
+    <p>레벨: ${player.lv} | 골드: ${player.gold}</p>
+    <button class="obtn" onclick="location.reload()">다시 도전</button>
+  `;
+}
+
+function victory() {
+  const overlay = document.getElementById('overlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <h2 style="color:#ffd700">🏆 승리!</h2>
+    <p style="color:#fff;font-size:18px">마왕을 물리쳤다!</p>
+    <p>레벨: ${player.lv} | 골드: ${player.gold}</p>
+    <button class="obtn" onclick="location.reload()">다시 플레이</button>
+  `;
+}
+
+// ===== 서브 메뉴 =====
+function showSkills() {
+  const menu = document.getElementById('sub-menu');
+  menu.innerHTML = Object.entries(SKILLS).map(([name, s]) =>
+    `<button class="sub-btn" onclick="useSkill('${name}')" ${player.mp < s.mp ? 'disabled' : ''}>
+      ${name}<br><span class="cost">MP ${s.mp} | ${s.desc}</span>
+    </button>`
+  ).join('') + `<button class="sub-btn" onclick="hideSubMenu()">← 뒤로</button>`;
+  menu.classList.add('show');
+}
+
+function showItems() {
+  const menu = document.getElementById('sub-menu');
+  menu.innerHTML = items.map((item, i) =>
+    `<button class="sub-btn" onclick="useItem(${i})" ${item.count <= 0 ? 'disabled' : ''}>
+      ${item.name} (${item.count}개)
+    </button>`
+  ).join('') + `<button class="sub-btn" onclick="hideSubMenu()">← 뒤로</button>`;
+  menu.classList.add('show');
+}
+
+function hideSubMenu() {
+  document.getElementById('sub-menu').classList.remove('show');
+}
+
+// 시작
+initGame();
+</script>
+</body>
+</html>
