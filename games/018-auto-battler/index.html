@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>오토 배틀러</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0ff;
+  font-family: 'Segoe UI', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#game {
+  width: 100%;
+  max-width: 520px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Top bar */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #16213e;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.top-bar .hp-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hp-bar .bar-bg {
+  width: 80px; height: 12px;
+  background: #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.hp-bar .bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e74c3c, #e67e22);
+  border-radius: 6px;
+  transition: width 0.5s;
+}
+.stat { font-weight: bold; }
+.gold-val { color: #f1c40f; }
+.round-val { color: #9b59b6; }
+
+/* Grid area */
+.battle-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.grid-label {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  margin: 2px 0;
+}
+.vs-line {
+  width: 90%;
+  text-align: center;
+  font-size: 12px;
+  color: #e74c3c;
+  padding: 3px 0;
+  border-top: 1px dashed #e74c3c44;
+  border-bottom: 1px dashed #e74c3c44;
+  letter-spacing: 4px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+.cell {
+  width: 60px; height: 60px;
+  background: #2a2a4a;
+  border: 1px solid #4a4a8a;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background 0.2s;
+}
+.cell.light { background: #323258; }
+.cell.dark { background: #2a2a4a; }
+.cell.drop-target { background: #3a3a6a; border-color: #7a7aba; }
+.cell.enemy-cell { opacity: 0.9; }
+
+/* Units */
+.unit {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: grab;
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.3s;
+  z-index: 2;
+  border: 2px solid #888;
+  background: #1a1a2e;
+}
+.unit.star2 {
+  border-color: #3498db;
+  box-shadow: 0 0 8px #3498db88;
+}
+.unit.star3 {
+  border-color: #f1c40f;
+  box-shadow: 0 0 14px #f1c40f88;
+  transform: scale(1.15);
+}
+.unit .star-badge {
+  position: absolute;
+  top: -6px;
+  font-size: 9px;
+  color: #f1c40f;
+  text-shadow: 0 0 4px #f1c40f;
+}
+.unit .hp-mini {
+  position: absolute;
+  bottom: -2px;
+  width: 36px; height: 4px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.unit .hp-mini-fill {
+  height: 100%;
+  background: #2ecc71;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.unit.dragging { opacity: 0.4; cursor: grabbing; }
+.unit.attack-anim {
+  animation: attackShake 0.3s;
+}
+@keyframes attackShake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-4px) rotate(-3deg); }
+  75% { transform: translateX(4px) rotate(3deg); }
+}
+.unit.star3.attack-anim {
+  animation: attackShake3 0.3s;
+}
+@keyframes attackShake3 {
+  0%,100% { transform: scale(1.15) translateX(0); }
+  25% { transform: scale(1.15) translateX(-4px) rotate(-3deg); }
+  75% { transform: scale(1.15) translateX(4px) rotate(3deg); }
+}
+
+/* Synergy aura */
+.unit.synergy-aura::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid;
+  animation: auraGlow 1.5s infinite;
+  pointer-events: none;
+}
+.unit.synergy-front::after { border-color: #e67e22; box-shadow: 0 0 8px #e67e2288; }
+.unit.synergy-magic::after { border-color: #9b59b6; box-shadow: 0 0 8px #9b59b688; }
+.unit.synergy-speed::after { border-color: #2ecc71; box-shadow: 0 0 8px #2ecc7188; }
+@keyframes auraGlow {
+  0%,100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Damage text */
+.dmg-text {
+  position: absolute;
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 10;
+  animation: floatUp 0.8s forwards;
+}
+.dmg-text.damage { color: #e74c3c; }
+.dmg-text.heal { color: #2ecc71; }
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+
+/* Bench */
+.bench-area {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 8px;
+}
+.bench-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+.bench-slots {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.bench-slot {
+  min-width: 54px; height: 54px;
+  background: #2a2a4a;
+  border: 1px solid #4a4a8a;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bench-slot.drop-target { background: #3a3a6a; border-color: #7a7aba; }
+
+/* Shop */
+.shop-area {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 8px;
+}
+.shop-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.shop-items {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.shop-card {
+  flex: 1;
+  min-width: 80px;
+  background: #2a2a4a;
+  border: 1px solid #4a4a8a;
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  font-size: 12px;
+}
+.shop-card:hover { background: #3a3a6a; transform: translateY(-2px); }
+.shop-card:active { transform: scale(0.95); }
+.shop-card .card-icon { font-size: 24px; }
+.shop-card .card-name { font-size: 11px; margin: 2px 0; }
+.shop-card .card-cost { color: #f1c40f; font-size: 11px; }
+.shop-card.sold { opacity: 0.3; pointer-events: none; }
+
+/* Buttons */
+.btn-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  transition: transform 0.1s, opacity 0.2s;
+}
+.btn:active { transform: scale(0.95); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn-battle { background: linear-gradient(135deg, #e74c3c, #c0392b); flex: 1; max-width: 200px; }
+.btn-refresh { background: #2980b9; font-size: 12px; padding: 8px 12px; }
+.btn-sell { background: #8e44ad; font-size: 11px; padding: 6px 10px; }
+.btn-lock { background: #27ae60; font-size: 11px; padding: 6px 10px; }
+.btn-lock.locked { background: #e67e22; }
+
+/* Synergy display */
+.synergy-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.synergy-tag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #333;
+}
+.synergy-tag.active { background: #4a2; color: #fff; }
+
+/* Streak display */
+.streak-info {
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+}
+
+/* Game over overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: #000c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  display: none;
+}
+.overlay.show { display: flex; }
+.overlay-box {
+  background: #16213e;
+  border: 2px solid #9b59b6;
+  border-radius: 16px;
+  padding: 30px 40px;
+  text-align: center;
+}
+.overlay-box h2 { font-size: 24px; margin-bottom: 10px; }
+.overlay-box p { margin: 6px 0; color: #bbb; }
+.overlay-box .btn { margin-top: 16px; background: #9b59b6; }
+
+/* Battle log */
+.battle-log {
+  font-size: 10px;
+  color: #777;
+  max-height: 40px;
+  overflow-y: auto;
+  text-align: center;
+  padding: 2px;
+}
+
+/* Sell zone indicator */
+.sell-zone {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(0deg, #e74c3ccc, transparent);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+}
+.sell-zone.active { display: flex; }
+
+/* Ghost drag element */
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 200;
+  opacity: 0.8;
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 400px) {
+  .cell { width: 52px; height: 52px; }
+  .unit { width: 44px; height: 44px; font-size: 18px; }
+  .shop-card { min-width: 65px; }
+}
+
+@media (min-width: 600px) {
+  .cell { width: 70px; height: 70px; }
+  .unit { width: 58px; height: 58px; font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="top-bar">
+    <div class="hp-bar">
+      <span>HP:</span>
+      <div class="bar-bg"><div class="bar-fill" id="hpBar"></div></div>
+      <span class="stat" id="hpText">100</span>
+    </div>
+    <div><span class="gold-val">💰 <span id="goldText">10</span></span></div>
+    <div><span class="round-val">라운드 <span id="roundText">1</span></span></div>
+  </div>
+
+  <div class="synergy-bar" id="synergyBar"></div>
+
+  <div class="battle-area">
+    <div class="grid-label">적 진영</div>
+    <div class="grid" id="enemyGrid"></div>
+    <div class="vs-line">⚔ VS ⚔</div>
+    <div class="grid" id="playerGrid"></div>
+    <div class="grid-label">내 진영</div>
+  </div>
+
+  <div class="bench-area">
+    <div class="bench-label">대기석</div>
+    <div class="bench-slots" id="benchSlots"></div>
+  </div>
+
+  <div class="shop-area" id="shopArea">
+    <div class="shop-label">
+      <span>상점</span>
+      <div class="streak-info" id="streakInfo"></div>
+    </div>
+    <div class="shop-items" id="shopItems"></div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-refresh" id="btnRefresh" onclick="refreshShop()">🔄 새로고침 (2G)</button>
+      <button class="btn btn-lock" id="btnLock" onclick="toggleLock()">🔒 잠금</button>
+      <button class="btn btn-battle" id="btnBattle" onclick="startBattle()">⚔️ 전투 시작</button>
+    </div>
+  </div>
+
+  <div class="battle-log" id="battleLog"></div>
+</div>
+
+<div class="sell-zone" id="sellZone">🗑️ 여기에 놓으면 판매</div>
+
+<div class="drag-ghost" id="dragGhost"></div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <h2 id="overlayTitle">게임 오버</h2>
+    <p id="overlayRound"></p>
+    <p id="overlayRecord"></p>
+    <button class="btn" onclick="restartGame()">다시 시작</button>
+  </div>
+</div>
+
+<script>
+// ========== UNIT TEMPLATES ==========
+const UNIT_TEMPLATES = {
+  warrior:     { key:'warrior',     name:'전사',     emoji:'⚔️', cost:3, hp:80,  atk:10, range:1, speed:1.0, type:'melee' },
+  archer:      { key:'archer',      name:'궁수',     emoji:'🏹', cost:3, hp:50,  atk:12, range:3, speed:1.2, type:'ranged' },
+  mage:        { key:'mage',        name:'마법사',   emoji:'🧙', cost:4, hp:40,  atk:15, range:2, speed:0.8, type:'magic', aoe:true },
+  healer:      { key:'healer',      name:'힐러',     emoji:'💚', cost:4, hp:45,  atk:0,  range:2, speed:1.0, type:'support', heal:8 },
+  assassin:    { key:'assassin',    name:'암살자',   emoji:'🗡️', cost:3, hp:45,  atk:18, range:1, speed:1.5, type:'melee', jumpToBack:true },
+  knight:      { key:'knight',      name:'기사',     emoji:'🛡️', cost:4, hp:100, atk:8,  range:1, speed:0.7, type:'melee', taunt:true },
+  ranger:      { key:'ranger',      name:'레인저',   emoji:'🎯', cost:3, hp:55,  atk:9,  range:3, speed:1.8, type:'ranged' },
+  necromancer: { key:'necromancer', name:'넥로맨서', emoji:'💀', cost:5, hp:35,  atk:12, range:2, speed:0.6, type:'magic', revive:true }
+};
+
+const SYNERGIES = {
+  front:  { name:'전열', keys:['warrior','knight'], need:2, bonus:'방어+30%', color:'#e67e22' },
+  magic:  { name:'마법진', keys:['mage','necromancer'], need:2, bonus:'마법+40%', color:'#9b59b6' },
+  speed:  { name:'속사', keys:['archer','ranger'], need:2, bonus:'공속+25%', color:'#2ecc71' }
+};
+
+// ========== GAME STATE ==========
+let state = {
+  phase: 'shop', // shop | battle | result
+  hp: 100,
+  gold: 10,
+  round: 1,
+  playerGrid: Array(12).fill(null), // 3 rows x 4 cols
+  enemyGrid: Array(12).fill(null),
+  bench: Array(7).fill(null),
+  shop: [],
+  shopLocked: false,
+  streak: 0, // positive = wins, negative = losses
+  battleUnits: { player: [], enemy: [] },
+  battleTimer: null,
+  bestRound: 0
+};
+
+function loadBest() {
+  try { state.bestRound = parseInt(localStorage.getItem('autobattler_best') || '0'); } catch(e) {}
+}
+function saveBest() {
+  try { if (state.round > state.bestRound) { state.bestRound = state.round; localStorage.setItem('autobattler_best', state.round); } } catch(e) {}
+}
+
+// ========== UNIT CREATION ==========
+let unitIdCounter = 0;
+function createUnit(key, star = 1) {
+  const t = UNIT_TEMPLATES[key];
+  const mult = star === 3 ? 4 : star === 2 ? 2 : 1;
+  return {
+    id: ++unitIdCounter,
+    key, star,
+    name: t.name,
+    emoji: t.emoji,
+    cost: t.cost,
+    type: t.type,
+    maxHp: t.hp * mult,
+    hp: t.hp * mult,
+    atk: t.atk * mult,
+    range: t.range,
+    speed: t.speed,
+    aoe: t.aoe || false,
+    heal: t.heal ? t.heal * mult : 0,
+    jumpToBack: t.jumpToBack || false,
+    taunt: t.taunt || false,
+    revive: t.revive || false,
+    cooldown: 0,
+    row: 0, col: 0,
+    element: null
+  };
+}
+
+// ========== RENDERING ==========
+function renderAll() {
+  renderTopBar();
+  renderGrid('enemyGrid', state.enemyGrid, true);
+  renderGrid('playerGrid', state.playerGrid, false);
+  renderBench();
+  renderShop();
+  renderSynergies();
+  renderStreak();
+}
+
+function renderTopBar() {
+  document.getElementById('hpBar').style.width = Math.max(0, state.hp) + '%';
+  document.getElementById('hpText').textContent = Math.max(0, state.hp);
+  document.getElementById('goldText').textContent = state.gold;
+  document.getElementById('roundText').textContent = state.round;
+}
+
+function renderGrid(gridId, gridData, isEnemy) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = '';
+  for (let i = 0; i < 12; i++) {
+    const cell = document.createElement('div');
+    const row = Math.floor(i / 4), col = i % 4;
+    cell.className = 'cell ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+    if (isEnemy) cell.classList.add('enemy-cell');
+    cell.dataset.gridId = gridId;
+    cell.dataset.index = i;
+
+    if (!isEnemy && state.phase === 'shop') {
+      cell.addEventListener('dragover', onDragOver);
+      cell.addEventListener('drop', e => onDrop(e, 'grid', i));
+      cell.addEventListener('dragleave', onDragLeave);
+    }
+
+    const unit = gridData[i];
+    if (unit) {
+      const el = createUnitElement(unit, !isEnemy && state.phase === 'shop');
+      cell.appendChild(el);
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function renderBench() {
+  const container = document.getElementById('benchSlots');
+  container.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'bench-slot';
+    slot.dataset.index = i;
+
+    if (state.phase === 'shop') {
+      slot.addEventListener('dragover', onDragOver);
+      slot.addEventListener('drop', e => onDrop(e, 'bench', i));
+      slot.addEventListener('dragleave', onDragLeave);
+    }
+
+    const unit = state.bench[i];
+    if (unit) {
+      const el = createUnitElement(unit, state.phase === 'shop');
+      slot.appendChild(el);
+    }
+    container.appendChild(slot);
+  }
+}
+
+function createUnitElement(unit, draggable) {
+  const el = document.createElement('div');
+  el.className = 'unit';
+  if (unit.star === 2) el.classList.add('star2');
+  if (unit.star === 3) el.classList.add('star3');
+  el.innerHTML = unit.emoji;
+  el.dataset.unitId = unit.id;
+
+  if (unit.star > 1) {
+    const badge = document.createElement('span');
+    badge.className = 'star-badge';
+    badge.textContent = '★'.repeat(unit.star);
+    el.appendChild(badge);
+  }
+
+  // HP mini bar
+  const hpBar = document.createElement('div');
+  hpBar.className = 'hp-mini';
+  const hpFill = document.createElement('div');
+  hpFill.className = 'hp-mini-fill';
+  hpFill.style.width = (unit.hp / unit.maxHp * 100) + '%';
+  hpBar.appendChild(hpFill);
+  el.appendChild(hpBar);
+
+  if (draggable) {
+    el.draggable = true;
+    el.addEventListener('dragstart', onDragStart);
+    el.addEventListener('dragend', onDragEnd);
+    // Touch support
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+  }
+
+  unit.element = el;
+  return el;
+}
+
+function renderShop() {
+  const container = document.getElementById('shopItems');
+  container.innerHTML = '';
+  const battleBtn = document.getElementById('btnBattle');
+  const refreshBtn = document.getElementById('btnRefresh');
+  const lockBtn = document.getElementById('btnLock');
+
+  if (state.phase === 'battle') {
+    battleBtn.disabled = true;
+    battleBtn.textContent = '⚔️ 전투 중...';
+    refreshBtn.disabled = true;
+  } else {
+    battleBtn.disabled = false;
+    battleBtn.textContent = '⚔️ 전투 시작';
+    refreshBtn.disabled = false;
+  }
+
+  lockBtn.className = 'btn btn-lock' + (state.shopLocked ? ' locked' : '');
+  lockBtn.textContent = state.shopLocked ? '🔓 잠금 해제' : '🔒 잠금';
+
+  state.shop.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'shop-card' + (item.sold ? ' sold' : '');
+    card.innerHTML = `
+      <div class="card-icon">${item.emoji}</div>
+      <div class="card-name">${item.name}</div>
+      <div class="card-cost">${item.cost}G</div>
+    `;
+    if (!item.sold) {
+      card.addEventListener('click', () => buyUnit(i));
+    }
+    container.appendChild(card);
+  });
+}
+
+function renderSynergies() {
+  const bar = document.getElementById('synergyBar');
+  bar.innerHTML = '';
+  const counts = getActiveSynergies();
+  for (const [sKey, syn] of Object.entries(SYNERGIES)) {
+    const count = counts[sKey] || 0;
+    const active = count >= syn.need;
+    const tag = document.createElement('span');
+    tag.className = 'synergy-tag' + (active ? ' active' : '');
+    tag.textContent = `${syn.name} ${count}/${syn.need} ${active ? syn.bonus : ''}`;
+    bar.appendChild(tag);
+  }
+
+  // Apply aura classes to units on player grid
+  const activeSyns = {};
+  for (const [sKey, syn] of Object.entries(SYNERGIES)) {
+    if ((counts[sKey] || 0) >= syn.need) activeSyns[sKey] = syn;
+  }
+
+  state.playerGrid.forEach(u => {
+    if (!u || !u.element) return;
+    u.element.classList.remove('synergy-aura', 'synergy-front', 'synergy-magic', 'synergy-speed');
+    for (const [sKey, syn] of Object.entries(activeSyns)) {
+      if (syn.keys.includes(u.key)) {
+        u.element.classList.add('synergy-aura', 'synergy-' + sKey);
+      }
+    }
+  });
+}
+
+function getActiveSynergies() {
+  const counts = {};
+  const placed = state.playerGrid.filter(u => u);
+  for (const [sKey, syn] of Object.entries(SYNERGIES)) {
+    counts[sKey] = placed.filter(u => syn.keys.includes(u.key)).length;
+  }
+  return counts;
+}
+
+function renderStreak() {
+  const el = document.getElementById('streakInfo');
+  if (state.streak > 0) el.textContent = `🔥 ${state.streak}연승`;
+  else if (state.streak < 0) el.textContent = `💔 ${Math.abs(state.streak)}연패`;
+  else el.textContent = '';
+}
+
+// ========== DRAG AND DROP (Mouse) ==========
+let dragData = null;
+
+function onDragStart(e) {
+  const unitId = parseInt(e.target.dataset.unitId);
+  const loc = findUnit(unitId);
+  if (!loc) return;
+  dragData = loc;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', unitId);
+  document.getElementById('sellZone').classList.add('active');
+}
+
+function onDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.getElementById('sellZone').classList.remove('active');
+  document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+  dragData = null;
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drop-target');
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drop-target');
+}
+
+function onDrop(e, targetType, targetIndex) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-target');
+  if (!dragData) return;
+  moveUnit(dragData, { type: targetType, index: targetIndex });
+  dragData = null;
+  document.getElementById('sellZone').classList.remove('active');
+}
+
+// ========== DRAG AND DROP (Touch) ==========
+let touchDragData = null;
+let touchGhost = null;
+
+function onTouchStart(e) {
+  if (state.phase !== 'shop') return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const unitId = parseInt(el.dataset.unitId);
+  const loc = findUnit(unitId);
+  if (!loc) return;
+
+  touchDragData = { loc, el, startX: e.touches[0].clientX, startY: e.touches[0].clientY };
+  el.classList.add('dragging');
+
+  const ghost = document.getElementById('dragGhost');
+  ghost.innerHTML = el.innerHTML;
+  ghost.className = 'drag-ghost unit ' + (el.classList.contains('star2') ? 'star2' : el.classList.contains('star3') ? 'star3' : '');
+  ghost.style.display = 'flex';
+  ghost.style.width = '50px';
+  ghost.style.height = '50px';
+  ghost.style.borderRadius = '50%';
+  ghost.style.alignItems = 'center';
+  ghost.style.justifyContent = 'center';
+  ghost.style.fontSize = '22px';
+  ghost.style.border = el.style.border || '2px solid #888';
+  ghost.style.background = '#1a1a2e';
+  positionGhost(e.touches[0].clientX, e.touches[0].clientY);
+
+  document.getElementById('sellZone').classList.add('active');
+}
+
+function onTouchMove(e) {
+  if (!touchDragData) return;
+  e.preventDefault();
+  positionGhost(e.touches[0].clientX, e.touches[0].clientY);
+}
+
+function onTouchEnd(e) {
+  if (!touchDragData) return;
+  const ghost = document.getElementById('dragGhost');
+  ghost.style.display = 'none';
+  touchDragData.el.classList.remove('dragging');
+  document.getElementById('sellZone').classList.remove('active');
+
+  const touch = e.changedTouches[0];
+  const x = touch.clientX, y = touch.clientY;
+
+  // Check sell zone
+  const sellZone = document.getElementById('sellZone');
+  const sellRect = sellZone.getBoundingClientRect();
+  if (y >= sellRect.top) {
+    sellUnit(touchDragData.loc);
+    touchDragData = null;
+    renderAll();
+    return;
+  }
+
+  // Check drop targets
+  const target = findDropTarget(x, y);
+  if (target) {
+    moveUnit(touchDragData.loc, target);
+  }
+  touchDragData = null;
+}
+
+function positionGhost(x, y) {
+  const ghost = document.getElementById('dragGhost');
+  ghost.style.left = (x - 25) + 'px';
+  ghost.style.top = (y - 25) + 'px';
+}
+
+function findDropTarget(x, y) {
+  // Check player grid cells
+  const playerCells = document.getElementById('playerGrid').children;
+  for (let i = 0; i < playerCells.length; i++) {
+    const r = playerCells[i].getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      return { type: 'grid', index: i };
+    }
+  }
+  // Check bench slots
+  const benchSlots = document.getElementById('benchSlots').children;
+  for (let i = 0; i < benchSlots.length; i++) {
+    const r = benchSlots[i].getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      return { type: 'bench', index: i };
+    }
+  }
+  return null;
+}
+
+// Sell zone drag
+document.addEventListener('DOMContentLoaded', () => {
+  const sellZone = document.getElementById('sellZone');
+  sellZone.addEventListener('dragover', e => { e.preventDefault(); });
+  sellZone.addEventListener('drop', e => {
+    e.preventDefault();
+    if (dragData) {
+      sellUnit(dragData);
+      dragData = null;
+      document.getElementById('sellZone').classList.remove('active');
+      renderAll();
+    }
+  });
+});
+
+// ========== UNIT MANAGEMENT ==========
+function findUnit(unitId) {
+  for (let i = 0; i < 12; i++) {
+    if (state.playerGrid[i] && state.playerGrid[i].id === unitId) return { type: 'grid', index: i };
+  }
+  for (let i = 0; i < 7; i++) {
+    if (state.bench[i] && state.bench[i].id === unitId) return { type: 'bench', index: i };
+  }
+  return null;
+}
+
+function getUnit(loc) {
+  return loc.type === 'grid' ? state.playerGrid[loc.index] : state.bench[loc.index];
+}
+
+function setUnit(loc, unit) {
+  if (loc.type === 'grid') state.playerGrid[loc.index] = unit;
+  else state.bench[loc.index] = unit;
+}
+
+function moveUnit(from, to) {
+  const unitA = getUnit(from);
+  const unitB = getUnit(to);
+  setUnit(to, unitA);
+  setUnit(from, unitB);
+  checkMerge();
+  renderAll();
+}
+
+function sellUnit(loc) {
+  const unit = getUnit(loc);
+  if (!unit) return;
+  const refund = unit.cost * (unit.star === 3 ? 9 : unit.star === 2 ? 3 : 1);
+  state.gold += refund;
+  setUnit(loc, null);
+}
+
+function buyUnit(shopIndex) {
+  if (state.phase !== 'shop') return;
+  const item = state.shop[shopIndex];
+  if (!item || item.sold) return;
+  if (state.gold < item.cost) return;
+
+  // Find empty bench slot
+  const emptyBench = state.bench.findIndex(s => s === null);
+  if (emptyBench === -1) return; // No space
+
+  state.gold -= item.cost;
+  item.sold = true;
+  state.bench[emptyBench] = createUnit(item.key);
+  checkMerge();
+  renderAll();
+}
+
+// ========== MERGE SYSTEM ==========
+function checkMerge() {
+  let merged = true;
+  while (merged) {
+    merged = false;
+    const allUnits = [];
+    for (let i = 0; i < 12; i++) {
+      if (state.playerGrid[i]) allUnits.push({ loc: { type: 'grid', index: i }, unit: state.playerGrid[i] });
+    }
+    for (let i = 0; i < 7; i++) {
+      if (state.bench[i]) allUnits.push({ loc: { type: 'bench', index: i }, unit: state.bench[i] });
+    }
+
+    // Group by key + star
+    const groups = {};
+    for (const entry of allUnits) {
+      const gKey = entry.unit.key + '_' + entry.unit.star;
+      if (!groups[gKey]) groups[gKey] = [];
+      groups[gKey].push(entry);
+    }
+
+    for (const gKey in groups) {
+      const group = groups[gKey];
+      if (group.length >= 3) {
+        merged = true;
+        const star = group[0].unit.star;
+        const newStar = star + 1;
+        if (newStar > 3) { merged = false; continue; }
+
+        // Keep the first one on grid if any, otherwise first
+        const gridOnes = group.filter(e => e.loc.type === 'grid');
+        const keeper = gridOnes.length > 0 ? gridOnes[0] : group[0];
+
+        // Remove all 3
+        for (const e of group.slice(0, 3)) {
+          setUnit(e.loc, null);
+        }
+
+        // Create merged unit
+        const newUnit = createUnit(keeper.unit.key, newStar);
+        setUnit(keeper.loc, newUnit);
+        break;
+      }
+    }
+  }
+}
+
+// ========== SHOP ==========
+function generateShop() {
+  const keys = Object.keys(UNIT_TEMPLATES);
+  const items = [];
+  for (let i = 0; i < 5; i++) {
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    const t = UNIT_TEMPLATES[key];
+    items.push({ key, name: t.name, emoji: t.emoji, cost: t.cost, sold: false });
+  }
+  return items;
+}
+
+function refreshShop() {
+  if (state.phase !== 'shop') return;
+  if (state.gold < 2) return;
+  state.gold -= 2;
+  state.shop = generateShop();
+  state.shopLocked = false;
+  renderAll();
+}
+
+function toggleLock() {
+  state.shopLocked = !state.shopLocked;
+  renderAll();
+}
+
+// ========== ENEMY GENERATION ==========
+function generateEnemy(round) {
+  const grid = Array(12).fill(null);
+  const keys = Object.keys(UNIT_TEMPLATES);
+  let numUnits, maxStar;
+
+  if (round <= 5) {
+    numUnits = 2 + Math.floor(Math.random() * 2);
+    maxStar = 1;
+  } else if (round <= 10) {
+    numUnits = 3 + Math.floor(Math.random() * 3);
+    maxStar = Math.random() < 0.3 ? 2 : 1;
+  } else if (round <= 15) {
+    numUnits = 5 + Math.floor(Math.random() * 3);
+    maxStar = Math.random() < 0.6 ? 2 : 1;
+  } else {
+    numUnits = 7 + Math.floor(Math.random() * 2);
+    maxStar = Math.random() < 0.3 ? 3 : 2;
+  }
+
+  const positions = [];
+  while (positions.length < numUnits && positions.length < 12) {
+    const pos = Math.floor(Math.random() * 12);
+    if (!positions.includes(pos)) positions.push(pos);
+  }
+
+  for (const pos of positions) {
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    let star = 1;
+    if (maxStar >= 2 && Math.random() < 0.4) star = 2;
+    if (maxStar >= 3 && Math.random() < 0.2) star = 3;
+    grid[pos] = createUnit(key, star);
+  }
+
+  return grid;
+}
+
+// ========== BATTLE SYSTEM ==========
+function startBattle() {
+  if (state.phase !== 'shop') return;
+  const playerUnits = state.playerGrid.filter(u => u);
+  if (playerUnits.length === 0) return;
+
+  state.phase = 'battle';
+  state.enemyGrid = generateEnemy(state.round);
+
+  // Build battle units with positions
+  const bu = { player: [], enemy: [] };
+
+  for (let i = 0; i < 12; i++) {
+    if (state.playerGrid[i]) {
+      const u = cloneUnitForBattle(state.playerGrid[i]);
+      u.row = Math.floor(i / 4);
+      u.col = i % 4;
+      u.side = 'player';
+      u.gridIndex = i;
+      bu.player.push(u);
+    }
+    if (state.enemyGrid[i]) {
+      const u = cloneUnitForBattle(state.enemyGrid[i]);
+      // Mirror rows for enemy (row 0 = closest to VS line)
+      u.row = Math.floor(i / 4);
+      u.col = i % 4;
+      u.side = 'enemy';
+      u.gridIndex = i;
+      bu.enemy.push(u);
+    }
+  }
+
+  // Apply synergies to player units
+  applySynergyBonuses(bu.player);
+
+  state.battleUnits = bu;
+  document.getElementById('battleLog').textContent = '';
+  renderAll();
+
+  // Assassin jump
+  for (const u of bu.player) {
+    if (u.jumpToBack && bu.enemy.length > 0) {
+      const backRow = Math.max(...bu.enemy.map(e => e.row));
+      const backEnemies = bu.enemy.filter(e => e.row === backRow);
+      const target = backEnemies.reduce((a, b) => a.hp < b.hp ? a : b);
+      u.row = target.row;
+      u.col = target.col > 0 ? target.col - 1 : target.col + 1;
+    }
+  }
+  for (const u of bu.enemy) {
+    if (u.jumpToBack && bu.player.length > 0) {
+      const backRow = Math.max(...bu.player.map(e => e.row));
+      const backPlayers = bu.player.filter(e => e.row === backRow);
+      const target = backPlayers.reduce((a, b) => a.hp < b.hp ? a : b);
+      u.row = target.row;
+      u.col = target.col > 0 ? target.col - 1 : target.col + 1;
+    }
+  }
+
+  // Start battle loop
+  state.battleTimer = setInterval(battleTick, 200);
+}
+
+function cloneUnitForBattle(unit) {
+  return {
+    ...unit,
+    hp: unit.maxHp,
+    maxHp: unit.maxHp,
+    cooldown: 0,
+    alive: true,
+    id: unit.id,
+    element: null
+  };
+}
+
+function applySynergyBonuses(units) {
+  const counts = {};
+  for (const [sKey, syn] of Object.entries(SYNERGIES)) {
+    counts[sKey] = units.filter(u => syn.keys.includes(u.key)).length;
+  }
+
+  for (const u of units) {
+    // Front line synergy: defense +30% (reduce damage taken -> increase HP by 30%)
+    if (counts.front >= SYNERGIES.front.need && SYNERGIES.front.keys.includes(u.key)) {
+      u.maxHp = Math.floor(u.maxHp * 1.3);
+      u.hp = u.maxHp;
+    }
+    // Magic synergy: +40% attack for magic types
+    if (counts.magic >= SYNERGIES.magic.need && SYNERGIES.magic.keys.includes(u.key)) {
+      u.atk = Math.floor(u.atk * 1.4);
+    }
+    // Speed synergy: +25% speed
+    if (counts.speed >= SYNERGIES.speed.need && SYNERGIES.speed.keys.includes(u.key)) {
+      u.speed *= 1.25;
+    }
+  }
+}
+
+function battleTick() {
+  const { player, enemy } = state.battleUnits;
+  const alive = { player: player.filter(u => u.alive), enemy: enemy.filter(u => u.alive) };
+
+  if (alive.player.length === 0 || alive.enemy.length === 0) {
+    endBattle(alive);
+    return;
+  }
+
+  // Process each alive unit
+  const allAlive = [...alive.player, ...alive.enemy];
+  for (const u of allAlive) {
+    if (!u.alive) continue;
+    u.cooldown -= 0.2;
+    if (u.cooldown > 0) continue;
+    u.cooldown = 1.0 / u.speed;
+
+    const enemies = u.side === 'player' ? alive.enemy.filter(e => e.alive) : alive.player.filter(e => e.alive);
+    const allies = u.side === 'player' ? alive.player.filter(e => e.alive && e.id !== u.id) : alive.enemy.filter(e => e.alive && e.id !== u.id);
+
+    if (enemies.length === 0) continue;
+
+    // Healer logic
+    if (u.heal > 0 && allies.length > 0) {
+      const lowest = allies.reduce((a, b) => (a.hp / a.maxHp) < (b.hp / b.maxHp) ? a : b);
+      if (lowest.hp < lowest.maxHp) {
+        const healAmt = Math.min(u.heal, lowest.maxHp - lowest.hp);
+        lowest.hp += healAmt;
+        showDamageText(lowest, healAmt, true);
+      }
+      // Healer can also attack weakly if atk > 0
+      if (u.atk > 0) {
+        attackTarget(u, enemies);
+      }
+      continue;
+    }
+
+    attackTarget(u, enemies);
+
+    // Necromancer revive
+    if (u.revive) {
+      const deadEnemies = (u.side === 'player' ? enemy : player).filter(e => !e.alive);
+      for (const dead of deadEnemies) {
+        if (Math.random() < 0.5 && !dead.revived) {
+          dead.revived = true;
+          const revived = cloneUnitForBattle(dead);
+          revived.hp = Math.floor(revived.maxHp * 0.3);
+          revived.maxHp = revived.maxHp;
+          revived.side = u.side;
+          revived.alive = true;
+          revived.id = ++unitIdCounter;
+          revived.row = u.row;
+          revived.col = u.col;
+          if (u.side === 'player') player.push(revived);
+          else enemy.push(revived);
+          logBattle(`${u.name}이(가) ${dead.name}을(를) 소환!`);
+          break;
+        }
+      }
+    }
+  }
+
+  renderBattleState();
+}
+
+function attackTarget(u, enemies) {
+  // Find closest enemy, with taunt priority
+  let target = null;
+  let minDist = Infinity;
+
+  const taunters = enemies.filter(e => e.taunt && e.alive);
+  const targetPool = taunters.length > 0 ? taunters : enemies;
+
+  for (const e of targetPool) {
+    if (!e.alive) continue;
+    const dist = Math.abs(u.row - e.row) + Math.abs(u.col - e.col);
+    // For enemies attacking player, adjust distance calculation
+    let effectiveDist = dist;
+    if (u.side !== e.side) {
+      // Account for the gap between grids (3 rows each + vs line)
+      const uAbsRow = u.side === 'player' ? u.row + 4 : u.row;
+      const eAbsRow = e.side === 'player' ? e.row + 4 : e.row;
+      effectiveDist = Math.abs(uAbsRow - eAbsRow) + Math.abs(u.col - e.col);
+    }
+    if (effectiveDist < minDist) {
+      minDist = effectiveDist;
+      target = e;
+    }
+  }
+
+  if (!target) return;
+
+  if (minDist <= u.range || u.range >= 2) {
+    // Attack
+    let dmg = u.atk + Math.floor(Math.random() * 3);
+
+    // AOE
+    if (u.aoe) {
+      const nearTarget = enemies.filter(e => e.alive && Math.abs(e.row - target.row) + Math.abs(e.col - target.col) <= 1);
+      for (const e of nearTarget) {
+        const aoeDmg = Math.floor(dmg * (e === target ? 1 : 0.5));
+        e.hp -= aoeDmg;
+        showDamageText(e, aoeDmg, false);
+        if (e.hp <= 0) { e.alive = false; }
+      }
+    } else {
+      target.hp -= dmg;
+      showDamageText(target, dmg, false);
+      if (target.hp <= 0) { target.alive = false; }
+    }
+
+    // Animate attack
+    if (u.element) {
+      u.element.classList.remove('attack-anim');
+      void u.element.offsetWidth;
+      u.element.classList.add('attack-anim');
+    }
+  } else {
+    // Move toward target
+    const dRow = Math.sign((target.side === u.side ? target.row : target.row) - u.row);
+    const dCol = Math.sign(target.col - u.col);
+    if (Math.abs(u.row - target.row) >= Math.abs(u.col - target.col)) {
+      u.row += dRow;
+    } else {
+      u.col += dCol;
+    }
+  }
+}
+
+function showDamageText(unit, amount, isHeal) {
+  // Find the unit's cell in DOM
+  const grids = ['playerGrid', 'enemyGrid'];
+  for (const gridId of grids) {
+    const gridEl = document.getElementById(gridId);
+    const cells = gridEl.children;
+    for (let i = 0; i < cells.length; i++) {
+      const unitEl = cells[i].querySelector('.unit');
+      if (unitEl && parseInt(unitEl.dataset.unitId) === unit.id) {
+        const txt = document.createElement('div');
+        txt.className = 'dmg-text ' + (isHeal ? 'heal' : 'damage');
+        txt.textContent = (isHeal ? '+' : '-') + amount;
+        txt.style.left = '50%';
+        txt.style.top = '0';
+        txt.style.transform = 'translateX(-50%)';
+        cells[i].appendChild(txt);
+        setTimeout(() => txt.remove(), 800);
+        return;
+      }
+    }
+  }
+}
+
+function renderBattleState() {
+  const { player, enemy } = state.battleUnits;
+
+  // Re-render both grids with battle positions
+  renderBattleGrid('enemyGrid', enemy, true);
+  renderBattleGrid('playerGrid', player, false);
+}
+
+function renderBattleGrid(gridId, units, isEnemy) {
+  const grid = document.getElementById(gridId);
+  // Clear unit elements from cells but keep cells
+  for (let i = 0; i < 12; i++) {
+    const cell = grid.children[i];
+    if (!cell) continue;
+    const existing = cell.querySelector('.unit');
+    if (existing) existing.remove();
+  }
+
+  for (const u of units) {
+    if (!u.alive) continue;
+    const idx = u.row * 4 + u.col;
+    if (idx < 0 || idx >= 12) continue;
+    const cell = grid.children[idx];
+    if (!cell) continue;
+
+    const el = document.createElement('div');
+    el.className = 'unit';
+    if (u.star === 2) el.classList.add('star2');
+    if (u.star === 3) el.classList.add('star3');
+    el.innerHTML = u.emoji;
+    el.dataset.unitId = u.id;
+
+    if (u.star > 1) {
+      const badge = document.createElement('span');
+      badge.className = 'star-badge';
+      badge.textContent = '★'.repeat(u.star);
+      el.appendChild(badge);
+    }
+
+    const hpBar = document.createElement('div');
+    hpBar.className = 'hp-mini';
+    const hpFill = document.createElement('div');
+    hpFill.className = 'hp-mini-fill';
+    hpFill.style.width = Math.max(0, u.hp / u.maxHp * 100) + '%';
+    if (u.hp / u.maxHp < 0.3) hpFill.style.background = '#e74c3c';
+    else if (u.hp / u.maxHp < 0.6) hpFill.style.background = '#f39c12';
+    hpBar.appendChild(hpFill);
+    el.appendChild(hpBar);
+
+    u.element = el;
+    cell.appendChild(el);
+  }
+}
+
+function endBattle(alive) {
+  clearInterval(state.battleTimer);
+  state.battleTimer = null;
+
+  const won = alive.player.length > 0;
+  const remainingEnemies = alive.enemy.length;
+
+  if (!won) {
+    state.hp -= remainingEnemies;
+    state.streak = state.streak < 0 ? state.streak - 1 : -1;
+    logBattle(`패배! 적 ${remainingEnemies}명 생존. HP -${remainingEnemies}`);
+  } else {
+    state.streak = state.streak > 0 ? state.streak + 1 : 1;
+    logBattle('승리!');
+  }
+
+  // Restore player units HP
+  for (let i = 0; i < 12; i++) {
+    if (state.playerGrid[i]) {
+      state.playerGrid[i].hp = state.playerGrid[i].maxHp;
+    }
+  }
+
+  // Clear enemy grid
+  state.enemyGrid = Array(12).fill(null);
+
+  // Check game over
+  if (state.hp <= 0) {
+    state.hp = 0;
+    saveBest();
+    showGameOver();
+    return;
+  }
+
+  // Income
+  const baseIncome = 5;
+  const interest = Math.min(5, Math.floor(state.gold / 10));
+  const streakBonus = Math.min(3, Math.floor(Math.abs(state.streak) / 2));
+  const totalIncome = baseIncome + interest + streakBonus;
+  state.gold += totalIncome;
+
+  logBattle(`수입: 기본${baseIncome} + 이자${interest} + 연속${streakBonus} = ${totalIncome}G`);
+
+  state.round++;
+  state.phase = 'shop';
+
+  if (!state.shopLocked) {
+    state.shop = generateShop();
+  }
+
+  saveBest();
+  renderAll();
+}
+
+function logBattle(msg) {
+  const el = document.getElementById('battleLog');
+  el.textContent = msg;
+}
+
+function showGameOver() {
+  state.phase = 'result';
+  const overlay = document.getElementById('overlay');
+  overlay.classList.add('show');
+  document.getElementById('overlayTitle').textContent = '게임 오버';
+  document.getElementById('overlayRound').textContent = `라운드 ${state.round}까지 생존!`;
+  document.getElementById('overlayRecord').textContent = `최고 기록: 라운드 ${state.bestRound}`;
+}
+
+function restartGame() {
+  document.getElementById('overlay').classList.remove('show');
+  unitIdCounter = 0;
+  state = {
+    phase: 'shop',
+    hp: 100,
+    gold: 10,
+    round: 1,
+    playerGrid: Array(12).fill(null),
+    enemyGrid: Array(12).fill(null),
+    bench: Array(7).fill(null),
+    shop: generateShop(),
+    shopLocked: false,
+    streak: 0,
+    battleUnits: { player: [], enemy: [] },
+    battleTimer: null,
+    bestRound: state.bestRound
+  };
+  renderAll();
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && state.phase === 'shop') {
+    e.preventDefault();
+    startBattle();
+  }
+});
+
+// ========== INIT ==========
+loadBest();
+state.shop = generateShop();
+renderAll();
+</script>
+</body>
+</html>
