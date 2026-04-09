@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>물리 퍼즐</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #e8ecf1;
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+#wrap {
+  position: relative;
+  width: 100vmin;
+  height: 100vmin;
+  max-width: 600px;
+  max-height: 600px;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+#ui {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+}
+#ui > * { pointer-events: auto; }
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+}
+.btn:active { transform: scale(0.95); }
+.btn-primary { background: #4a90d9; }
+.btn-warn { background: #e67e22; }
+.btn-green { background: #27ae60; }
+.btn-gray { background: #7f8c8d; }
+#topBar {
+  position: absolute;
+  top: 10px; left: 10px; right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#levelLabel {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c3e50;
+  background: rgba(255,255,255,0.85);
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+#bottomBar {
+  position: absolute;
+  bottom: 10px; left: 10px; right: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+#starDisplay {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  color: #f39c12;
+  background: rgba(255,255,255,0.85);
+  padding: 4px 12px;
+  border-radius: 8px;
+  letter-spacing: 4px;
+}
+#hint {
+  position: absolute;
+  bottom: 55px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: #7f8c8d;
+  background: rgba(255,255,255,0.8);
+  padding: 4px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <div id="topBar">
+      <div id="levelLabel"></div>
+      <button class="btn btn-gray" id="btnMenu" style="padding:8px 14px;font-size:13px;">메뉴</button>
+    </div>
+    <div id="starDisplay"></div>
+    <div id="hint"></div>
+    <div id="bottomBar">
+      <button class="btn btn-primary" id="btnLaunch">발사</button>
+      <button class="btn btn-warn" id="btnReset">리셋</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 600, H = 600;
+canvas.width = W;
+canvas.height = H;
+
+// ====== STATE ======
+let state = 'menu'; // menu, play, launched, complete
+let currentLevel = 0;
+let stars = [];
+let bestStars = JSON.parse(localStorage.getItem('pp_stars') || '[]');
+let launchTime = 0;
+let removedCount = 0;
+let placedObjects = [];
+let particles = [];
+let trailParticles = [];
+let ball = null;
+let levelData = null;
+let dragging = null; // { idx, ox, oy }
+let goalReached = false;
+let goalTimer = 0;
+let animFrame = 0;
+
+// ====== PHYSICS ======
+const GRAVITY = 0.35;
+const FRICTION = 0.995;
+const GROUND_FRICTION = 0.92;
+const RESTITUTION = 0.55;
+const BUMPER_FORCE = 1.8;
+const DT = 1;
+
+function vec(x,y) { return {x,y}; }
+function vadd(a,b) { return {x:a.x+b.x, y:a.y+b.y}; }
+function vsub(a,b) { return {x:a.x-b.x, y:a.y-b.y}; }
+function vmul(a,s) { return {x:a.x*s, y:a.y*s}; }
+function vlen(a) { return Math.sqrt(a.x*a.x+a.y*a.y); }
+function vnorm(a) { const l=vlen(a)||1; return {x:a.x/l,y:a.y/l}; }
+function vdot(a,b) { return a.x*b.x+a.y*b.y; }
+function vrot(v,a) { const c=Math.cos(a),s=Math.sin(a); return {x:v.x*c-v.y*s, y:v.x*s+v.y*c}; }
+
+// ====== LEVELS ======
+const levels = [
+  // Level 1: Simple drop
+  {
+    name: "첫 번째 낙하",
+    ball: {x:100,y:80}, target: {x:100,y:500},
+    platforms: [{x:40,y:300,w:120,h:14,a:0.15}],
+    bumpers: [], portals: [], removables: [], placeables: []
+  },
+  // Level 2: Two platforms
+  {
+    name: "계단 내려가기",
+    ball: {x:80,y:60}, target: {x:480,y:520},
+    platforms: [
+      {x:40,y:200,w:160,h:14,a:0.2},
+      {x:300,y:350,w:180,h:14,a:-0.15},
+      {x:400,y:500,w:160,h:14,a:0}
+    ],
+    bumpers: [], portals: [], removables: [], placeables: []
+  },
+  // Level 3: Funnel
+  {
+    name: "깔때기",
+    ball: {x:300,y:50}, target: {x:300,y:540},
+    platforms: [
+      {x:120,y:180,w:140,h:14,a:0.35},
+      {x:340,y:180,w:140,h:14,a:-0.35},
+      {x:200,y:350,w:100,h:14,a:0.25},
+      {x:300,y:350,w:100,h:14,a:-0.25}
+    ],
+    bumpers: [], portals: [], removables: [], placeables: []
+  },
+  // Level 4: Bumpers intro
+  {
+    name: "범퍼 등장",
+    ball: {x:80,y:60}, target: {x:500,y:520},
+    platforms: [
+      {x:30,y:200,w:140,h:14,a:0.2},
+      {x:380,y:420,w:160,h:14,a:-0.1}
+    ],
+    bumpers: [{x:250,y:300,r:22},{x:400,y:250,r:22}],
+    portals: [], removables: [], placeables: []
+  },
+  // Level 5: Removable blocks
+  {
+    name: "길을 열어라",
+    ball: {x:100,y:60}, target: {x:100,y:520},
+    platforms: [{x:40,y:200,w:120,h:14,a:0}],
+    bumpers: [],
+    portals: [],
+    removables: [{x:60,y:330,w:80,h:20},{x:60,y:420,w:80,h:20}],
+    placeables: []
+  },
+  // Level 6: Bumpers + removables
+  {
+    name: "선택과 반사",
+    ball: {x:80,y:50}, target: {x:500,y:500},
+    platforms: [
+      {x:30,y:180,w:130,h:14,a:0.25},
+      {x:350,y:400,w:150,h:14,a:-0.1}
+    ],
+    bumpers: [{x:220,y:280,r:24},{x:350,y:200,r:20}],
+    portals: [],
+    removables: [{x:280,y:350,w:70,h:20},{x:430,y:300,w:60,h:20}],
+    placeables: []
+  },
+  // Level 7: Portals intro
+  {
+    name: "순간이동",
+    ball: {x:80,y:80}, target: {x:500,y:520},
+    platforms: [
+      {x:30,y:220,w:130,h:14,a:0.1},
+      {x:400,y:420,w:140,h:14,a:-0.1}
+    ],
+    bumpers: [],
+    portals: [{x1:160,y1:350,x2:420,y2:300}],
+    removables: [], placeables: []
+  },
+  // Level 8: Angled + portals
+  {
+    name: "비스듬한 통로",
+    ball: {x:300,y:50}, target: {x:80,y:540},
+    platforms: [
+      {x:220,y:160,w:160,h:14,a:0.4},
+      {x:350,y:350,w:120,h:14,a:-0.3},
+      {x:30,y:460,w:120,h:14,a:0}
+    ],
+    bumpers: [{x:180,y:300,r:20}],
+    portals: [{x1:500,y1:420,x2:100,y2:380}],
+    removables: [], placeables: []
+  },
+  // Level 9: Portal chain
+  {
+    name: "포탈 미로",
+    ball: {x:80,y:60}, target: {x:300,y:540},
+    platforms: [
+      {x:30,y:170,w:120,h:14,a:0.15},
+      {x:350,y:250,w:100,h:14,a:-0.2},
+      {x:100,y:400,w:120,h:14,a:0.1},
+      {x:230,y:500,w:140,h:14,a:-0.05}
+    ],
+    bumpers: [{x:260,y:180,r:18}],
+    portals: [{x1:180,y1:260,x2:420,y2:170},{x1:500,y1:330,x2:120,y2:320}],
+    removables: [], placeables: []
+  },
+  // Level 10: Placeable ramps
+  {
+    name: "건축가",
+    ball: {x:100,y:50}, target: {x:480,y:540},
+    platforms: [
+      {x:40,y:180,w:130,h:14,a:0.2}
+    ],
+    bumpers: [{x:300,y:250,r:22}],
+    portals: [],
+    removables: [{x:350,y:380,w:70,h:20}],
+    placeables: [{x:50,y:550,w:100,h:12,a:0.2,color:'#2ecc71'}]
+  },
+  // Level 11: Complex combo
+  {
+    name: "종합 도전",
+    ball: {x:60,y:50}, target: {x:530,y:540},
+    platforms: [
+      {x:20,y:170,w:120,h:14,a:0.3},
+      {x:350,y:260,w:100,h:14,a:-0.2},
+      {x:150,y:430,w:120,h:14,a:0.15}
+    ],
+    bumpers: [{x:240,y:230,r:20},{x:450,y:380,r:24}],
+    portals: [{x1:500,y1:180,x2:80,y2:350}],
+    removables: [{x:300,y:340,w:60,h:18},{x:200,y:520,w:70,h:18}],
+    placeables: [{x:50,y:555,w:90,h:12,a:-0.2,color:'#2ecc71'}]
+  },
+  // Level 12: Final challenge
+  {
+    name: "최종 퍼즐",
+    ball: {x:300,y:40}, target: {x:300,y:550},
+    platforms: [
+      {x:200,y:140,w:100,h:14,a:0.35},
+      {x:300,y:140,w:100,h:14,a:-0.35},
+      {x:80,y:300,w:110,h:14,a:0.2},
+      {x:410,y:300,w:110,h:14,a:-0.2},
+      {x:200,y:460,w:100,h:14,a:0.15},
+      {x:300,y:460,w:100,h:14,a:-0.15}
+    ],
+    bumpers: [{x:250,y:230,r:18},{x:350,y:230,r:18},{x:300,y:380,r:22}],
+    portals: [{x1:80,y1:400,x2:520,y2:200},{x1:520,y1:400,x2:80,y2:200}],
+    removables: [{x:260,y:310,w:80,h:18},{x:270,y:520,w:60,h:18}],
+    placeables: [{x:50,y:555,w:90,h:12,a:0.25,color:'#2ecc71'}]
+  }
+];
+
+// ====== PARTICLE SYSTEM ======
+function spawnParticles(x, y, color, count, speed) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd = (Math.random() * 0.6 + 0.4) * speed;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      r: 2 + Math.random() * 3,
+      color
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.08;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  // trail
+  if (state === 'launched' && ball) {
+    trailParticles.push({
+      x: ball.x, y: ball.y,
+      life: 1, decay: 0.04,
+      r: ball.r * 0.4,
+      color: 'rgba(74,144,217,0.5)'
+    });
+  }
+  for (let i = trailParticles.length - 1; i >= 0; i--) {
+    trailParticles[i].life -= trailParticles[i].decay;
+    if (trailParticles[i].life <= 0) trailParticles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of trailParticles) {
+    ctx.globalAlpha = p.life * 0.4;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ====== COLLISION ======
+function circleRect(cx, cy, cr, rx, ry, rw, rh, angle) {
+  // Transform circle into rect's local space
+  const cos = Math.cos(-angle), sin = Math.sin(-angle);
+  const rcx = rx + rw / 2, rcy = ry + rh / 2;
+  const dx = cx - rcx, dy = cy - rcy;
+  const lx = cos * dx - sin * dy + rw / 2;
+  const ly = sin * dx + cos * dy + rh / 2;
+
+  const closestX = Math.max(0, Math.min(rw, lx));
+  const closestY = Math.max(0, Math.min(rh, ly));
+
+  const distX = lx - closestX;
+  const distY = ly - closestY;
+  const distSq = distX * distX + distY * distY;
+
+  if (distSq < cr * cr) {
+    const dist = Math.sqrt(distSq) || 0.01;
+    const nx = distX / dist;
+    const ny = distY / dist;
+    // rotate normal back
+    const wnx = cos * nx + sin * ny;
+    const wny = -sin * nx + cos * ny;
+    return { nx: wnx, ny: wny, depth: cr - dist };
+  }
+  return null;
+}
+
+function circleCircle(ax, ay, ar, bx, by, br) {
+  const dx = ax - bx, dy = ay - by;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+  const minDist = ar + br;
+  if (dist < minDist) {
+    return { nx: dx / dist, ny: dy / dist, depth: minDist - dist };
+  }
+  return null;
+}
+
+// ====== LEVEL MANAGEMENT ======
+function loadLevel(idx) {
+  currentLevel = idx;
+  const L = levels[idx];
+  levelData = JSON.parse(JSON.stringify(L));
+  ball = { x: L.ball.x, y: L.ball.y, vx: 0, vy: 0, r: 14 };
+  placedObjects = [];
+  particles = [];
+  trailParticles = [];
+  removedCount = 0;
+  goalReached = false;
+  goalTimer = 0;
+  dragging = null;
+  state = 'play';
+  document.getElementById('levelLabel').textContent = `레벨 ${idx + 1}`;
+  document.getElementById('hint').textContent = levelData.placeables.length > 0
+    ? '초록 램프를 드래그하여 배치 후 발사!'
+    : levelData.removables.length > 0
+      ? '빨간 블록을 클릭하여 제거 후 발사!'
+      : '발사 버튼을 눌러 공을 떨어뜨리세요!';
+  updateStarDisplay();
+}
+
+function resetLevel() {
+  loadLevel(currentLevel);
+}
+
+function updateStarDisplay() {
+  const el = document.getElementById('starDisplay');
+  if (state === 'menu') { el.textContent = ''; return; }
+  const b = bestStars[currentLevel] || 0;
+  el.textContent = (b >= 1 ? '\u2605' : '\u2606') + (b >= 2 ? '\u2605' : '\u2606') + (b >= 3 ? '\u2605' : '\u2606');
+}
+
+function calcStars(time) {
+  let s = 1; // completed
+  if (time < 8000) s++;
+  if (removedCount === 0 && placedObjects.length <= (levelData.placeables.length > 0 ? 1 : 0)) s++;
+  return s;
+}
+
+// ====== INPUT ======
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return {
+    x: (t.clientX - rect.left) / rect.width * W,
+    y: (t.clientY - rect.top) / rect.height * H
+  };
+}
+
+function handleDown(e) {
+  e.preventDefault();
+  const p = getPos(e);
+
+  if (state === 'menu') {
+    handleMenuClick(p);
+    return;
+  }
+  if (state === 'complete') return;
+
+  if (state === 'play') {
+    // Check removables
+    for (let i = levelData.removables.length - 1; i >= 0; i--) {
+      const r = levelData.removables[i];
+      if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+        levelData.removables.splice(i, 1);
+        removedCount++;
+        spawnParticles(r.x + r.w/2, r.y + r.h/2, '#e74c3c', 10, 3);
+        return;
+      }
+    }
+    // Check placeables for drag
+    for (let i = 0; i < levelData.placeables.length; i++) {
+      const pl = levelData.placeables[i];
+      if (p.x >= pl.x - 10 && p.x <= pl.x + pl.w + 10 && p.y >= pl.y - 10 && p.y <= pl.y + pl.h + 10) {
+        dragging = { idx: i, ox: p.x - pl.x, oy: p.y - pl.y };
+        return;
+      }
+    }
+  }
+}
+
+function handleMove(e) {
+  e.preventDefault();
+  if (dragging && state === 'play') {
+    const p = getPos(e);
+    const pl = levelData.placeables[dragging.idx];
+    pl.x = Math.max(0, Math.min(W - pl.w, p.x - dragging.ox));
+    pl.y = Math.max(0, Math.min(H - pl.h, p.y - dragging.oy));
+  }
+}
+
+function handleUp(e) {
+  if (dragging) {
+    placedObjects.push(dragging.idx);
+    dragging = null;
+  }
+}
+
+canvas.addEventListener('mousedown', handleDown);
+canvas.addEventListener('mousemove', handleMove);
+canvas.addEventListener('mouseup', handleUp);
+canvas.addEventListener('touchstart', handleDown, {passive:false});
+canvas.addEventListener('touchmove', handleMove, {passive:false});
+canvas.addEventListener('touchend', handleUp);
+
+// Menu click
+function handleMenuClick(p) {
+  const cols = 4, rows = 3;
+  const gx = 80, gy = 180, cw = 110, ch = 100;
+  for (let i = 0; i < 12; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const bx = gx + col * cw, by = gy + row * ch;
+    if (p.x >= bx && p.x <= bx + 90 && p.y >= by && p.y <= by + 75) {
+      loadLevel(i);
+      return;
+    }
+  }
+}
+
+// Buttons
+document.getElementById('btnLaunch').addEventListener('click', () => {
+  if (state === 'play') {
+    state = 'launched';
+    launchTime = Date.now();
+    document.getElementById('hint').textContent = '';
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (state === 'play' || state === 'launched') resetLevel();
+});
+
+document.getElementById('btnMenu').addEventListener('click', () => {
+  state = 'menu';
+  document.getElementById('hint').textContent = '';
+  updateStarDisplay();
+});
+
+// ====== PHYSICS UPDATE ======
+function physicsTick() {
+  if (!ball || state !== 'launched') return;
+
+  ball.vy += GRAVITY;
+  ball.vx *= FRICTION;
+  ball.vy *= FRICTION;
+  ball.x += ball.vx * DT;
+  ball.y += ball.vy * DT;
+
+  // Walls
+  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx) * RESTITUTION; }
+  if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * RESTITUTION; }
+  if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy = Math.abs(ball.vy) * RESTITUTION; }
+  if (ball.y + ball.r > H) {
+    ball.y = H - ball.r;
+    ball.vy = -Math.abs(ball.vy) * RESTITUTION;
+    ball.vx *= GROUND_FRICTION;
+  }
+
+  // Platforms
+  const allPlats = [...levelData.platforms, ...levelData.placeables];
+  for (const plat of allPlats) {
+    const col = circleRect(ball.x, ball.y, ball.r, plat.x, plat.y, plat.w, plat.h, plat.a || 0);
+    if (col) {
+      ball.x += col.nx * col.depth;
+      ball.y += col.ny * col.depth;
+      const vdot2 = vdot({x:ball.vx,y:ball.vy}, {x:col.nx,y:col.ny});
+      ball.vx -= (1 + RESTITUTION) * vdot2 * col.nx;
+      ball.vy -= (1 + RESTITUTION) * vdot2 * col.ny;
+      ball.vx *= GROUND_FRICTION;
+      spawnParticles(ball.x - col.nx * ball.r, ball.y - col.ny * ball.r, '#aab', 3, 2);
+    }
+  }
+
+  // Removable blocks (solid)
+  for (const rem of levelData.removables) {
+    const col = circleRect(ball.x, ball.y, ball.r, rem.x, rem.y, rem.w, rem.h, 0);
+    if (col) {
+      ball.x += col.nx * col.depth;
+      ball.y += col.ny * col.depth;
+      const vdot2 = vdot({x:ball.vx,y:ball.vy}, {x:col.nx,y:col.ny});
+      ball.vx -= (1 + RESTITUTION) * vdot2 * col.nx;
+      ball.vy -= (1 + RESTITUTION) * vdot2 * col.ny;
+    }
+  }
+
+  // Bumpers
+  for (const bump of levelData.bumpers) {
+    const col = circleCircle(ball.x, ball.y, ball.r, bump.x, bump.y, bump.r);
+    if (col) {
+      ball.x += col.nx * col.depth;
+      ball.y += col.ny * col.depth;
+      const speed = vlen({x:ball.vx,y:ball.vy});
+      const newSpeed = Math.max(speed, 5) * BUMPER_FORCE;
+      ball.vx = col.nx * newSpeed;
+      ball.vy = col.ny * newSpeed;
+      spawnParticles(bump.x, bump.y, '#e67e22', 12, 4);
+    }
+  }
+
+  // Portals
+  for (const portal of levelData.portals) {
+    const d1 = Math.sqrt((ball.x-portal.x1)**2 + (ball.y-portal.y1)**2);
+    const d2 = Math.sqrt((ball.x-portal.x2)**2 + (ball.y-portal.y2)**2);
+    if (d1 < 22) {
+      ball.x = portal.x2;
+      ball.y = portal.y2;
+      spawnParticles(portal.x1, portal.y1, '#9b59b6', 15, 3);
+      spawnParticles(portal.x2, portal.y2, '#9b59b6', 15, 3);
+    } else if (d2 < 22) {
+      ball.x = portal.x1;
+      ball.y = portal.y1;
+      spawnParticles(portal.x2, portal.y2, '#9b59b6', 15, 3);
+      spawnParticles(portal.x1, portal.y1, '#9b59b6', 15, 3);
+    }
+  }
+
+  // Target check
+  const t = levelData.target;
+  if (!goalReached) {
+    const td = Math.sqrt((ball.x - t.x)**2 + (ball.y - t.y)**2);
+    if (td < ball.r + 18) {
+      goalReached = true;
+      goalTimer = Date.now();
+      const elapsed = goalTimer - launchTime;
+      const s = calcStars(elapsed);
+      if (!bestStars[currentLevel] || bestStars[currentLevel] < s) {
+        bestStars[currentLevel] = s;
+        localStorage.setItem('pp_stars', JSON.stringify(bestStars));
+      }
+      stars = [];
+      for (let i = 0; i < s; i++) stars.push(i);
+      spawnParticles(t.x, t.y, '#f1c40f', 40, 5);
+      spawnParticles(t.x, t.y, '#e67e22', 20, 3);
+      state = 'complete';
+    }
+  }
+}
+
+// ====== TRAJECTORY PREVIEW ======
+function drawTrajectory() {
+  if (state !== 'play' || !ball) return;
+  let sx = ball.x, sy = ball.y, svx = 0, svy = 0;
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = 'rgba(74,144,217,0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  for (let i = 0; i < 80; i++) {
+    svy += GRAVITY;
+    sx += svx;
+    sy += svy;
+    if (sy > H) break;
+    if (i % 2 === 0) ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ====== DRAW ======
+function drawMenu() {
+  // Background
+  ctx.fillStyle = '#f0f4f8';
+  ctx.fillRect(0, 0, W, H);
+
+  // Title
+  ctx.fillStyle = '#2c3e50';
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('물리 퍼즐', W/2, 80);
+  ctx.font = '18px Segoe UI, sans-serif';
+  ctx.fillStyle = '#7f8c8d';
+  ctx.fillText('공을 별까지 보내세요!', W/2, 115);
+
+  // Level grid
+  const cols = 4, rows = 3;
+  const gx = 80, gy = 180, cw = 110, ch = 100;
+  for (let i = 0; i < 12; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const bx = gx + col * cw, by = gy + row * ch;
+
+    // Card
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.1)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    roundRect(bx, by, 90, 75, 10, true, false);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Number
+    ctx.fillStyle = '#4a90d9';
+    ctx.font = 'bold 24px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(i + 1, bx + 45, by + 35);
+
+    // Stars
+    const bs = bestStars[i] || 0;
+    ctx.font = '16px sans-serif';
+    ctx.fillStyle = '#f39c12';
+    let stxt = '';
+    for (let s = 0; s < 3; s++) stxt += s < bs ? '\u2605' : '\u2606';
+    ctx.fillText(stxt, bx + 45, by + 60);
+  }
+}
+
+function roundRect(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+function drawPlatform(p, color) {
+  ctx.save();
+  const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+  ctx.translate(cx, cy);
+  ctx.rotate(p.a || 0);
+  ctx.fillStyle = color || '#27ae60';
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+  roundRect(-p.w/2, -p.h/2, p.w, p.h, 4, true, false);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawBumper(b) {
+  ctx.save();
+  // Glow
+  const grd = ctx.createRadialGradient(b.x, b.y, b.r * 0.3, b.x, b.y, b.r * 1.4);
+  grd.addColorStop(0, 'rgba(230,126,34,0.3)');
+  grd.addColorStop(1, 'rgba(230,126,34,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.r * 1.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#e67e22';
+  ctx.shadowColor = 'rgba(230,126,34,0.4)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawPortal(p, time) {
+  const pulse = Math.sin(time * 0.004) * 3;
+  for (const [px, py] of [[p.x1, p.y1], [p.x2, p.y2]]) {
+    ctx.save();
+    // Outer ring
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(px, py, 18 + pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    // Inner
+    const grd = ctx.createRadialGradient(px, py, 0, px, py, 16);
+    grd.addColorStop(0, 'rgba(155,89,182,0.6)');
+    grd.addColorStop(1, 'rgba(155,89,182,0.1)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(px, py, 16, 0, Math.PI * 2);
+    ctx.fill();
+    // Spinning dots
+    for (let i = 0; i < 4; i++) {
+      const a = time * 0.003 + i * Math.PI / 2;
+      ctx.fillStyle = '#8e44ad';
+      ctx.beginPath();
+      ctx.arc(px + Math.cos(a) * 12, py + Math.sin(a) * 12, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  // Connection line
+  ctx.save();
+  ctx.setLineDash([4, 8]);
+  ctx.strokeStyle = 'rgba(155,89,182,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(p.x1, p.y1);
+  ctx.lineTo(p.x2, p.y2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawTarget(t, time) {
+  const pulse = Math.sin(time * 0.005) * 4;
+  // Glow
+  const grd = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, 28 + pulse);
+  grd.addColorStop(0, 'rgba(241,196,15,0.5)');
+  grd.addColorStop(1, 'rgba(241,196,15,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, 28 + pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Star shape
+  ctx.fillStyle = '#f1c40f';
+  ctx.strokeStyle = '#f39c12';
+  ctx.lineWidth = 2;
+  drawStar(t.x, t.y, 5, 16 + pulse * 0.3, 8);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawStar(cx, cy, spikes, outerR, innerR) {
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i * Math.PI / spikes) - Math.PI / 2;
+    if (i === 0) ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    else ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  ctx.closePath();
+}
+
+function drawBall() {
+  if (!ball) return;
+  ctx.save();
+  // Shadow
+  ctx.fillStyle = 'rgba(74,144,217,0.2)';
+  ctx.beginPath();
+  ctx.arc(ball.x + 3, ball.y + 3, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+  // Ball
+  const grd = ctx.createRadialGradient(ball.x - 4, ball.y - 4, 2, ball.x, ball.y, ball.r);
+  grd.addColorStop(0, '#6cb3f5');
+  grd.addColorStop(1, '#3a7bd5');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath();
+  ctx.arc(ball.x - 4, ball.y - 4, ball.r * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRemovable(r) {
+  ctx.fillStyle = '#e74c3c';
+  ctx.shadowColor = 'rgba(231,76,60,0.3)';
+  ctx.shadowBlur = 6;
+  roundRect(r.x, r.y, r.w, r.h, 4, true, false);
+  ctx.shadowBlur = 0;
+  // X mark
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 2;
+  const cx = r.x + r.w/2, cy = r.y + r.h/2, s = 5;
+  ctx.beginPath();
+  ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
+  ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+  ctx.stroke();
+}
+
+function drawComplete(time) {
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur = 20;
+  roundRect(W/2 - 140, H/2 - 100, 280, 200, 16, true, false);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#2c3e50';
+  ctx.font = 'bold 28px Segoe UI, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('클리어!', W/2, H/2 - 50);
+
+  // Stars
+  ctx.font = '36px sans-serif';
+  let stxt = '';
+  for (let i = 0; i < 3; i++) stxt += i < stars.length ? '\u2605' : '\u2606';
+  ctx.fillStyle = '#f39c12';
+  ctx.fillText(stxt, W/2, H/2);
+
+  // Buttons drawn on canvas for simplicity
+  ctx.fillStyle = '#4a90d9';
+  roundRect(W/2 - 120, H/2 + 30, 110, 40, 8, true, false);
+  ctx.fillStyle = '#27ae60';
+  roundRect(W/2 + 10, H/2 + 30, 110, 40, 8, true, false);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '15px Segoe UI, sans-serif';
+  ctx.fillText('다시하기', W/2 - 65, H/2 + 56);
+  ctx.fillText('다음 레벨', W/2 + 65, H/2 + 56);
+}
+
+// Complete screen click
+canvas.addEventListener('click', (e) => {
+  if (state !== 'complete') return;
+  const p = getPos(e);
+  // Retry
+  if (p.x >= W/2-120 && p.x <= W/2-10 && p.y >= H/2+30 && p.y <= H/2+70) {
+    resetLevel();
+  }
+  // Next
+  if (p.x >= W/2+10 && p.x <= W/2+120 && p.y >= H/2+30 && p.y <= H/2+70) {
+    if (currentLevel < 11) loadLevel(currentLevel + 1);
+    else { state = 'menu'; updateStarDisplay(); }
+  }
+});
+
+// ====== MAIN LOOP ======
+function frame(time) {
+  animFrame = requestAnimationFrame(frame);
+  ctx.clearRect(0, 0, W, H);
+
+  if (state === 'menu') {
+    drawMenu();
+    document.getElementById('levelLabel').textContent = '';
+    document.getElementById('bottomBar').style.display = 'none';
+    document.getElementById('starDisplay').textContent = '';
+    document.getElementById('hint').textContent = '';
+  } else {
+    document.getElementById('bottomBar').style.display = 'flex';
+
+    // Background
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(0, 0, W, H);
+    // Grid dots
+    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    for (let gx = 20; gx < W; gx += 40) {
+      for (let gy = 20; gy < H; gy += 40) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Draw level objects
+    for (const p of levelData.platforms) drawPlatform(p);
+    for (const p of levelData.placeables) drawPlatform(p, p.color || '#2ecc71');
+    for (const r of levelData.removables) drawRemovable(r);
+    for (const b of levelData.bumpers) drawBumper(b);
+    for (const p of levelData.portals) drawPortal(p, time);
+    drawTarget(levelData.target, time);
+
+    // Trajectory
+    drawTrajectory();
+
+    // Physics
+    physicsTick();
+
+    // Particles
+    updateParticles();
+    drawParticles();
+
+    // Ball
+    drawBall();
+
+    // Complete overlay
+    if (state === 'complete') drawComplete(time);
+
+    updateStarDisplay();
+  }
+}
+
+// Start
+state = 'menu';
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
