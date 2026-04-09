@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>카드 배틀 - 덱빌딩 로그라이크</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0a0a12; color:#e0ddd5; font-family:'Segoe UI',sans-serif; overflow:hidden; height:100vh; user-select:none; }
+
+#screen-title, #screen-game, #screen-reward, #screen-rest, #screen-gameover, #screen-victory { display:none; position:absolute; inset:0; }
+.active { display:flex!important; flex-direction:column; align-items:center; justify-content:center; }
+
+/* Title */
+#screen-title { background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a0a12 70%); }
+#screen-title h1 { font-size:3em; color:#c9a84c; text-shadow:0 0 30px rgba(201,168,76,.4); margin-bottom:10px; letter-spacing:4px; }
+#screen-title .subtitle { color:#887; font-size:1.1em; margin-bottom:30px; }
+#screen-title .best { color:#998; font-size:.9em; margin-bottom:20px; }
+.btn { background:linear-gradient(135deg,#2a2a4a,#1a1a3a); border:2px solid #c9a84c; color:#c9a84c; padding:14px 40px; font-size:1.2em; cursor:pointer; border-radius:8px; transition:all .2s; }
+.btn:hover { background:linear-gradient(135deg,#3a3a5a,#2a2a4a); transform:scale(1.05); box-shadow:0 0 20px rgba(201,168,76,.3); }
+
+/* Game screen */
+#screen-game { display:none; flex-direction:column; background:#0d0d18; }
+
+.top-bar { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:rgba(0,0,0,.4); font-size:.85em; color:#998; border-bottom:1px solid #222; flex-shrink:0; }
+
+.enemy-area { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; min-height:0; }
+.enemy-sprite { font-size:5em; filter:drop-shadow(0 0 20px rgba(255,50,50,.3)); transition:transform .15s; }
+.enemy-sprite.hit { transform:scale(1.15); filter:drop-shadow(0 0 30px rgba(255,0,0,.6)); }
+.enemy-name { font-size:1.1em; color:#dda; margin-top:6px; }
+.enemy-hp-bar { width:220px; height:16px; background:#222; border-radius:8px; overflow:hidden; margin-top:6px; position:relative; border:1px solid #444; }
+.enemy-hp-fill { height:100%; background:linear-gradient(90deg,#c0392b,#e74c3c); transition:width .4s; border-radius:8px; }
+.enemy-hp-text { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.7em; color:#fff; text-shadow:1px 1px 2px #000; }
+.enemy-intent { margin-top:8px; padding:6px 14px; background:rgba(0,0,0,.5); border-radius:12px; font-size:.85em; border:1px solid #444; }
+.enemy-status { margin-top:4px; font-size:.8em; color:#a8e; }
+
+.mid-bar { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:rgba(0,0,0,.3); flex-shrink:0; }
+.player-info { display:flex; gap:16px; align-items:center; }
+.player-hp-bar { width:180px; height:14px; background:#222; border-radius:7px; overflow:hidden; position:relative; border:1px solid #444; }
+.player-hp-fill { height:100%; background:linear-gradient(90deg,#27ae60,#2ecc71); transition:width .4s; border-radius:7px; }
+.player-hp-text { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.65em; color:#fff; text-shadow:1px 1px 2px #000; }
+.energy-display { display:flex; align-items:center; gap:4px; }
+.energy-orb { width:36px; height:36px; border-radius:50%; background:radial-gradient(circle,#f1c40f,#e67e22); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.1em; color:#222; box-shadow:0 0 12px rgba(241,196,15,.4); border:2px solid #c9a84c; }
+.deck-info { display:flex; gap:12px; font-size:.8em; color:#887; }
+.player-status { font-size:.8em; color:#8e8; margin-left:8px; }
+
+.hand-area { padding:10px 10px 16px; display:flex; justify-content:center; gap:8px; flex-shrink:0; min-height:190px; align-items:flex-end; perspective:800px; }
+
+.card { width:120px; height:170px; border-radius:10px; padding:8px; cursor:pointer; transition:all .2s; position:relative; display:flex; flex-direction:column; flex-shrink:0; }
+.card:hover { transform:translateY(-20px) scale(1.08); z-index:10; box-shadow:0 10px 30px rgba(0,0,0,.6); }
+.card.disabled { opacity:.5; cursor:not-allowed; }
+.card.disabled:hover { transform:none; box-shadow:none; }
+.card.selected { transform:translateY(-30px) scale(1.12); box-shadow:0 0 25px rgba(255,255,100,.4); }
+.card-attack { background:linear-gradient(135deg,#2a1520,#1a0a10); border:2px solid #e74c3c; }
+.card-defense { background:linear-gradient(135deg,#152a2a,#0a1a1a); border:2px solid #3498db; }
+.card-skill { background:linear-gradient(135deg,#1a2a15,#0a1a0a); border:2px solid #2ecc71; }
+.card-power { background:linear-gradient(135deg,#2a1a2a,#1a0a1a); border:2px solid #9b59b6; }
+.card-cost { position:absolute; top:-6px; left:-6px; width:26px; height:26px; border-radius:50%; background:radial-gradient(circle,#f1c40f,#e67e22); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:.85em; color:#222; border:2px solid #c9a84c; }
+.card-name { font-size:.78em; font-weight:bold; text-align:center; margin-top:12px; color:#eee; }
+.card-type-label { font-size:.55em; text-align:center; color:#999; margin-top:2px; }
+.card-desc { font-size:.62em; text-align:center; color:#bbb; margin-top:auto; line-height:1.3; padding:4px; }
+
+.bottom-bar { display:flex; justify-content:center; padding:6px; flex-shrink:0; background:rgba(0,0,0,.3); }
+.btn-end-turn { background:linear-gradient(135deg,#4a2a1a,#3a1a0a); border:2px solid #e67e22; color:#f0c070; padding:8px 28px; font-size:1em; cursor:pointer; border-radius:6px; transition:all .2s; }
+.btn-end-turn:hover { background:linear-gradient(135deg,#5a3a2a,#4a2a1a); box-shadow:0 0 15px rgba(230,126,34,.3); }
+
+/* Floating damage */
+.float-dmg { position:absolute; font-weight:bold; font-size:1.5em; pointer-events:none; animation:floatUp .8s ease-out forwards; z-index:100; text-shadow:2px 2px 4px #000; }
+@keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-60px)} }
+
+/* Reward */
+#screen-reward { background:rgba(10,10,18,.95); }
+#screen-reward h2 { color:#c9a84c; margin-bottom:6px; font-size:1.5em; }
+#screen-reward .reward-sub { color:#887; margin-bottom:20px; font-size:.9em; }
+.reward-cards { display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap; justify-content:center; }
+.reward-card { width:140px; height:195px; border-radius:12px; padding:10px; cursor:pointer; display:flex; flex-direction:column; transition:all .2s; }
+.reward-card:hover { transform:translateY(-10px) scale(1.06); box-shadow:0 8px 25px rgba(0,0,0,.5); }
+.reward-card .card-cost { top:-6px; left:-6px; }
+.reward-card .card-name { font-size:.9em; margin-top:14px; }
+.reward-card .card-desc { font-size:.72em; }
+.btn-skip { background:none; border:1px solid #555; color:#888; padding:8px 24px; font-size:.9em; cursor:pointer; border-radius:6px; }
+.btn-skip:hover { border-color:#888; color:#bbb; }
+
+/* Rest */
+#screen-rest { background:rgba(10,10,18,.95); }
+#screen-rest h2 { color:#c9a84c; margin-bottom:10px; }
+#screen-rest p { color:#998; margin-bottom:20px; line-height:1.6; }
+
+/* Game Over / Victory */
+#screen-gameover, #screen-victory { background:rgba(10,10,18,.95); }
+#screen-gameover h2 { color:#c0392b; font-size:2em; margin-bottom:10px; }
+#screen-victory h2 { color:#c9a84c; font-size:2em; margin-bottom:10px; text-shadow:0 0 20px rgba(201,168,76,.4); }
+.stats { color:#998; margin-bottom:20px; line-height:1.8; font-size:.95em; }
+
+/* Screen shake */
+.shake { animation:shake .3s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+</style>
+</head>
+<body>
+
+<div id="screen-title" class="active">
+  <h1>카드 배틀</h1>
+  <div class="subtitle">덱빌딩 로그라이크</div>
+  <div class="best" id="best-record"></div>
+  <button class="btn" onclick="startGame()">게임 시작</button>
+</div>
+
+<div id="screen-game">
+  <div class="top-bar">
+    <span id="act-info"></span>
+    <span id="fight-info"></span>
+  </div>
+  <div class="enemy-area" id="enemy-area">
+    <div class="enemy-sprite" id="enemy-sprite"></div>
+    <div class="enemy-name" id="enemy-name"></div>
+    <div class="enemy-hp-bar"><div class="enemy-hp-fill" id="enemy-hp-fill"></div><div class="enemy-hp-text" id="enemy-hp-text"></div></div>
+    <div class="enemy-intent" id="enemy-intent"></div>
+    <div class="enemy-status" id="enemy-status"></div>
+  </div>
+  <div class="mid-bar">
+    <div class="player-info">
+      <div class="energy-display"><div class="energy-orb" id="energy-display"></div></div>
+      <div>
+        <div class="player-hp-bar"><div class="player-hp-fill" id="player-hp-fill"></div><div class="player-hp-text" id="player-hp-text"></div></div>
+        <span class="player-status" id="player-status"></span>
+      </div>
+    </div>
+    <div class="deck-info">
+      <span id="block-display"></span>
+      <span>덱: <span id="draw-count">0</span></span>
+      <span>버림: <span id="discard-count">0</span></span>
+    </div>
+  </div>
+  <div class="hand-area" id="hand-area"></div>
+  <div class="bottom-bar">
+    <button class="btn-end-turn" id="btn-end-turn" onclick="endTurn()">턴 종료</button>
+  </div>
+</div>
+
+<div id="screen-reward">
+  <h2>전투 승리!</h2>
+  <div class="reward-sub">카드를 선택하여 덱에 추가하세요</div>
+  <div class="reward-cards" id="reward-cards"></div>
+  <button class="btn-skip" onclick="skipReward()">건너뛰기</button>
+</div>
+
+<div id="screen-rest">
+  <h2>휴식</h2>
+  <p id="rest-text"></p>
+  <button class="btn" onclick="continueFromRest()">계속하기</button>
+</div>
+
+<div id="screen-gameover">
+  <h2>패배...</h2>
+  <div class="stats" id="gameover-stats"></div>
+  <button class="btn" onclick="showTitle()">다시 시작</button>
+</div>
+
+<div id="screen-victory">
+  <h2>승리!</h2>
+  <div class="stats" id="victory-stats"></div>
+  <button class="btn" onclick="showTitle()">다시 시작</button>
+</div>
+
+<script>
+// === CARD DATABASE ===
+const CARDS={
+  strike:{name:'강타',type:'attack',cost:1,desc:'6 데미지',fn:(g)=>{dealDmg(g,6)}},
+  heavy_blow:{name:'강력한 일격',type:'attack',cost:2,desc:'14 데미지',fn:(g)=>{dealDmg(g,14)}},
+  whirlwind:{name:'회전 베기',type:'attack',cost:1,desc:'5 데미지 x2',fn:(g)=>{dealDmg(g,5);dealDmg(g,5)}},
+  precise:{name:'정밀 타격',type:'attack',cost:1,desc:'8 데미지 (적이 공격 시 12)',fn:(g)=>{let d=g.enemy.intent.type==='attack'?12:8;dealDmg(g,d)}},
+  cleave:{name:'갈라치기',type:'attack',cost:1,desc:'7 데미지',fn:(g)=>{dealDmg(g,7)}},
+  backstab:{name:'기습',type:'attack',cost:0,desc:'4 데미지',fn:(g)=>{dealDmg(g,4)}},
+  block:{name:'방어',type:'defense',cost:1,desc:'방어 5',fn:(g)=>{g.player.block+=5}},
+  iron_wall:{name:'철벽',type:'defense',cost:2,desc:'방어 12',fn:(g)=>{g.player.block+=12}},
+  parry:{name:'반격',type:'defense',cost:1,desc:'방어 3, 4 데미지',fn:(g)=>{g.player.block+=3;dealDmg(g,4)}},
+  shield_bash:{name:'방패 강타',type:'defense',cost:1,desc:'방어 4, 3 데미지',fn:(g)=>{g.player.block+=4;dealDmg(g,3)}},
+  rage:{name:'분노',type:'skill',cost:1,desc:'+3 공격력 (2턴)',fn:(g)=>{addBuff(g.player,'atk',3,2)}},
+  heal:{name:'치유',type:'skill',cost:1,desc:'체력 6 회복',fn:(g)=>{g.player.hp=Math.min(g.player.maxHp,g.player.hp+6)}},
+  draw:{name:'드로우',type:'skill',cost:0,desc:'카드 2장 뽑기',fn:(g)=>{drawCards(g,2)}},
+  poison:{name:'맹독',type:'skill',cost:1,desc:'독 3 부여',fn:(g)=>{g.enemy.poison=(g.enemy.poison||0)+3}},
+  weaken:{name:'약화',type:'skill',cost:1,desc:'적 공격력 -2 (2턴)',fn:(g)=>{addBuff(g.enemy,'weakened',2,2)}},
+  strength_up:{name:'힘 증가',type:'power',cost:2,desc:'영구 공격력 +2',fn:(g)=>{g.player.permAtk=(g.player.permAtk||0)+2}},
+  thorns:{name:'가시 갑옷',type:'power',cost:2,desc:'피격 시 3 데미지 반사',fn:(g)=>{g.player.thorns=(g.player.thorns||0)+3}},
+};
+const ALL_CARD_IDS=Object.keys(CARDS);
+const STARTER_DECK=['strike','strike','strike','strike','strike','block','block','block','block','backstab'];
+
+// === ENEMY DATABASE ===
+const ENEMIES={
+  slime:{name:'슬라임',emoji:'🟢',maxHp:28,actions:[{type:'attack',val:5},{type:'attack',val:8},{type:'defend',val:4}]},
+  goblin:{name:'고블린',emoji:'👺',maxHp:32,actions:[{type:'attack',val:7},{type:'attack',val:5},{type:'defend',val:3},{type:'attack',val:9}]},
+  skeleton:{name:'스켈레톤',emoji:'💀',maxHp:36,actions:[{type:'attack',val:8},{type:'attack',val:6},{type:'buff',val:2}]},
+  orc:{name:'오크',emoji:'👹',maxHp:52,actions:[{type:'attack',val:10},{type:'attack',val:7},{type:'defend',val:6},{type:'attack',val:12}]},
+  dark_mage:{name:'흑마법사',emoji:'🧙',maxHp:44,actions:[{type:'attack',val:9},{type:'buff',val:3},{type:'attack',val:14}]},
+  golem:{name:'골렘',emoji:'🗿',maxHp:65,actions:[{type:'defend',val:10},{type:'attack',val:14},{type:'attack',val:8},{type:'defend',val:8}]},
+  vampire:{name:'뱀파이어',emoji:'🧛',maxHp:55,actions:[{type:'attack',val:10,heal:5},{type:'attack',val:8},{type:'buff',val:2},{type:'attack',val:13}]},
+  dragon:{name:'드래곤',emoji:'🐉',maxHp:100,actions:[{type:'attack',val:12},{type:'buff',val:3},{type:'attack',val:18},{type:'defend',val:8},{type:'attack',val:15}]},
+};
+
+const ACT_STRUCTURE=[
+  {name:'1막',fights:['slime','goblin','skeleton'],elite:'orc'},
+  {name:'2막',fights:['orc','dark_mage','golem'],elite:'vampire'},
+  {name:'3막',fights:[],elite:null,boss:'dragon'},
+];
+
+// === GAME STATE ===
+let G=null;
+
+function newGame(){
+  return{
+    player:{hp:60,maxHp:60,block:0,energy:0,maxEnergy:3,hand:[],drawPile:[],discardPile:[],deck:[...STARTER_DECK],permAtk:0,thorns:0,buffs:[]},
+    enemy:null,
+    act:0,fight:0,totalFights:0,
+    phase:'title',
+    animating:false,
+  };
+}
+
+// === UTILITIES ===
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.random()*i+1|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function addBuff(target,type,val,dur){target.buffs=target.buffs||[];target.buffs.push({type,val,dur})}
+function getBuff(target,type){let total=0;(target.buffs||[]).forEach(b=>{if(b.type===type)total+=b.val});return total}
+function tickBuffs(target){target.buffs=(target.buffs||[]).map(b=>({...b,dur:b.dur-1})).filter(b=>b.dur>0)}
+
+function dealDmg(g,base){
+  let atk=base+getBuff(g.player,'atk')+(g.player.permAtk||0);
+  let weak=getBuff(g.enemy,'weakened');
+  // weakened reduces enemy defense, not player attack - keep atk as is
+  let block=g.enemy.block||0;
+  let after=Math.max(0,atk-block);
+  g.enemy.block=Math.max(0,block-atk);
+  g.enemy.hp=Math.max(0,g.enemy.hp-after);
+  showFloatDmg(after,'enemy');
+}
+
+function enemyDealDmg(g,base){
+  let weak=getBuff(g.enemy,'weakened');
+  let atk=Math.max(0,base-weak+(g.enemy.permAtk||0));
+  let block=g.player.block;
+  let after=Math.max(0,atk-block);
+  g.player.block=Math.max(0,block-atk);
+  g.player.hp=Math.max(0,g.player.hp-after);
+  if(after>0) showFloatDmg(after,'player');
+  if(after>0&&g.player.thorns>0){
+    g.enemy.hp=Math.max(0,g.enemy.hp-g.player.thorns);
+    showFloatDmg(g.player.thorns,'enemy');
+  }
+}
+
+// === DRAW / DECK ===
+function initDraw(g){
+  g.player.drawPile=shuffle([...g.player.deck]);
+  g.player.discardPile=[];
+  g.player.hand=[];
+}
+
+function drawCards(g,n){
+  for(let i=0;i<n;i++){
+    if(g.player.drawPile.length===0){
+      if(g.player.discardPile.length===0) return;
+      g.player.drawPile=shuffle([...g.player.discardPile]);
+      g.player.discardPile=[];
+    }
+    g.player.hand.push(g.player.drawPile.pop());
+  }
+}
+
+function startTurn(g){
+  g.player.block=0;
+  g.player.energy=g.player.maxEnergy;
+  drawCards(g,5);
+  pickEnemyIntent(g);
+  render();
+}
+
+function discardHand(g){
+  g.player.discardPile.push(...g.player.hand);
+  g.player.hand=[];
+}
+
+// === ENEMY AI ===
+function pickEnemyIntent(g){
+  if(!g.enemy) return;
+  let acts=g.enemy.actions;
+  let idx=(g.enemy.turnCount||0)%acts.length;
+  g.enemy.intent={...acts[idx]};
+  g.enemy.turnCount=(g.enemy.turnCount||0)+1;
+}
+
+function executeEnemyTurn(g){
+  if(!g.enemy||g.enemy.hp<=0) return;
+  let intent=g.enemy.intent;
+  if(!intent) return;
+
+  if(intent.type==='attack'){
+    enemyDealDmg(g,intent.val);
+    if(intent.heal){
+      g.enemy.hp=Math.min(g.enemy.maxHp,g.enemy.hp+intent.heal);
+    }
+    shakeScreen();
+  } else if(intent.type==='defend'){
+    g.enemy.block=(g.enemy.block||0)+intent.val;
+  } else if(intent.type==='buff'){
+    g.enemy.permAtk=(g.enemy.permAtk||0)+intent.val;
+  }
+
+  // poison tick
+  if(g.enemy.poison>0){
+    g.enemy.hp=Math.max(0,g.enemy.hp-g.enemy.poison);
+    showFloatDmg(g.enemy.poison,'enemy');
+    g.enemy.poison--;
+  }
+
+  tickBuffs(g.enemy);
+  tickBuffs(g.player);
+}
+
+// === SCREENS ===
+function showScreen(id){
+  document.querySelectorAll('[id^="screen-"]').forEach(el=>el.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+
+function showTitle(){
+  let best=localStorage.getItem('card-battle-best');
+  let el=document.getElementById('best-record');
+  el.textContent=best?`최고 기록: ${best}막 클리어`:'';
+  showScreen('title');
+}
+
+// === GAME FLOW ===
+function startGame(){
+  G=newGame();
+  G.act=0;
+  G.fight=0;
+  startFight();
+}
+
+function startFight(){
+  let act=ACT_STRUCTURE[G.act];
+  let enemyId;
+
+  if(G.act===2){
+    enemyId='dragon';
+  } else if(G.fight<act.fights.length){
+    enemyId=act.fights[G.fight];
+  } else {
+    enemyId=act.elite;
+  }
+
+  let tmpl=ENEMIES[enemyId];
+  G.enemy={...tmpl,hp:tmpl.maxHp,block:0,poison:0,turnCount:0,permAtk:0,buffs:[],actions:[...tmpl.actions.map(a=>({...a}))]};
+
+  initDraw(G);
+  G.player.block=0;
+  G.animating=false;
+
+  showScreen('game');
+  startTurn(G);
+}
+
+function playCard(idx){
+  if(G.animating) return;
+  let cardId=G.player.hand[idx];
+  let card=CARDS[cardId];
+  if(G.player.energy<card.cost) return;
+
+  G.player.energy-=card.cost;
+  G.player.hand.splice(idx,1);
+  card.fn(G);
+
+  G.player.discardPile.push(cardId);
+
+  // check enemy dead
+  if(G.enemy.hp<=0){
+    G.animating=true;
+    render();
+    setTimeout(()=>onEnemyDead(),600);
+    return;
+  }
+  render();
+}
+
+function endTurn(){
+  if(G.animating) return;
+  G.animating=true;
+  discardHand(G);
+  render();
+
+  setTimeout(()=>{
+    executeEnemyTurn(G);
+
+    if(G.player.hp<=0){
+      render();
+      setTimeout(()=>onPlayerDead(),500);
+      return;
+    }
+    if(G.enemy.hp<=0){
+      render();
+      setTimeout(()=>onEnemyDead(),500);
+      return;
+    }
+
+    G.animating=false;
+    startTurn(G);
+  },500);
+}
+
+function onEnemyDead(){
+  G.totalFights++;
+
+  // check if act complete
+  let act=ACT_STRUCTURE[G.act];
+  let totalFightsInAct=G.act===2?1:(act.fights.length+1);
+  let fightDone=G.fight+1>=totalFightsInAct;
+
+  if(G.act===2){
+    // boss dead = victory
+    onVictory();
+    return;
+  }
+
+  showReward();
+}
+
+function showReward(){
+  // pick 3 random cards
+  let pool=ALL_CARD_IDS.filter(id=>!STARTER_DECK.includes(id)||Math.random()<.3);
+  shuffle(pool);
+  let choices=pool.slice(0,3);
+
+  let container=document.getElementById('reward-cards');
+  container.innerHTML='';
+  choices.forEach(cid=>{
+    let c=CARDS[cid];
+    let div=document.createElement('div');
+    div.className='reward-card card-'+c.type;
+    div.innerHTML=`<div class="card-cost">${c.cost}</div><div class="card-name">${c.name}</div><div class="card-type-label">${typeLabel(c.type)}</div><div class="card-desc">${c.desc}</div>`;
+    div.onclick=()=>pickReward(cid);
+    container.appendChild(div);
+  });
+  showScreen('reward');
+}
+
+function typeLabel(t){return{attack:'공격',defense:'방어',skill:'스킬',power:'파워'}[t]}
+
+function pickReward(cardId){
+  G.player.deck.push(cardId);
+  advanceFight();
+}
+
+function skipReward(){
+  advanceFight();
+}
+
+function advanceFight(){
+  let act=ACT_STRUCTURE[G.act];
+  let totalFightsInAct=act.fights.length+1;
+  G.fight++;
+
+  if(G.fight>=totalFightsInAct){
+    // act complete, rest then next act
+    G.act++;
+    G.fight=0;
+    if(G.act>=ACT_STRUCTURE.length){
+      onVictory();
+      return;
+    }
+    showRest();
+  } else {
+    startFight();
+  }
+}
+
+function showRest(){
+  let heal=Math.floor(G.player.maxHp*0.3);
+  let before=G.player.hp;
+  G.player.hp=Math.min(G.player.maxHp,G.player.hp+heal);
+  let actual=G.player.hp-before;
+  document.getElementById('rest-text').innerHTML=
+    `모닥불 옆에서 휴식을 취합니다.<br>체력을 <b style="color:#2ecc71">${actual}</b> 회복했습니다. (${G.player.hp}/${G.player.maxHp})<br><br>${ACT_STRUCTURE[G.act].name}이 시작됩니다.`;
+  showScreen('rest');
+}
+
+function continueFromRest(){
+  startFight();
+}
+
+function onPlayerDead(){
+  let stats=document.getElementById('gameover-stats');
+  stats.innerHTML=`도달: ${ACT_STRUCTURE[G.act].name}<br>처치한 적: ${G.totalFights}<br>덱 크기: ${G.player.deck.length}장`;
+  showScreen('gameover');
+}
+
+function onVictory(){
+  let prev=localStorage.getItem('card-battle-best');
+  let cur=G.act+1;
+  if(!prev||cur>parseInt(prev)) localStorage.setItem('card-battle-best',cur);
+  let stats=document.getElementById('victory-stats');
+  stats.innerHTML=`드래곤을 물리쳤습니다!<br>처치한 적: ${G.totalFights}<br>최종 체력: ${G.player.hp}/${G.player.maxHp}<br>덱 크기: ${G.player.deck.length}장`;
+  showScreen('victory');
+}
+
+// === RENDERING ===
+function render(){
+  if(!G) return;
+
+  // act info
+  document.getElementById('act-info').textContent=`${ACT_STRUCTURE[G.act].name}`;
+  let act=ACT_STRUCTURE[G.act];
+  let totalF=G.act===2?1:(act.fights.length+1);
+  document.getElementById('fight-info').textContent=`전투 ${G.fight+1}/${totalF}`;
+
+  // enemy
+  if(G.enemy){
+    document.getElementById('enemy-sprite').textContent=G.enemy.emoji;
+    document.getElementById('enemy-name').textContent=G.enemy.name+(G.fight>=ACT_STRUCTURE[G.act].fights.length&&G.act<2?' ★':'');
+    let pct=Math.max(0,G.enemy.hp/G.enemy.maxHp*100);
+    document.getElementById('enemy-hp-fill').style.width=pct+'%';
+    document.getElementById('enemy-hp-text').textContent=`${G.enemy.hp}/${G.enemy.maxHp}`;
+
+    // intent
+    let intent=G.enemy.intent;
+    let intentText='';
+    if(intent){
+      if(intent.type==='attack'){
+        let weak=getBuff(G.enemy,'weakened');
+        let dmg=Math.max(0,intent.val-weak+(G.enemy.permAtk||0));
+        intentText=`⚔️ 공격 ${dmg}`;
+        if(intent.heal) intentText+=` (+${intent.heal} 흡혈)`;
+      }
+      else if(intent.type==='defend') intentText=`🛡️ 방어 ${intent.val}`;
+      else if(intent.type==='buff') intentText=`⬆️ 강화`;
+    }
+    document.getElementById('enemy-intent').textContent=intentText;
+
+    // enemy status
+    let estatus=[];
+    if(G.enemy.block>0) estatus.push(`🛡️${G.enemy.block}`);
+    if(G.enemy.poison>0) estatus.push(`🧪${G.enemy.poison}`);
+    if(G.enemy.permAtk>0) estatus.push(`⚔️+${G.enemy.permAtk}`);
+    document.getElementById('enemy-status').textContent=estatus.join(' ');
+  }
+
+  // player
+  let ppct=Math.max(0,G.player.hp/G.player.maxHp*100);
+  document.getElementById('player-hp-fill').style.width=ppct+'%';
+  document.getElementById('player-hp-text').textContent=`${G.player.hp}/${G.player.maxHp}`;
+  document.getElementById('energy-display').textContent=`${G.player.energy}/${G.player.maxEnergy}`;
+  document.getElementById('draw-count').textContent=G.player.drawPile.length;
+  document.getElementById('discard-count').textContent=G.player.discardPile.length;
+  document.getElementById('block-display').textContent=G.player.block>0?`🛡️ ${G.player.block}`:'';
+
+  // player status
+  let pstatus=[];
+  let atkBuff=getBuff(G.player,'atk');
+  if(atkBuff>0) pstatus.push(`⚔️+${atkBuff}`);
+  if(G.player.permAtk>0) pstatus.push(`💪+${G.player.permAtk}`);
+  if(G.player.thorns>0) pstatus.push(`🌹${G.player.thorns}`);
+  document.getElementById('player-status').textContent=pstatus.join(' ');
+
+  // hand
+  let hand=document.getElementById('hand-area');
+  hand.innerHTML='';
+  G.player.hand.forEach((cid,i)=>{
+    let c=CARDS[cid];
+    let div=document.createElement('div');
+    let canPlay=G.player.energy>=c.cost&&!G.animating;
+    div.className=`card card-${c.type}${canPlay?'':' disabled'}`;
+    div.innerHTML=`<div class="card-cost">${c.cost}</div><div class="card-name">${c.name}</div><div class="card-type-label">${typeLabel(c.type)}</div><div class="card-desc">${c.desc}</div>`;
+    if(canPlay) div.onclick=()=>playCard(i);
+    hand.appendChild(div);
+  });
+}
+
+// === EFFECTS ===
+function showFloatDmg(val,target){
+  let area=target==='enemy'?document.getElementById('enemy-area'):document.querySelector('.mid-bar');
+  let el=document.createElement('div');
+  el.className='float-dmg';
+  el.textContent=val>0?`-${val}`:'0';
+  el.style.color=target==='enemy'?'#e74c3c':'#ff6b6b';
+  el.style.left=Math.random()*60+20+'%';
+  el.style.top=target==='enemy'?'40%':'50%';
+  area.style.position='relative';
+  area.appendChild(el);
+  setTimeout(()=>el.remove(),800);
+
+  if(target==='enemy'){
+    let sprite=document.getElementById('enemy-sprite');
+    sprite.classList.add('hit');
+    setTimeout(()=>sprite.classList.remove('hit'),200);
+  }
+}
+
+function shakeScreen(){
+  let el=document.getElementById('screen-game');
+  el.classList.add('shake');
+  setTimeout(()=>el.classList.remove('shake'),300);
+}
+
+// === INIT ===
+showTitle();
+</script>
+</body>
+</html>
