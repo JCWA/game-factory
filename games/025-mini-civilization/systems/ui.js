@@ -36,7 +36,7 @@ window.UI = (() => {
       { id: 'navigation', name: '항해술', cost: 80, prereqs: [], row: 1, col: 0 },
       { id: 'exploration', name: '탐험', cost: 120, prereqs: ['navigation'], row: 1, col: 1 },
       { id: 'architecture', name: '건축학', cost: 80, prereqs: [], row: 2, col: 0 },
-      { id: 'urbanPlanning', name: '도시계획', cost: 120, prereqs: ['architecture'], row: 2, col: 1 },
+      { id: 'cityPlanning', name: '도시계획', cost: 120, prereqs: ['architecture'], row: 2, col: 1 },
     ],
     modern: [
       { id: 'industrialRevolution', name: '산업혁명', cost: 200, prereqs: [], row: 0, col: 0 },
@@ -64,7 +64,7 @@ window.UI = (() => {
     warrior:   { name: '전사',   icon: '⚔',  cost: 20, tech: null },
     archer:    { name: '궁수',   icon: '🏹', cost: 30, tech: 'archery' },
     knight:    { name: '기사',   icon: '🐎', cost: 50, tech: 'chivalry' },
-    siegeRam:  { name: '공성추', icon: '💣', cost: 60, tech: 'gunpowder' },
+    siege:     { name: '공성추', icon: '💣', cost: 60, tech: 'gunpowder' },
     musketeer: { name: '머스킷병', icon: '🔫', cost: 70, tech: 'industrialRevolution' },
   };
 
@@ -379,6 +379,7 @@ window.UI = (() => {
 
   // ─── DOM 구조 생성 ──────────────────────────────────────
   function _createDOMStructure() {
+    if (document.getElementById('game-container')) return;
     if (document.getElementById('game-ui-root')) return;
 
     const root = document.createElement('div');
@@ -885,7 +886,7 @@ window.UI = (() => {
       // 일반 이동
       if (typeof Game.moveUnit === 'function') {
         const path = typeof HexMap !== 'undefined' && typeof HexMap.findPath === 'function'
-          ? HexMap.findPath(unit.x, unit.y, targetCol, targetRow, unit.movesLeft)
+          ? HexMap.findPath(unit.x, unit.y, targetCol, targetRow, Game.state.tiles, Game.state.mapWidth, Game.state.mapHeight)
           : null;
 
         if (path && path.length > 0) {
@@ -961,11 +962,14 @@ window.UI = (() => {
       hpFill.style.width = (hpRatio * 100) + '%';
       hpFill.style.background = _hpColor(hpRatio);
 
+      const unitDef = (typeof Game !== 'undefined' && Game.UNITS && Game.UNITS[unit.type]) || {};
+      const atkVal = unit.attack != null ? unit.attack : (unitDef.attack != null ? unitDef.attack : '?');
+      const defVal = unit.defense != null ? unit.defense : (unitDef.defense != null ? unitDef.defense : '?');
       _el('up-stats').innerHTML = `
         <div>HP: <span>${unit.hp}/${unit.maxHp}</span></div>
         <div>이동: <span>${unit.movesLeft}/${unit.maxMoves}</span></div>
         <div>위치: <span>(${unit.x}, ${unit.y})</span></div>
-        <div>공격: <span>${unit.attack || '?'}</span> / 방어: <span>${unit.defense || '?'}</span></div>
+        <div>공격: <span>${atkVal}</span> / 방어: <span>${defVal}</span></div>
       `;
 
       const actDiv = _el('up-actions');
@@ -1136,7 +1140,7 @@ window.UI = (() => {
             const cost = type === 'unit'
               ? (UNITS[id] ? UNITS[id].cost : 30)
               : (BUILDINGS[id] ? BUILDINGS[id].cost : 30);
-            city.productionQueue = [{ type, id, remaining: cost }];
+            city.productionQueue = [{ type, id, remaining: cost, totalCost: cost }];
           }
           UI.showNotification(`${type === 'unit' ? (UNITS[id]?.name || id) : (BUILDINGS[id]?.name || id)} 생산 시작`);
           UI.showCityPanel(city); // 새로고침
@@ -1241,7 +1245,7 @@ window.UI = (() => {
         el.addEventListener('click', () => {
           const techId = el.dataset.techId;
           if (typeof Game.setResearch === 'function') {
-            Game.setResearch(player, techId);
+            Game.setResearch(player.id, techId);
           } else {
             player.currentResearch = techId;
             player.researchPoints = 0;
@@ -1372,8 +1376,8 @@ window.UI = (() => {
       if (hasSave) {
         _el('menu-continue').addEventListener('click', () => {
           overlay.remove();
-          if (typeof Game.loadGame === 'function') {
-            Game.loadGame();
+          if (typeof Game.load === 'function') {
+            Game.load();
             UI.updateHUD();
             if (typeof Renderer.render === 'function') Renderer.render();
           }
@@ -1474,6 +1478,17 @@ window.UI = (() => {
     // ─────────────────────────────────────────────────────
     // TURN FLOW
     // ─────────────────────────────────────────────────────
+    updateAll: function() {
+      UI.updateHUD();
+      // Update any open panels
+      if (UI.selectedUnit) UI.showUnitPanel(UI.selectedUnit);
+      if (UI.selectedCity) UI.showCityPanel(UI.selectedCity);
+    },
+
+    notify: function(msg, type) {
+      UI.showNotification(msg, type);
+    },
+
     endTurn() {
       if (_isAIProcessing) return;
       if (!Game.state) return;
@@ -1570,7 +1585,7 @@ window.UI = (() => {
 
   function _getTerrainMoveCost(terrain) {
     const costs = {
-      plains: 1, grassland: 1, forest: 2, mountain: 3,
+      plains: 1, grass: 1, forest: 2, mountain: 3,
       desert: 1, water: Infinity, hills: 2,
     };
     return costs[terrain] || 1;
@@ -1640,7 +1655,7 @@ window.UI = (() => {
 
   function _moveTowards(unit, targetCol, targetRow, callback) {
     if (typeof HexMap !== 'undefined' && typeof HexMap.findPath === 'function') {
-      const path = HexMap.findPath(unit.x, unit.y, targetCol, targetRow, unit.movesLeft);
+      const path = HexMap.findPath(unit.x, unit.y, targetCol, targetRow, Game.state.tiles, Game.state.mapWidth, Game.state.mapHeight);
       if (path && path.length > 0) {
         // 경로의 마지막 직전 칸까지 이동 (대상 한 칸 앞에 멈춤)
         const stopPath = path.slice(0, -1);
@@ -1669,7 +1684,7 @@ window.UI = (() => {
       stepIdx++;
 
       if (typeof Renderer !== 'undefined' && typeof Renderer.animateMove === 'function') {
-        Renderer.animateMove(unit, target.col || target.x, target.row || target.y, () => {
+        Renderer.animateMove(unit, [{col: unit.x, row: unit.y}, {col: target.col || target.x, row: target.row || target.y}], () => {
           if (typeof Game.moveUnit === 'function') {
             Game.moveUnit(unit, target.col || target.x, target.row || target.y);
           }
@@ -1724,7 +1739,7 @@ window.UI = (() => {
     const action = actions[index];
 
     if (action.type === 'move' && typeof Renderer !== 'undefined' && typeof Renderer.animateMove === 'function') {
-      Renderer.animateMove(action.unit, action.toX, action.toY, () => {
+      Renderer.animateMove(action.unit, [{col: action.unit.x, row: action.unit.y}, {col: action.toX, row: action.toY}], () => {
         _animateAIActions(actions, index + 1, callback);
       });
     } else if (action.type === 'combat') {

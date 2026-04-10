@@ -312,8 +312,8 @@ window.Main = {
         this.startGameLoop();
 
         // 알림
-        if (window.UI && typeof UI.notify === 'function') {
-          UI.notify('저장된 게임을 불러왔습니다.', 'success');
+        if (window.UI && typeof UI.showNotification === 'function') {
+          UI.showNotification('저장된 게임을 불러왔습니다.', 'success');
         }
 
         console.log('[Main] 게임 불러오기 완료, 턴:', saveData.gameState.turn || '?');
@@ -322,8 +322,8 @@ window.Main = {
         this.hideLoading();
         this.showMainMenu();
 
-        if (window.UI && typeof UI.notify === 'function') {
-          UI.notify('저장 데이터를 불러올 수 없습니다.', 'warning');
+        if (window.UI && typeof UI.showNotification === 'function') {
+          UI.showNotification('저장 데이터를 불러올 수 없습니다.', 'warning');
         }
       }
     });
@@ -351,15 +351,15 @@ window.Main = {
       localStorage.setItem('miniCiv_save', JSON.stringify(saveData));
       this.checkSaveExists();
 
-      if (window.UI && typeof UI.notify === 'function') {
-        UI.notify('게임이 저장되었습니다.', 'success');
+      if (window.UI && typeof UI.showNotification === 'function') {
+        UI.showNotification('게임이 저장되었습니다.', 'success');
       }
 
       console.log('[Main] 게임 저장 완료');
     } catch (e) {
       console.error('[Main] 게임 저장 실패:', e);
-      if (window.UI && typeof UI.notify === 'function') {
-        UI.notify('저장에 실패했습니다.', 'warning');
+      if (window.UI && typeof UI.showNotification === 'function') {
+        UI.showNotification('저장에 실패했습니다.', 'warning');
       }
     }
   },
@@ -602,44 +602,7 @@ window.Main = {
         }
       }
 
-      // 게임 진행 중이 아니면 무시
-      if (!this.isRunning || this.isAITurn) return;
-
-      // 모달 열려 있으면 게임 단축키 무시
-      const anyModalOpen = document.querySelector('.modal-overlay.active');
-      if (anyModalOpen) return;
-
-      switch (e.key) {
-        case 'Enter':
-          e.preventDefault();
-          this.endTurn();
-          break;
-        case 't':
-        case 'T':
-          e.preventDefault();
-          document.getElementById('btn-tech-tree')?.click();
-          break;
-        case 'd':
-        case 'D':
-          e.preventDefault();
-          document.getElementById('btn-diplomacy')?.click();
-          break;
-        case 'b':
-        case 'B':
-          e.preventDefault();
-          document.getElementById('btn-found-city')?.click();
-          break;
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-          // 유닛 빠른 선택
-          if (window.UI && typeof UI.selectUnitByIndex === 'function') {
-            UI.selectUnitByIndex(parseInt(e.key) - 1);
-          }
-          break;
-      }
+      // 게임 단축키(Enter, T, D, B, 1-5)는 ui.js에서 처리
     });
   },
 

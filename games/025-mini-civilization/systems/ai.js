@@ -4,16 +4,16 @@
  *
  * Depends on:
  *   - Game.state (game data)
- *   - Game.moveUnit(unitId, x, y)
- *   - Game.combat(attackerId, targetId)
- *   - Game.createCity(unitId)
+ *   - Game.moveUnit(unit, x, y)
+ *   - Game.combat(attacker, target)
+ *   - Game.buildCity(unit)
  *   - Game.produceUnit(cityId, unitType)
  *   - Game.produceBuilding(cityId, buildingId)
  *   - Game.startResearch(civId, techId)
  *   - Game.declareWar(fromCivId, toCivId)
  *   - Game.proposeTrade(fromCivId, toCivId, offer)
  *   - Game.makePeace(fromCivId, toCivId)
- *   - HexMap.findPath(startX, startY, endX, endY, civId)
+ *   - HexMap.findPath(startX, startY, endX, endY, tiles, width, height)
  *   - HexMap.distance(x1, y1, x2, y2)
  *   - HexMap.getNeighbors(x, y)
  */
@@ -87,7 +87,7 @@ window.AI = (() => {
     const civ = getCiv(civId);
     if (!civ || !civ.units) return 0;
     const UNIT_POWER = {
-      warrior: 8, archer: 9, knight: 15, ram: 17, musketeer: 20, settler: 0,
+      warrior: 8, archer: 9, knight: 15, siege: 17, musketeer: 20, settler: 0,
     };
     return civ.units.reduce((sum, u) => {
       return sum + (UNIT_POWER[u.type] || 5) * (u.hp / (u.maxHp || 20));
@@ -386,7 +386,7 @@ window.AI = (() => {
   function pickBestUnit(civId) {
     // Ordered from strongest to weakest; pick the first we have tech for
     if (hasTech(civId, 'industrialRevolution')) return 'musketeer';
-    if (hasTech(civId, 'gunpowder')) return 'ram';
+    if (hasTech(civId, 'gunpowder')) return 'siege';
     if (hasTech(civId, 'chivalry')) return 'knight';
     if (hasTech(civId, 'archery')) return 'archer';
     return 'warrior';
@@ -543,7 +543,7 @@ window.AI = (() => {
     const tile = getTile(unit.x, unit.y);
     if (tile && tile.terrain !== 'water' && isSuitableForCity(unit.x, unit.y, civId)) {
       try {
-        Game.createCity(unit.id);
+        Game.buildCity(unit);
         return { type: 'city_founded', unitId: unit.id, x: unit.x, y: unit.y };
       } catch (e) { /* can't build here, keep moving */ }
     }
@@ -621,7 +621,7 @@ window.AI = (() => {
   function terrainYield(terrain) {
     const yields = {
       plains: 3,  // 2 food + 1 prod
-      grassland: 3, // 3 food
+      grass: 3, // 3 food
       forest: 3,  // 1 food + 2 prod
       mountain: 4, // 3 prod + 1 gold
       desert: 3,  // 1 prod + 2 gold
@@ -663,7 +663,7 @@ window.AI = (() => {
     // If adjacent, attack
     if (dist <= 1) {
       try {
-        Game.combat(unit.id, target.id);
+        Game.combat(unit, target);
         return { type: 'attack', unitId: unit.id, targetId: target.id, x: target.x, y: target.y };
       } catch (e) {
         return null;
@@ -752,7 +752,7 @@ window.AI = (() => {
           if (distToEnemy <= 1) {
             // Attack if adjacent
             try {
-              Game.combat(unit.id, enemy.id);
+              Game.combat(unit, enemy);
               return { type: 'defend_attack', unitId: unit.id, targetId: enemy.id };
             } catch (e) { /* ignore */ }
           }
@@ -839,11 +839,11 @@ window.AI = (() => {
     if (unit.x === tx && unit.y === ty) return null;
 
     try {
-      const path = HexMap.findPath(unit.x, unit.y, tx, ty, civId);
+      const path = HexMap.findPath(unit.x, unit.y, tx, ty, Game.state.tiles, Game.state.mapWidth, Game.state.mapHeight);
       if (path && path.length > 1) {
         // path[0] is current pos, path[1] is next step
         const next = path[1];
-        Game.moveUnit(unit.id, next.x, next.y);
+        Game.moveUnit(unit, next.x, next.y);
         return {
           type: 'move',
           unitId: unit.id,
@@ -867,7 +867,7 @@ window.AI = (() => {
       }
       if (bestNeighbor) {
         try {
-          Game.moveUnit(unit.id, bestNeighbor.x, bestNeighbor.y);
+          Game.moveUnit(unit, bestNeighbor.x, bestNeighbor.y);
           return {
             type: 'move',
             unitId: unit.id,
@@ -1085,55 +1085,60 @@ window.AI = (() => {
    *   6. Diplomacy decisions
    */
   function processTurn(civId) {
-    const civ = getCiv(civId);
-    if (!civ || !civ.isAI) return [];
+    try {
+      const civ = getCiv(civId);
+      if (!civ || !civ.isAI) return [];
 
-    const allActions = [];
+      const allActions = [];
 
-    // 1 & 2. Threat assessment + resource check (implicit in evaluateActions)
-    // 3. Utility score calculation
-    const candidates = evaluateActions(civId);
+      // 1 & 2. Threat assessment + resource check (implicit in evaluateActions)
+      // 3. Utility score calculation
+      const candidates = evaluateActions(civId);
 
-    // 4. Execute top actions (we execute the most important ones that don't conflict)
-    const executedTypes = new Set();
-    for (const candidate of candidates) {
-      // Skip low-score actions
-      if (candidate.score < 15) break;
+      // 4. Execute top actions (we execute the most important ones that don't conflict)
+      const executedTypes = new Set();
+      for (const candidate of candidates) {
+        // Skip low-score actions
+        if (candidate.score < 15) break;
 
-      // Only execute each action type once
-      if (executedTypes.has(candidate.action)) continue;
+        // Only execute each action type once
+        if (executedTypes.has(candidate.action)) continue;
 
-      const action = executeAction(civId, candidate);
-      if (action) {
-        allActions.push(action);
-        executedTypes.add(candidate.action);
+        const action = executeAction(civId, candidate);
+        if (action) {
+          allActions.push(action);
+          executedTypes.add(candidate.action);
+        }
+
+        // Limit to top 3 distinct actions per turn
+        if (executedTypes.size >= 3) break;
       }
 
-      // Limit to top 3 distinct actions per turn
-      if (executedTypes.size >= 3) break;
-    }
-
-    // Make sure research is always set
-    if (!civ.currentResearch) {
-      const research = selectResearch(civId);
-      if (research) {
-        allActions.push({ type: 'research', techId: research });
+      // Make sure research is always set
+      if (!civ.currentResearch) {
+        const research = selectResearch(civId);
+        if (research) {
+          allActions.push({ type: 'research', techId: research });
+        }
       }
+
+      // City management (production queues)
+      const cityActions = manageCities(civId);
+      allActions.push(...cityActions);
+
+      // 5. Unit commands
+      const unitActions = moveUnits(civId);
+      allActions.push(...unitActions);
+
+      // 6. Diplomacy
+      const diplomacyActions = updateDiplomacy(civId);
+      allActions.push(...diplomacyActions);
+
+      return allActions;
+    } catch (e) {
+      console.error('[AI] 턴 처리 오류 (civ ' + civId + '):', e);
+      return [];
     }
-
-    // City management (production queues)
-    const cityActions = manageCities(civId);
-    allActions.push(...cityActions);
-
-    // 5. Unit commands
-    const unitActions = moveUnits(civId);
-    allActions.push(...unitActions);
-
-    // 6. Diplomacy
-    const diplomacyActions = updateDiplomacy(civId);
-    allActions.push(...diplomacyActions);
-
-    return allActions;
   }
 
   /**

@@ -42,6 +42,7 @@
     knight:   { name: '기사',     attack: 10, defense: 5, moves: 3, cost: 50, tech: 'chivalry',    icon: '🐎' },
     siege:    { name: '공성추',   attack: 15, defense: 2, moves: 1, cost: 60, tech: 'gunpowder',   icon: '💣' },
     musketeer:{ name: '머스킷병', attack: 12, defense: 8, moves: 2, cost: 70, tech: 'industrialRevolution', icon: '🔫' },
+    settler:  { name: '개척자', attack: 0, defense: 1, moves: 2, cost: 40, tech: null, icon: '🏠' },
   };
 
   const techTree = {
@@ -249,6 +250,7 @@
         winner: null,
         winCondition: null,
         log: [],
+        techTree: techTree,
       };
 
       return Game.state;
@@ -290,9 +292,9 @@
           const neighbors = getNeighbors(pos.col, pos.row);
           let placed = false;
           for (const n of neighbors) {
-            const tile = getTile(n.col, n.row);
-            if (tile && TERRAINS[tile.terrain].passable && !Game.getUnitAt(n.col, n.row)) {
-              Game._spawnUnit(i, 'warrior', n.col, n.row);
+            const tile = getTile(n.x, n.y);
+            if (tile && TERRAINS[tile.terrain].passable && !Game.getUnitAt(n.x, n.y)) {
+              Game._spawnUnit(i, 'warrior', n.x, n.y);
               placed = true;
               break;
             }
@@ -305,9 +307,9 @@
           Game._revealTiles(i, pos.col, pos.row, 2);
           if (placed) {
             for (const n of neighbors) {
-              const tile = getTile(n.col, n.row);
+              const tile = getTile(n.x, n.y);
               if (tile && TERRAINS[tile.terrain].passable) {
-                Game._revealTiles(i, n.col, n.row, 2);
+                Game._revealTiles(i, n.x, n.y, 2);
                 break;
               }
             }
@@ -456,7 +458,7 @@
           gold += t.gold;
 
           // Special resources
-          if (tile.resource === 'gems') gold += 3;
+          if (tile.resource === 'gem') gold += 3;
         }
       }
 
@@ -1387,6 +1389,78 @@
         total += city.researchPerTurn;
       }
       return total;
+    },
+
+    // ─────────────────────────────────────────
+    // SETTLER / CITY BUILDING
+    // ─────────────────────────────────────────
+
+    buildCity: function(unit) {
+      if (!unit || unit.type !== 'settler') return false;
+      const city = Game.createCity(unit.civId, unit.x, unit.y);
+      if (!city) return false;
+      Game._removeUnit(unit);
+      Game._revealTiles(unit.civId, unit.x, unit.y, 2);
+      return true;
+    },
+
+    // ─────────────────────────────────────────
+    // AI COMPATIBILITY WRAPPERS
+    // ─────────────────────────────────────────
+
+    produceUnit: function(cityId, unitType) {
+      for (const civ of Game.state.civilizations) {
+        const city = civ.cities.find(c => c.id === cityId);
+        if (city) return Game.addToProductionQueue(city, 'unit', unitType);
+      }
+      return false;
+    },
+
+    produceBuilding: function(cityId, buildingId) {
+      for (const civ of Game.state.civilizations) {
+        const city = civ.cities.find(c => c.id === cityId);
+        if (city) return Game.addToProductionQueue(city, 'building', buildingId);
+      }
+      return false;
+    },
+
+    setProduction: function(cityId, type, id) {
+      for (const civ of Game.state.civilizations) {
+        const city = civ.cities.find(c => c.id === cityId);
+        if (city) return Game.addToProductionQueue(city, type, id);
+      }
+      return false;
+    },
+
+    // ─────────────────────────────────────────
+    // DIPLOMACY API WRAPPERS
+    // ─────────────────────────────────────────
+
+    declareWar: function(civId, targetCivId) {
+      Game.setDiplomacyStatus(civId, targetCivId, 'war');
+    },
+
+    proposeTrade: function(civId, targetCivId) {
+      const d1 = Game.getDiplomacy(civId, targetCivId);
+      const d2 = Game.getDiplomacy(targetCivId, civId);
+      if (d1) d1.trading = true;
+      if (d2) d2.trading = true;
+      if (d1 && d1.status !== 'war') d1.status = 'friendly';
+      if (d2 && d2.status !== 'war') d2.status = 'friendly';
+    },
+
+    makePeace: function(civId, targetCivId) {
+      Game.setDiplomacyStatus(civId, targetCivId, 'neutral');
+      const d1 = Game.getDiplomacy(civId, targetCivId);
+      const d2 = Game.getDiplomacy(targetCivId, civId);
+      if (d1) d1.trading = false;
+      if (d2) d2.trading = false;
+    },
+
+    diplomacyAction: function(civId, targetCivId, action) {
+      if (action === 'war') Game.declareWar(civId, targetCivId);
+      else if (action === 'trade') Game.proposeTrade(civId, targetCivId);
+      else if (action === 'peace') Game.makePeace(civId, targetCivId);
     },
   };
 
