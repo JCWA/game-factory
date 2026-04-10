@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>절차적 도시 빌더</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#1a202c;--panel:#2d3748;--panelLight:#4a5568;--text:#e2e8f0;
+--textDim:#a0aec0;--accent:#63b3ed;--green:#48bb78;--blue:#4299e1;
+--yellow:#ecc94b;--red:#fc8181;--orange:#ed8936;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;width:100vw;display:flex;flex-direction:column;user-select:none;-webkit-user-select:none}
+#topBar{background:var(--panel);padding:6px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px;min-height:36px;z-index:10;border-bottom:1px solid #4a5568}
+#topBar .stat{display:flex;align-items:center;gap:3px}
+#topBar .stat span{color:var(--textDim);font-size:11px}
+#topBar .val{font-weight:bold;color:var(--accent)}
+#topBar .val.neg{color:var(--red)}
+#topBar .val.pos{color:var(--green)}
+#mainArea{display:flex;flex:1;overflow:hidden}
+#toolbar{background:var(--panel);width:72px;min-width:72px;display:flex;flex-direction:column;gap:2px;padding:4px;overflow-y:auto;border-right:1px solid #4a5568;z-index:10}
+.toolBtn{background:var(--panelLight);border:2px solid transparent;border-radius:6px;color:var(--text);padding:4px 2px;font-size:10px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;transition:.15s}
+.toolBtn:hover{background:#5a6a7e}
+.toolBtn.active{border-color:var(--accent);background:#2b4a6e}
+.toolBtn .icon{font-size:18px}
+.toolBtn .cost{font-size:9px;color:var(--yellow)}
+.toolSep{height:1px;background:#4a5568;margin:2px 0}
+#canvasWrap{flex:1;position:relative;overflow:hidden;background:#1a3a1a}
+canvas{position:absolute;top:0;left:0}
+#bottomBar{background:var(--panel);padding:6px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;z-index:10;border-top:1px solid #4a5568}
+.demandBar{display:flex;align-items:center;gap:3px}
+.demandBar .label{width:12px;font-weight:bold;font-size:11px}
+.demandBar .bar{width:40px;height:8px;background:#1a202c;border-radius:3px;overflow:hidden}
+.demandBar .fill{height:100%;border-radius:3px;transition:width .3s}
+.demandR .fill{background:var(--green)}.demandC .fill{background:var(--blue)}.demandI .fill{background:var(--yellow)}
+#adviceText{flex:1;color:var(--textDim);font-size:11px;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctrlBtn{background:var(--panelLight);border:1px solid #5a6a7e;border-radius:4px;color:var(--text);padding:3px 8px;font-size:11px;cursor:pointer;transition:.15s}
+.ctrlBtn:hover{background:#5a6a7e}.ctrlBtn.active{background:var(--accent);color:#1a202c}
+#eventBanner{position:absolute;top:50px;left:50%;transform:translateX(-50%);background:rgba(200,40,40,0.9);color:#fff;padding:8px 20px;border-radius:8px;font-size:14px;font-weight:bold;z-index:20;display:none;pointer-events:none;text-align:center}
+#tooltip{position:absolute;background:rgba(30,40,55,0.95);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;pointer-events:none;z-index:30;display:none;max-width:200px;border:1px solid #4a5568}
+/* Modal */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:50;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--panel);border-radius:12px;padding:20px;max-width:460px;width:90%;max-height:80vh;overflow-y:auto;border:1px solid #4a5568}
+.modal h2{margin-bottom:12px;color:var(--accent);font-size:18px}
+.modal .close-btn{float:right;background:none;border:none;color:var(--textDim);font-size:20px;cursor:pointer}
+.happinessRow{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12px}
+.happinessRow .hLabel{width:50px;text-align:right;color:var(--textDim)}
+.happinessRow .hBar{flex:1;height:10px;background:#1a202c;border-radius:4px;overflow:hidden}
+.happinessRow .hFill{height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+.happinessRow .hVal{width:32px;font-size:11px}
+.taxRow{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+.taxRow label{width:30px;font-weight:bold}
+.taxRow input[type=range]{flex:1;accent-color:var(--accent)}
+.taxRow .tVal{width:32px;text-align:right}
+.miniChart{width:100%;height:80px;background:#1a202c;border-radius:6px;margin:6px 0}
+.scenarioBtn{display:block;width:100%;background:var(--panelLight);border:1px solid #5a6a7e;border-radius:6px;color:var(--text);padding:10px;margin:6px 0;cursor:pointer;text-align:left;font-size:12px}
+.scenarioBtn:hover{background:#5a6a7e}
+.scenarioBtn h4{color:var(--accent);margin-bottom:4px}
+.saveSlot{display:flex;align-items:center;gap:8px;padding:8px;background:var(--panelLight);border-radius:6px;margin:4px 0}
+.saveSlot .slotInfo{flex:1;font-size:11px}
+.saveSlot button{font-size:11px}
+#gameOverOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column}
+#gameOverOverlay.show{display:flex}
+#gameOverOverlay h1{color:var(--red);font-size:32px;margin-bottom:12px}
+#gameOverOverlay p{color:var(--textDim);margin-bottom:20px}
+@media(max-width:600px){
+  #toolbar{width:56px;min-width:56px}
+  .toolBtn{font-size:9px;padding:3px 1px}
+  .toolBtn .icon{font-size:15px}
+  #topBar{font-size:11px;padding:4px 8px;gap:8px}
+  #bottomBar{font-size:10px;padding:4px 6px;gap:4px}
+}
+</style>
+</head>
+<body>
+<div id="topBar">
+  <div class="stat"><span>🏙️</span><span>인구:</span><span class="val" id="sPop">0</span></div>
+  <div class="stat"><span>💰</span><span>예산:</span><span class="val" id="sBudget">5,000</span></div>
+  <div class="stat"><span>📅</span><span id="sDate">1년 1월</span></div>
+  <div class="stat"><span>😊</span><span>행복:</span><span class="val" id="sHappy">50%</span></div>
+  <div class="stat"><span>📊</span><span>수지:</span><span class="val" id="sBalance">+0</span></div>
+</div>
+<div id="mainArea">
+  <div id="toolbar"></div>
+  <div id="canvasWrap">
+    <canvas id="gameCanvas"></canvas>
+    <div id="eventBanner"></div>
+    <div id="tooltip"></div>
+  </div>
+</div>
+<div id="bottomBar">
+  <div class="demandBar demandR"><span class="label" style="color:var(--green)">R</span><div class="bar"><div class="fill" id="dR" style="width:0"></div></div></div>
+  <div class="demandBar demandC"><span class="label" style="color:var(--blue)">C</span><div class="bar"><div class="fill" id="dC" style="width:0"></div></div></div>
+  <div class="demandBar demandI"><span class="label" style="color:var(--yellow)">I</span><div class="bar"><div class="fill" id="dI" style="width:0"></div></div></div>
+  <span id="adviceText">시청을 건설하여 시작하세요!</span>
+  <button class="ctrlBtn" id="btnPause" onclick="togglePause()">⏸</button>
+  <button class="ctrlBtn" id="btnS1" onclick="setSpeed(1)">x1</button>
+  <button class="ctrlBtn active" id="btnS2" onclick="setSpeed(2)">x2</button>
+  <button class="ctrlBtn" id="btnS5" onclick="setSpeed(5)">x5</button>
+  <button class="ctrlBtn" onclick="showStats()">📊</button>
+  <button class="ctrlBtn" onclick="showSaveLoad()">💾</button>
+  <button class="ctrlBtn" onclick="showScenario()">🎯</button>
+</div>
+
+<!-- Stats Modal -->
+<div class="modal-overlay" id="statsModal">
+<div class="modal">
+  <button class="close-btn" onclick="closeModal('statsModal')">&times;</button>
+  <h2>📊 도시 통계</h2>
+  <h4 style="font-size:12px;color:var(--textDim)">인구 추이</h4>
+  <canvas class="miniChart" id="chartPop"></canvas>
+  <h4 style="font-size:12px;color:var(--textDim)">예산 추이</h4>
+  <canvas class="miniChart" id="chartBudget"></canvas>
+  <h4 style="font-size:12px;color:var(--textDim);margin-top:8px">행복도 구성</h4>
+  <div id="happinessBreakdown"></div>
+  <h4 style="font-size:12px;color:var(--textDim);margin-top:12px">세율 조정</h4>
+  <div class="taxRow"><label style="color:var(--green)">주거</label><input type="range" min="0" max="20" value="10" id="taxR" oninput="updateTax('residential',this.value)"><span class="tVal" id="taxRV">10%</span></div>
+  <div class="taxRow"><label style="color:var(--blue)">상업</label><input type="range" min="0" max="20" value="10" id="taxC" oninput="updateTax('commercial',this.value)"><span class="tVal" id="taxCV">10%</span></div>
+  <div class="taxRow"><label style="color:var(--yellow)">공업</label><input type="range" min="0" max="20" value="10" id="taxI" oninput="updateTax('industrial',this.value)"><span class="tVal" id="taxIV">10%</span></div>
+  <div style="margin-top:10px;font-size:11px;color:var(--textDim)">
+    <div>주거 건물: <span id="stResCount">0</span> | 상업: <span id="stComCount">0</span> | 공업: <span id="stIndCount">0</span></div>
+    <div>총 일자리: <span id="stJobs">0</span> | 범죄율: <span id="stCrime">0%</span> | 전력: <span id="stPower">0%</span> | 상수도: <span id="stWater">0%</span></div>
+  </div>
+</div>
+</div>
+
+<!-- Save/Load Modal -->
+<div class="modal-overlay" id="saveModal">
+<div class="modal">
+  <button class="close-btn" onclick="closeModal('saveModal')">&times;</button>
+  <h2>💾 저장 / 불러오기</h2>
+  <div id="saveSlots"></div>
+  <button class="ctrlBtn" style="margin-top:10px;width:100%" onclick="newGame()">🆕 새 게임</button>
+</div>
+</div>
+
+<!-- Scenario Modal -->
+<div class="modal-overlay" id="scenarioModal">
+<div class="modal">
+  <button class="close-btn" onclick="closeModal('scenarioModal')">&times;</button>
+  <h2>🎯 시나리오 선택</h2>
+  <button class="scenarioBtn" onclick="startScenario('free')"><h4>🏙 자유 모드</h4>목표 없이 자유롭게 도시를 건설합니다.</button>
+  <button class="scenarioBtn" onclick="startScenario('pop500')"><h4>🏘 첫 번째 도시</h4>인구 500명을 달성하세요. (튜토리얼)</button>
+  <button class="scenarioBtn" onclick="startScenario('money')"><h4>💰 경제 도시</h4>예산 20,000을 달성하세요.</button>
+  <button class="scenarioBtn" onclick="startScenario('happy')"><h4>😊 행복한 도시</h4>행복도 90% 이상을 12개월 유지하세요.</button>
+</div>
+</div>
+
+<!-- Game Over -->
+<div id="gameOverOverlay">
+  <h1>💀 재정 파탄!</h1>
+  <p>예산이 -10,000 이하로 떨어졌습니다.</p>
+  <button class="ctrlBtn" onclick="newGame()" style="font-size:16px;padding:10px 30px">새 게임</button>
+</div>
+
+<script>
+// ========== CONSTANTS ==========
+const COLS=40,ROWS=30,MONTH_MS=10000;
+const ZONE_COLORS={R:'#c6f6d5',C:'#bee3f8',I:'#fefcbf'};
+const ZONE_BUILD_COLORS={R:['#38a169','#2f855a','#276749'],C:['#3182ce','#2b6cb0','#2c5282'],I:['#d69e2e','#b7791f','#975a16']};
+const EMPTY_COLOR='#d4edda',ROAD_COLOR='#6c757d',AVENUE_COLOR='#495057';
+
+const SPECIAL_DEFS={
+  police:{name:'경찰서',icon:'🚔',w:2,h:2,cost:500,maint:20,radius:8,color:'#4299e1'},
+  fire:{name:'소방서',icon:'🚒',w:2,h:2,cost:500,maint:20,radius:8,color:'#e53e3e'},
+  hospital:{name:'병원',icon:'🏥',w:2,h:2,cost:800,maint:30,radius:10,color:'#fff5f5'},
+  school:{name:'학교',icon:'🏫',w:2,h:2,cost:600,maint:25,radius:8,color:'#9f7aea'},
+  park:{name:'공원',icon:'🌳',w:2,h:2,cost:200,maint:5,radius:6,color:'#68d391'},
+  power:{name:'발전소',icon:'⚡',w:3,h:3,cost:1500,maint:50,radius:15,color:'#fbd38d'},
+  water:{name:'상수도',icon:'💧',w:2,h:2,cost:1000,maint:30,radius:12,color:'#90cdf4'},
+  dump:{name:'쓰레기장',icon:'🗑️',w:2,h:2,cost:400,maint:15,radius:999,color:'#a0aec0'},
+  cityhall:{name:'시청',icon:'🏛️',w:3,h:3,cost:2000,maint:0,radius:0,color:'#faf089'}
+};
+
+const POP_CAP=[0,2,8,20],JOB_CAP_C=[0,3,10,25],JOB_CAP_I=[0,5,15,30];
+const BUILD_TICKS=[0,3,5,8];
+
+const DISASTERS=[
+  {type:'fire',name:'🔥 화재',prob:0.03,msg:'화재가 발생했습니다!'},
+  {type:'earthquake',name:'🌍 지진',prob:0.01,msg:'지진이 발생했습니다!'},
+  {type:'flood',name:'🌊 홍수',prob:0.02,msg:'홍수가 발생했습니다!'},
+  {type:'crime',name:'🔫 범죄파동',prob:0.05,msg:'범죄파동이 발생했습니다!'},
+  {type:'recession',name:'📉 경기침체',prob:0.03,msg:'경기침체가 시작되었습니다!'},
+  {type:'plague',name:'🦠 전염병',prob:0.01,msg:'전염병이 퍼지고 있습니다!'}
+];
+
+const MILESTONES={100:1000,500:3000,1000:5000,5000:10000};
+
+// ========== GAME STATE ==========
+let G={
+  month:1,year:1,speed:2,paused:false,
+  budget:5000,monthlyIncome:0,monthlyExpense:0,
+  population:0,happiness:0.5,
+  grid:null,
+  stats:{totalRes:0,totalCom:0,totalInd:0,totalJobs:0,avgHappy:0.5,avgTraffic:0,crimeRate:0,
+    healthCov:0,eduCov:0,powerCov:0,waterCov:0,garbageCov:0,demandR:0,demandC:0,demandI:0},
+  taxRates:{residential:10,commercial:10,industrial:10},
+  events:[],
+  history:{population:[],budget:[],happiness:[]},
+  milestones:{100:false,500:false,1000:false,5000:false},
+  advisorMessages:[],
+  scenario:null,happyMonths:0,
+  hasCityHall:false
+};
+
+let selectedTool=null,selectedSubtype=null;
+let camX=0,camY=0,zoom=1,tileSize=20;
+let tickAccum=0,lastTime=0;
+let shakeTimer=0,shakeIntensity=0;
+let particles=[];
+let isPanning=false,panStartX=0,panStartY=0,camStartX=0,camStartY=0;
+let isDragging=false,dragTool=null;
+let hoverX=-1,hoverY=-1;
+let lastPinchDist=0;
+let canvas,ctx;
+let eventBannerTimer=0;
+
+// ========== INIT ==========
+function initGrid(){
+  G.grid=[];
+  for(let y=0;y<ROWS;y++){
+    G.grid[y]=[];
+    for(let x=0;x<COLS;x++){
+      G.grid[y][x]=createEmptyTile();
+    }
+  }
+}
+function createEmptyTile(){
+  return{type:'empty',roadType:null,zoneType:null,building:null,special:null,
+    services:{power:false,water:false,garbage:false},traffic:0,trafficCap:10,
+    crimeRate:0.1,pollution:0,isOrigin:false,parentX:-1,parentY:-1};
+}
+
+function init(){
+  canvas=document.getElementById('gameCanvas');
+  ctx=canvas.getContext('2d');
+  initGrid();
+  buildToolbar();
+  resizeCanvas();
+  window.addEventListener('resize',resizeCanvas);
+  setupInput();
+  tryAutoLoad();
+  lastTime=performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function resizeCanvas(){
+  const w=document.getElementById('canvasWrap');
+  canvas.width=w.clientWidth;
+  canvas.height=w.clientHeight;
+  const isMobile=window.innerWidth<600;
+  tileSize=isMobile?16:20;
+  if(camX===0&&camY===0){
+    camX=(canvas.width-COLS*tileSize*zoom)/2;
+    camY=(canvas.height-ROWS*tileSize*zoom)/2;
+  }
+}
+
+// ========== TOOLBAR ==========
+function buildToolbar(){
+  const tb=document.getElementById('toolbar');
+  const tools=[
+    {id:'road',icon:'🛤️',label:'도로',cost:10},
+    {id:'avenue',icon:'🛣️',label:'대로',cost:30},
+    'sep',
+    {id:'zoneR',icon:'🏠',label:'주거',cost:5},
+    {id:'zoneC',icon:'🏪',label:'상업',cost:8},
+    {id:'zoneI',icon:'🏭',label:'공업',cost:10},
+    'sep',
+    {id:'police',icon:'🚔',label:'경찰',cost:500},
+    {id:'fire',icon:'🚒',label:'소방',cost:500},
+    {id:'hospital',icon:'🏥',label:'병원',cost:800},
+    {id:'school',icon:'🏫',label:'학교',cost:600},
+    {id:'park',icon:'🌳',label:'공원',cost:200},
+    {id:'power',icon:'⚡',label:'발전',cost:1500},
+    {id:'water',icon:'💧',label:'상수',cost:1000},
+    {id:'dump',icon:'🗑️',label:'쓰레기',cost:400},
+    {id:'cityhall',icon:'🏛️',label:'시청',cost:2000},
+    'sep',
+    {id:'bulldoze',icon:'🚜',label:'불도저',cost:0}
+  ];
+  tb.innerHTML='';
+  tools.forEach(t=>{
+    if(t==='sep'){const d=document.createElement('div');d.className='toolSep';tb.appendChild(d);return;}
+    const b=document.createElement('button');
+    b.className='toolBtn';
+    b.innerHTML=`<span class="icon">${t.icon}</span><span>${t.label}</span>${t.cost?`<span class="cost">$${t.cost}</span>`:''}`;
+    b.onclick=()=>selectTool(t.id);
+    b.id='tool_'+t.id;
+    tb.appendChild(b);
+  });
+}
+
+function selectTool(id){
+  selectedTool=id;
+  document.querySelectorAll('.toolBtn').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('tool_'+id);
+  if(el)el.classList.add('active');
+}
+
+// ========== INPUT ==========
+function setupInput(){
+  const wrap=document.getElementById('canvasWrap');
+  // Mouse
+  canvas.addEventListener('mousedown',e=>{
+    if(e.button===2||e.button===1){isPanning=true;panStartX=e.clientX;panStartY=e.clientY;camStartX=camX;camStartY=camY;e.preventDefault();return;}
+    if(e.button===0){isDragging=true;handleClick(e);}
+  });
+  canvas.addEventListener('mousemove',e=>{
+    if(isPanning){camX=camStartX+(e.clientX-panStartX);camY=camStartY+(e.clientY-panStartY);return;}
+    const pos=screenToGrid(e.clientX-canvas.getBoundingClientRect().left,e.clientY-canvas.getBoundingClientRect().top);
+    hoverX=pos.x;hoverY=pos.y;
+    if(isDragging&&(selectedTool==='road'||selectedTool==='avenue'||selectedTool==='zoneR'||selectedTool==='zoneC'||selectedTool==='zoneI'||selectedTool==='bulldoze')){
+      handlePlace(pos.x,pos.y);
+    }
+    showTooltip(e.clientX,e.clientY,pos.x,pos.y);
+  });
+  canvas.addEventListener('mouseup',()=>{isPanning=false;isDragging=false;});
+  canvas.addEventListener('mouseleave',()=>{isPanning=false;isDragging=false;hoverX=-1;hoverY=-1;hideTooltip();});
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    const oldZ=zoom;
+    zoom*=e.deltaY<0?1.15:0.87;
+    zoom=Math.max(0.3,Math.min(3,zoom));
+    camX=mx-(mx-camX)*(zoom/oldZ);
+    camY=my-(my-camY)*(zoom/oldZ);
+  },{passive:false});
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+  // Touch
+  let touches=[];
+  canvas.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    touches=[...e.touches];
+    if(e.touches.length===1){isDragging=true;handleClick(e.touches[0]);}
+    if(e.touches.length===2){isPanning=true;lastPinchDist=getPinchDist(e.touches);panStartX=(e.touches[0].clientX+e.touches[1].clientX)/2;panStartY=(e.touches[0].clientY+e.touches[1].clientY)/2;camStartX=camX;camStartY=camY;}
+  },{passive:false});
+  canvas.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(e.touches.length===2){
+      const d=getPinchDist(e.touches);
+      const cx=(e.touches[0].clientX+e.touches[1].clientX)/2;
+      const cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      const oldZ=zoom;
+      zoom*=d/lastPinchDist;
+      zoom=Math.max(0.3,Math.min(3,zoom));
+      lastPinchDist=d;
+      const rect=canvas.getBoundingClientRect();
+      const mx=cx-rect.left,my=cy-rect.top;
+      camX=mx-(mx-camX)*(zoom/oldZ);
+      camY=my-(my-camY)*(zoom/oldZ);
+      camX+=cx-panStartX;camY+=cy-panStartY;
+      panStartX=cx;panStartY=cy;
+    } else if(e.touches.length===1&&isDragging){
+      const t=e.touches[0];
+      const rect=canvas.getBoundingClientRect();
+      const pos=screenToGrid(t.clientX-rect.left,t.clientY-rect.top);
+      if(selectedTool==='road'||selectedTool==='avenue'||selectedTool==='zoneR'||selectedTool==='zoneC'||selectedTool==='zoneI'||selectedTool==='bulldoze'){
+        handlePlace(pos.x,pos.y);
+      }
+    }
+  },{passive:false});
+  canvas.addEventListener('touchend',e=>{isDragging=false;isPanning=false;});
+
+  // Keyboard
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT')return;
+    switch(e.key.toLowerCase()){
+      case'r':selectTool('road');break;
+      case'z':selectTool('zoneR');break;
+      case'1':selectTool('zoneR');break;
+      case'2':selectTool('zoneC');break;
+      case'3':selectTool('zoneI');break;
+      case'b':selectTool('cityhall');break;
+      case'x':selectTool('bulldoze');break;
+      case' ':e.preventDefault();togglePause();break;
+      case'+':case'=':cycleSpeed(1);break;
+      case'-':cycleSpeed(-1);break;
+      case'i':showStats();break;
+    }
+  });
+}
+
+function getPinchDist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+
+function screenToGrid(sx,sy){
+  const ts=tileSize*zoom;
+  return{x:Math.floor((sx-camX)/ts),y:Math.floor((sy-camY)/ts)};
+}
+
+function handleClick(e){
+  const rect=canvas.getBoundingClientRect();
+  const cx=e.clientX||e.pageX,cy=e.clientY||e.pageY;
+  const pos=screenToGrid(cx-rect.left,cy-rect.top);
+  handlePlace(pos.x,pos.y);
+}
+
+function handlePlace(x,y){
+  if(x<1||x>=COLS-1||y<1||y>=ROWS-1)return;
+  if(!selectedTool)return;
+  const t=G.grid[y][x];
+  if(selectedTool==='road'||selectedTool==='avenue'){
+    if(t.type!=='empty')return;
+    const cost=selectedTool==='road'?10:30;
+    if(G.budget<cost)return;
+    G.budget-=cost;
+    t.type='road';t.roadType=selectedTool==='road'?'road':'avenue';
+    t.trafficCap=selectedTool==='road'?10:30;
+    updateRoadConnections(x,y);
+    recalcServices();
+  } else if(selectedTool==='zoneR'||selectedTool==='zoneC'||selectedTool==='zoneI'){
+    if(t.type!=='empty')return;
+    if(!isAdjacentToRoad(x,y))return;
+    const zt=selectedTool[4];
+    const cost=zt==='R'?5:zt==='C'?8:10;
+    if(G.budget<cost)return;
+    G.budget-=cost;
+    t.type='zone';t.zoneType=zt;
+  } else if(selectedTool==='bulldoze'){
+    bulldoze(x,y);
+  } else if(SPECIAL_DEFS[selectedTool]){
+    placeSpecial(selectedTool,x,y);
+  }
+}
+
+function placeSpecial(type,x,y){
+  const def=SPECIAL_DEFS[type];
+  if(G.budget<def.cost)return;
+  // Check bounds
+  if(x+def.w>COLS-1||y+def.h>ROWS-1)return;
+  // Check all tiles empty & at least one adjacent to road
+  let adjRoad=false;
+  for(let dy=0;dy<def.h;dy++)for(let dx=0;dx<def.w;dx++){
+    const t=G.grid[y+dy][x+dx];
+    if(t.type!=='empty')return;
+  }
+  // Check road adjacency around perimeter
+  for(let dy=-1;dy<=def.h;dy++)for(let dx=-1;dx<=def.w;dx++){
+    if(dy>=0&&dy<def.h&&dx>=0&&dx<def.w)continue;
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&G.grid[ny][nx].type==='road')adjRoad=true;
+  }
+  if(!adjRoad)return;
+  G.budget-=def.cost;
+  for(let dy=0;dy<def.h;dy++)for(let dx=0;dx<def.w;dx++){
+    const t=G.grid[y+dy][x+dx];
+    t.type='special';
+    t.special={type:type,radius:def.radius};
+    t.isOrigin=(dy===0&&dx===0);
+    t.parentX=x;t.parentY=y;
+  }
+  if(type==='cityhall')G.hasCityHall=true;
+  recalcServices();
+}
+
+function bulldoze(x,y){
+  const t=G.grid[y][x];
+  if(t.type==='empty')return;
+  if(t.type==='special'){
+    const ox=t.parentX,oy=t.parentY;
+    const orig=G.grid[oy][ox];
+    if(!orig.special)return;
+    const def=SPECIAL_DEFS[orig.special.type];
+    const cost=Math.floor(def.cost*0.3);
+    if(G.budget<cost)return;
+    G.budget-=cost;
+    if(orig.special.type==='cityhall')G.hasCityHall=false;
+    for(let dy=0;dy<def.h;dy++)for(let dx=0;dx<def.w;dx++){
+      const ct=G.grid[oy+dy][ox+dx];
+      Object.assign(ct,createEmptyTile());
+    }
+    recalcServices();
+    return;
+  }
+  let cost=0;
+  if(t.type==='road')cost=Math.floor((t.roadType==='avenue'?30:10)*0.3);
+  else if(t.type==='zone')cost=Math.floor((t.zoneType==='R'?5:t.zoneType==='C'?8:10)*0.3);
+  if(G.budget<cost)return;
+  G.budget-=cost;
+  Object.assign(t,createEmptyTile());
+  updateRoadConnectionsArea(x,y);
+  recalcServices();
+}
+
+function isAdjacentToRoad(x,y){
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  for(const[dx,dy]of dirs){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&G.grid[ny][nx].type==='road')return true;
+  }
+  return false;
+}
+
+function updateRoadConnections(x,y){
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  for(const[dx,dy]of dirs){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&G.grid[ny][nx].type==='road'){
+      // neighbor exists, connections auto-handled in rendering
+    }
+  }
+}
+function updateRoadConnectionsArea(x,y){
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&G.grid[ny][nx].type==='road'){
+      updateRoadConnections(nx,ny);
+    }
+  }
+}
+
+// ========== SERVICES ==========
+function recalcServices(){
+  // Reset
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    G.grid[y][x].services={power:false,water:false,garbage:false};
+    G.grid[y][x].crimeRate=0.15;
+  }
+  G.hasCityHall=false;
+  // Apply special buildings
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='special'&&t.isOrigin&&t.special){
+      const st=t.special.type;
+      const r=t.special.radius;
+      if(st==='cityhall'){G.hasCityHall=true;continue;}
+      if(st==='dump'){
+        // Global
+        for(let gy=0;gy<ROWS;gy++)for(let gx=0;gx<COLS;gx++)G.grid[gy][gx].services.garbage=true;
+        continue;
+      }
+      // BFS radius
+      applyServiceRadius(x,y,r,st);
+    }
+  }
+}
+
+function applyServiceRadius(ox,oy,radius,type){
+  for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+    if(Math.abs(dx)+Math.abs(dy)>radius)continue;
+    const nx=ox+dx,ny=oy+dy;
+    if(nx<0||nx>=COLS||ny<0||ny>=ROWS)continue;
+    const t=G.grid[ny][nx];
+    switch(type){
+      case'power':t.services.power=true;break;
+      case'water':t.services.water=true;break;
+      case'police':t.crimeRate=Math.max(0,t.crimeRate-0.1);break;
+      case'fire':break;// handled in disaster
+      case'hospital':break;// handled in happiness
+      case'school':break;// handled in happiness
+      case'park':break;// handled in happiness
+    }
+  }
+}
+
+function getCoverage(type){
+  let covered=0,total=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='zone'||t.building){
+      total++;
+      if(type==='power'&&t.services.power)covered++;
+      if(type==='water'&&t.services.water)covered++;
+      if(type==='garbage'&&t.services.garbage)covered++;
+    }
+  }
+  return total>0?covered/total:0;
+}
+
+function getSpecialCoverage(spType,tileX,tileY){
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='special'&&t.isOrigin&&t.special&&t.special.type===spType){
+      const r=t.special.radius;
+      if(Math.abs(x-tileX)+Math.abs(y-tileY)<=r)return true;
+    }
+  }
+  return false;
+}
+
+function getSpecialCoverageRate(spType){
+  let covered=0,total=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='zone'||(t.type==='special')){
+      total++;
+      if(getSpecialCoverage(spType,x,y))covered++;
+    }
+  }
+  return total>0?covered/total:0;
+}
+
+// ========== SIMULATION ==========
+function simTick(){
+  resetTraffic();
+  calcDemand();
+  growBuildings();
+  simTraffic();
+  calcStats();
+}
+
+function monthTick(){
+  calcEconomy();
+  simPopulation();
+  calcHappiness();
+  checkDisasters();
+  checkMilestones();
+  generateAdvice();
+  G.history.population.push(G.population);
+  G.history.budget.push(G.budget);
+  G.history.happiness.push(G.happiness);
+  if(G.history.population.length>120){G.history.population.shift();G.history.budget.shift();G.history.happiness.shift();}
+  processEvents();
+  checkScenario();
+  checkGameOver();
+  // Auto save every year
+  if(G.month===1)autoSave();
+  // Advance month
+  G.month++;
+  if(G.month>12){G.month=1;G.year++;}
+}
+
+function resetTraffic(){
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    if(G.grid[y][x].type==='road')G.grid[y][x].traffic=0;
+  }
+}
+
+function calcDemand(){
+  let pop=0,jobs=0,resBldg=0,comBldg=0,indBldg=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.building){
+      if(t.zoneType==='R'){resBldg++;pop+=t.building.population;}
+      if(t.zoneType==='C'){comBldg++;jobs+=t.building.jobs;}
+      if(t.zoneType==='I'){indBldg++;jobs+=t.building.jobs;}
+    }
+  }
+  G.stats.demandR=jobs>0?Math.max(0,Math.min(1,(jobs-pop)/Math.max(1,jobs))):0.5;
+  G.stats.demandC=pop>0?Math.max(0,Math.min(1,(pop-comBldg*20)/Math.max(1,pop))):0;
+  G.stats.demandI=comBldg>0?Math.max(0,Math.min(1,(comBldg-indBldg*2)/Math.max(1,comBldg))):0;
+  // Boost initial demand
+  if(resBldg===0&&jobs===0){G.stats.demandR=0.8;G.stats.demandC=0.3;G.stats.demandI=0.2;}
+}
+
+function growBuildings(){
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type!=='zone')continue;
+    if(!isAdjacentToRoad(x,y))continue;
+    if(!t.building){
+      // Try create
+      const demand=t.zoneType==='R'?G.stats.demandR:t.zoneType==='C'?G.stats.demandC:G.stats.demandI;
+      if(demand>0&&Math.random()<demand*0.1){
+        t.building={type:t.zoneType==='R'?'house':t.zoneType==='C'?'shop':'factory',
+          level:0,state:'building',stateTimer:BUILD_TICKS[1],
+          population:0,jobs:0,satisfaction:0.5,lowSatTicks:0,animProgress:0};
+      }
+    } else {
+      const b=t.building;
+      if(b.state==='building'){
+        b.stateTimer--;
+        b.animProgress=Math.min(1,b.animProgress+0.15);
+        if(b.stateTimer<=0){
+          b.state='active';b.level=1;b.animProgress=1;
+          if(t.zoneType==='R')b.population=POP_CAP[1];
+          if(t.zoneType==='C')b.jobs=JOB_CAP_C[1];
+          if(t.zoneType==='I')b.jobs=JOB_CAP_I[1];
+        }
+      } else if(b.state==='active'&&b.level<3){
+        const sat=calcTileSatisfaction(x,y);
+        b.satisfaction=sat;
+        if(sat>0.7&&Math.random()<sat*0.05){
+          b.state='building';b.stateTimer=BUILD_TICKS[b.level+1];b.level++;b.animProgress=0.7;
+          if(t.zoneType==='R')b.population=POP_CAP[b.level];
+          if(t.zoneType==='C')b.jobs=JOB_CAP_C[b.level];
+          if(t.zoneType==='I')b.jobs=JOB_CAP_I[b.level];
+        }
+        if(sat<0.3){
+          b.lowSatTicks=(b.lowSatTicks||0)+1;
+          if(b.lowSatTicks>=5&&Math.random()<0.02){
+            if(b.level>1){
+              b.level--;
+              if(t.zoneType==='R')b.population=POP_CAP[b.level];
+              if(t.zoneType==='C')b.jobs=JOB_CAP_C[b.level];
+              if(t.zoneType==='I')b.jobs=JOB_CAP_I[b.level];
+              b.lowSatTicks=0;
+            } else {
+              b.state='ruin';b.stateTimer=10;b.population=0;b.jobs=0;
+            }
+          }
+        } else b.lowSatTicks=0;
+      } else if(b.state==='active'&&b.level===3){
+        b.satisfaction=calcTileSatisfaction(x,y);
+        if(b.satisfaction<0.3){b.lowSatTicks=(b.lowSatTicks||0)+1;if(b.lowSatTicks>=5&&Math.random()<0.02){b.level=2;if(t.zoneType==='R')b.population=POP_CAP[2];if(t.zoneType==='C')b.jobs=JOB_CAP_C[2];if(t.zoneType==='I')b.jobs=JOB_CAP_I[2];b.lowSatTicks=0;}}
+        else b.lowSatTicks=0;
+      } else if(b.state==='ruin'){
+        b.stateTimer--;
+        if(b.stateTimer<=0){t.building=null;}
+      }
+    }
+  }
+}
+
+function calcTileSatisfaction(x,y){
+  const t=G.grid[y][x];
+  let sat=0.5;
+  sat+=t.services.power?0.15:-0.3;
+  sat+=t.services.water?0.1:-0.2;
+  // traffic
+  let nearTraffic=0,roadCount=0;
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  for(const[dx,dy]of dirs){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&G.grid[ny][nx].type==='road'){
+      const rt=G.grid[ny][nx];
+      nearTraffic+=rt.traffic/Math.max(1,rt.trafficCap);
+      roadCount++;
+    }
+  }
+  const congestion=roadCount>0?nearTraffic/roadCount:0;
+  sat+=congestion<0.5?0.1:-0.1;
+  sat+=t.crimeRate<0.1?0.05:-0.1;
+  if(getSpecialCoverage('park',x,y))sat+=0.05;
+  // Industry nearby penalty for residential
+  if(t.zoneType==='R'){
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+      const nx=x+dx,ny=y+dy;
+      if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS){
+        const nt=G.grid[ny][nx];
+        if(nt.zoneType==='I'&&nt.building){sat-=0.05;break;}
+      }
+    }
+  }
+  return Math.max(0,Math.min(1,sat));
+}
+
+function simTraffic(){
+  // Sample 10% of residential buildings
+  const resTiles=[];
+  const workTiles=[];
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.building&&t.building.state==='active'){
+      if(t.zoneType==='R')resTiles.push({x,y});
+      if(t.zoneType==='C'||t.zoneType==='I')workTiles.push({x,y});
+    }
+  }
+  if(workTiles.length===0||resTiles.length===0)return;
+  const sample=Math.max(1,Math.floor(resTiles.length*0.1));
+  for(let i=0;i<sample;i++){
+    const src=resTiles[Math.floor(Math.random()*resTiles.length)];
+    const dst=workTiles[Math.floor(Math.random()*workTiles.length)];
+    const path=bfsPath(src.x,src.y,dst.x,dst.y);
+    if(path){
+      const mult=resTiles.length/sample;
+      for(const p of path){
+        const pt=G.grid[p.y][p.x];
+        if(pt.type==='road')pt.traffic+=mult;
+      }
+    }
+  }
+}
+
+function bfsPath(sx,sy,ex,ey){
+  const visited=new Set();
+  const queue=[{x:sx,y:sy,path:[]}];
+  visited.add(sy*COLS+sx);
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  let steps=0;
+  while(queue.length>0&&steps<500){
+    steps++;
+    const curr=queue.shift();
+    for(const[dx,dy]of dirs){
+      const nx=curr.x+dx,ny=curr.y+dy;
+      if(nx<0||nx>=COLS||ny<0||ny>=ROWS)continue;
+      const key=ny*COLS+nx;
+      if(visited.has(key))continue;
+      visited.add(key);
+      const nt=G.grid[ny][nx];
+      const np=[...curr.path,{x:nx,y:ny}];
+      if(nx===ex&&ny===ey)return np;
+      if(nt.type==='road')queue.push({x:nx,y:ny,path:np});
+    }
+  }
+  return null;
+}
+
+function calcStats(){
+  let pop=0,jobs=0,res=0,com=0,ind=0,trafficSum=0,roadCount=0,crimeSum=0,zoneCount=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.building&&t.building.state==='active'){
+      if(t.zoneType==='R'){res++;pop+=t.building.population;}
+      if(t.zoneType==='C'){com++;jobs+=t.building.jobs;}
+      if(t.zoneType==='I'){ind++;jobs+=t.building.jobs;}
+    }
+    if(t.type==='road'){trafficSum+=t.traffic/Math.max(1,t.trafficCap);roadCount++;}
+    if(t.type==='zone'){crimeSum+=t.crimeRate;zoneCount++;}
+  }
+  G.population=pop;
+  G.stats.totalRes=res;G.stats.totalCom=com;G.stats.totalInd=ind;
+  G.stats.totalJobs=jobs;
+  G.stats.avgTraffic=roadCount>0?trafficSum/roadCount:0;
+  G.stats.crimeRate=zoneCount>0?crimeSum/zoneCount:0;
+  G.stats.powerCov=getCoverage('power');
+  G.stats.waterCov=getCoverage('water');
+  G.stats.garbageCov=getCoverage('garbage');
+  G.stats.healthCov=getSpecialCoverageRate('hospital');
+  G.stats.eduCov=getSpecialCoverageRate('school');
+}
+
+function calcEconomy(){
+  if(!G.hasCityHall){G.monthlyIncome=0;G.monthlyExpense=0;return;}
+  const eduLevel=0.5+G.stats.eduCov*1.5;
+  const rTax=G.population*G.taxRates.residential/100*eduLevel;
+  const cTax=G.stats.totalCom*G.taxRates.commercial/100*50;
+  const iTax=G.stats.totalInd*G.taxRates.industrial/100*80;
+  let income=rTax+cTax+iTax;
+  // Recession event
+  if(G.events.find(e=>e.type==='recession'))income*=0.5;
+  // Crime event
+  if(G.events.find(e=>e.type==='crime'))income*=0.7;
+
+  let expense=0;
+  // Special buildings maintenance
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='special'&&t.isOrigin&&t.special){
+      expense+=SPECIAL_DEFS[t.special.type].maint;
+    }
+  }
+  // Road maintenance
+  let roads=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){if(G.grid[y][x].type==='road')roads++;}
+  expense+=roads*0.5;
+
+  G.monthlyIncome=Math.floor(income);
+  G.monthlyExpense=Math.floor(expense);
+  G.budget+=G.monthlyIncome-G.monthlyExpense;
+}
+
+function simPopulation(){
+  const vacancies=getResidentialVacancies();
+  const inflow=Math.floor(vacancies*G.happiness*0.1);
+  const outflow=Math.floor(G.population*Math.max(0,1-G.happiness)*0.05);
+  const natural=Math.floor(G.population*0.01);
+  const delta=inflow-outflow+natural;
+  // Plague
+  if(G.events.find(e=>e.type==='plague')){
+    const loss=Math.floor(G.population*0.05);
+    adjustPopulation(-loss);
+  }
+  adjustPopulation(delta);
+}
+
+function getResidentialVacancies(){
+  let cap=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.building&&t.building.state==='active'&&t.zoneType==='R'){
+      cap+=POP_CAP[t.building.level];
+    }
+  }
+  return Math.max(0,cap-G.population);
+}
+
+function adjustPopulation(delta){
+  if(delta===0)return;
+  // Distribute across residential buildings
+  const resTiles=[];
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.building&&t.building.state==='active'&&t.zoneType==='R')resTiles.push(t);
+  }
+  if(resTiles.length===0)return;
+  if(delta>0){
+    for(let i=0;i<delta;i++){
+      // Fill buildings with space
+      for(const t of resTiles){
+        if(t.building.population<POP_CAP[t.building.level]){t.building.population++;break;}
+      }
+    }
+  } else {
+    for(let i=0;i<Math.abs(delta);i++){
+      for(let j=resTiles.length-1;j>=0;j--){
+        if(resTiles[j].building.population>0){resTiles[j].building.population--;break;}
+      }
+    }
+  }
+}
+
+function calcHappiness(){
+  const taxSat=1-((G.taxRates.residential+G.taxRates.commercial+G.taxRates.industrial)/3)/25;
+  const trafficSat=1-Math.min(1,G.stats.avgTraffic);
+  const safeSat=1-G.stats.crimeRate;
+  const healthSat=G.stats.healthCov;
+  const eduSat=G.stats.eduCov;
+  const parkCov=getSpecialCoverageRate('park');
+  const envSat=Math.max(0,parkCov-G.stats.totalInd*0.01);
+  const svcSat=(G.stats.powerCov+G.stats.waterCov+G.stats.garbageCov)/3;
+  // Plague effect
+  let plaguePenalty=G.events.find(e=>e.type==='plague')?0.2:0;
+  G.happiness=Math.max(0,Math.min(1,(taxSat+trafficSat+safeSat+healthSat+eduSat+envSat+svcSat)/7-plaguePenalty));
+  G.stats.avgHappy=G.happiness;
+  G.stats._happyBreakdown={tax:taxSat,traffic:trafficSat,safety:safeSat,health:healthSat,education:eduSat,environment:envSat,service:svcSat};
+}
+
+function checkDisasters(){
+  for(const d of DISASTERS){
+    if(Math.random()<d.prob){
+      triggerDisaster(d);
+      break;// One disaster per month max
+    }
+  }
+}
+
+function triggerDisaster(d){
+  showEvent(d.msg);
+  switch(d.type){
+    case'fire':{
+      const hasFireStation=hasSpecial('fire');
+      let count=Math.floor(Math.random()*3)+1;
+      if(hasFireStation)count=Math.max(1,Math.floor(count*0.3));
+      destroyRandomBuildings(count);
+      spawnFireParticles();
+      break;
+    }
+    case'earthquake':{
+      shakeTimer=60;shakeIntensity=8;
+      const count=Math.floor(Math.random()*5)+2;
+      destroyRandomBuildings(count);
+      G.budget-=Math.floor(count*100);
+      break;
+    }
+    case'flood':{
+      const count=Math.floor(Math.random()*3)+1;
+      destroyRandomBuildings(count);
+      break;
+    }
+    case'crime':{
+      G.events.push({type:'crime',duration:1,remaining:1});
+      break;
+    }
+    case'recession':{
+      G.events.push({type:'recession',duration:3,remaining:3});
+      break;
+    }
+    case'plague':{
+      const hasHospital=hasSpecial('hospital');
+      if(hasHospital)G.events.push({type:'plague',duration:1,remaining:1});
+      else G.events.push({type:'plague',duration:2,remaining:2});
+      break;
+    }
+  }
+}
+
+function hasSpecial(type){
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=G.grid[y][x];
+    if(t.type==='special'&&t.isOrigin&&t.special&&t.special.type===type)return true;
+  }
+  return false;
+}
+
+function destroyRandomBuildings(count){
+  const buildings=[];
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    if(G.grid[y][x].building&&G.grid[y][x].building.state==='active')buildings.push({x,y});
+  }
+  for(let i=0;i<count&&buildings.length>0;i++){
+    const idx=Math.floor(Math.random()*buildings.length);
+    const{x,y}=buildings.splice(idx,1)[0];
+    G.grid[y][x].building={type:'ruin',level:0,state:'ruin',stateTimer:10,population:0,jobs:0,satisfaction:0,lowSatTicks:0,animProgress:1};
+    spawnDustParticles(x,y);
+  }
+}
+
+function processEvents(){
+  G.events=G.events.filter(e=>{e.remaining--;return e.remaining>0;});
+}
+
+function checkMilestones(){
+  for(const[pop,reward]of Object.entries(MILESTONES)){
+    const p=parseInt(pop);
+    if(G.population>=p&&!G.milestones[p]){
+      G.milestones[p]=true;
+      G.budget+=reward;
+      showEvent(`🎉 인구 ${p}명 달성! +$${reward} 보너스!`);
+    }
+  }
+}
+
+function generateAdvice(){
+  const msgs=[];
+  if(!G.hasCityHall)msgs.push('시청을 건설하여 세금 징수를 시작하세요!');
+  else if(G.stats.demandR>0.5)msgs.push('주거 구역이 부족합니다. 더 지정하세요.');
+  if(G.stats.powerCov<0.5&&G.population>0)msgs.push('전력이 부족합니다! 발전소를 건설하세요.');
+  if(G.stats.waterCov<0.5&&G.population>0)msgs.push('물 공급이 부족합니다! 상수도를 건설하세요.');
+  if(G.stats.crimeRate>0.12)msgs.push('범죄율이 높습니다. 경찰서가 필요합니다.');
+  if(G.budget<500&&G.budget>0)msgs.push('예산이 부족합니다. 세율을 조정하세요.');
+  if(G.stats.avgTraffic>0.7)msgs.push('교통이 혼잡합니다. 대로를 건설하세요.');
+  if(G.stats.demandC>0.5)msgs.push('상업 구역을 늘려주세요.');
+  if(G.stats.demandI>0.5)msgs.push('공업 구역을 늘려주세요.');
+  G.advisorMessages=msgs;
+  const el=document.getElementById('adviceText');
+  if(msgs.length>0)el.textContent='💡 '+msgs[Math.floor(Math.random()*msgs.length)];
+  else el.textContent='도시가 잘 운영되고 있습니다!';
+}
+
+function checkScenario(){
+  if(!G.scenario)return;
+  if(G.scenario==='pop500'&&G.population>=500){showEvent('🎉 시나리오 완료: 인구 500명 달성!');G.scenario=null;}
+  if(G.scenario==='money'&&G.budget>=20000){showEvent('🎉 시나리오 완료: 예산 20,000 달성!');G.scenario=null;}
+  if(G.scenario==='happy'){
+    if(G.happiness>=0.9)G.happyMonths=(G.happyMonths||0)+1;
+    else G.happyMonths=0;
+    if(G.happyMonths>=12){showEvent('🎉 시나리오 완료: 행복도 90% 12개월 유지!');G.scenario=null;}
+  }
+}
+
+function checkGameOver(){
+  if(G.budget<-5000){
+    showEvent('⚠️ 재정 위기! 예산이 -5,000 이하입니다!');
+  }
+  if(G.budget<-10000){
+    document.getElementById('gameOverOverlay').classList.add('show');
+    G.paused=true;
+  }
+}
+
+// ========== PARTICLES ==========
+function spawnFireParticles(){
+  for(let i=0;i<30;i++){
+    particles.push({x:Math.random()*COLS*tileSize*zoom+camX,y:Math.random()*ROWS*tileSize*zoom+camY,
+      vx:(Math.random()-0.5)*2,vy:-Math.random()*3-1,life:60+Math.random()*40,
+      color:Math.random()>0.5?'#ff6b35':'#ffd700',size:3+Math.random()*4,type:'fire'});
+  }
+}
+function spawnDustParticles(gx,gy){
+  const ts=tileSize*zoom;
+  const px=camX+gx*ts+ts/2,py=camY+gy*ts+ts/2;
+  for(let i=0;i<10;i++){
+    particles.push({x:px,y:py,vx:(Math.random()-0.5)*3,vy:-Math.random()*2-1,
+      life:30+Math.random()*20,color:'#a0aec0',size:2+Math.random()*3,type:'dust'});
+  }
+}
+function updateParticles(){
+  particles=particles.filter(p=>{
+    p.x+=p.vx;p.y+=p.vy;p.life--;
+    if(p.type==='fire')p.vy-=0.05;
+    return p.life>0;
+  });
+}
+
+// ========== RENDERING ==========
+function render(){
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#1a3a1a';
+  ctx.fillRect(0,0,w,h);
+
+  // Shake
+  let sx=0,sy=0;
+  if(shakeTimer>0){
+    sx=(Math.random()-0.5)*shakeIntensity;
+    sy=(Math.random()-0.5)*shakeIntensity;
+    shakeTimer--;
+    shakeIntensity*=0.95;
+  }
+
+  ctx.save();
+  ctx.translate(sx,sy);
+  const ts=tileSize*zoom;
+
+  // Visible tile range
+  const startX=Math.max(0,Math.floor(-camX/ts));
+  const startY=Math.max(0,Math.floor(-camY/ts));
+  const endX=Math.min(COLS,Math.ceil((w-camX)/ts));
+  const endY=Math.min(ROWS,Math.ceil((h-camY)/ts));
+
+  for(let y=startY;y<endY;y++){
+    for(let x=startX;x<endX;x++){
+      const px=camX+x*ts,py=camY+y*ts;
+      const t=G.grid[y][x];
+      drawTile(ctx,t,x,y,px,py,ts);
+    }
+  }
+
+  // Hover highlight
+  if(hoverX>=0&&hoverY>=0&&hoverX<COLS&&hoverY<ROWS){
+    const px=camX+hoverX*ts,py=camY+hoverY*ts;
+    if(selectedTool&&SPECIAL_DEFS[selectedTool]){
+      const def=SPECIAL_DEFS[selectedTool];
+      ctx.strokeStyle='rgba(255,255,255,0.7)';ctx.lineWidth=2;
+      ctx.strokeRect(px,py,ts*def.w,ts*def.h);
+      // Radius preview
+      if(def.radius>0&&def.radius<100){
+        ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.arc(px+ts*def.w/2,py+ts*def.h/2,def.radius*ts,0,Math.PI*2);ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;
+      ctx.strokeRect(px,py,ts,ts);
+    }
+  }
+
+  // Particles
+  for(const p of particles){
+    ctx.globalAlpha=p.life/60;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size*zoom,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  ctx.restore();
+}
+
+function drawTile(ctx,t,gx,gy,px,py,ts){
+  // Base
+  if(t.type==='empty'){
+    ctx.fillStyle=EMPTY_COLOR;
+    ctx.fillRect(px,py,ts,ts);
+  } else if(t.type==='road'){
+    drawRoad(ctx,gx,gy,px,py,ts,t);
+  } else if(t.type==='zone'){
+    ctx.fillStyle=ZONE_COLORS[t.zoneType];
+    ctx.fillRect(px,py,ts,ts);
+    if(t.building)drawBuilding(ctx,t,px,py,ts);
+  } else if(t.type==='special'){
+    drawSpecial(ctx,t,gx,gy,px,py,ts);
+  }
+  // Grid line
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+  ctx.strokeRect(px,py,ts,ts);
+}
+
+function drawRoad(ctx,gx,gy,px,py,ts,t){
+  ctx.fillStyle=t.roadType==='avenue'?AVENUE_COLOR:ROAD_COLOR;
+  ctx.fillRect(px,py,ts,ts);
+
+  // Connection lines (road markings)
+  const n=gy>0&&G.grid[gy-1][gx].type==='road';
+  const s=gy<ROWS-1&&G.grid[gy+1][gx].type==='road';
+  const w=gx>0&&G.grid[gy][gx-1].type==='road';
+  const e=gx<COLS-1&&G.grid[gy][gx+1].type==='road';
+
+  ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=Math.max(1,ts*0.05);
+  const cx=px+ts/2,cy=py+ts/2;
+
+  // Draw yellow center line for avenue
+  if(t.roadType==='avenue'){
+    ctx.strokeStyle='rgba(255,200,0,0.4)';ctx.lineWidth=Math.max(1,ts*0.08);
+  }
+
+  if(n||s){ctx.beginPath();ctx.moveTo(cx,n?py:cy);ctx.lineTo(cx,s?py+ts:cy);ctx.stroke();}
+  if(w||e){ctx.beginPath();ctx.moveTo(w?px:cx,cy);ctx.lineTo(e?px+ts:cx,cy);ctx.stroke();}
+
+  // Traffic visualization
+  if(t.traffic>0){
+    const congestion=t.traffic/Math.max(1,t.trafficCap);
+    if(congestion>0.3){
+      ctx.fillStyle=`rgba(255,${Math.floor(255*(1-congestion))},0,${Math.min(0.5,congestion*0.5)})`;
+      ctx.fillRect(px+ts*0.2,py+ts*0.2,ts*0.6,ts*0.6);
+    }
+  }
+}
+
+function drawBuilding(ctx,t,px,py,ts){
+  const b=t.building;
+  if(!b)return;
+  const colors=ZONE_BUILD_COLORS[t.zoneType]||ZONE_BUILD_COLORS.R;
+  if(b.state==='ruin'){
+    ctx.fillStyle='#718096';
+    const h=ts*0.3;
+    ctx.fillRect(px+ts*0.2,py+ts-h,ts*0.6,h);
+    // Rubble marks
+    ctx.fillStyle='#4a5568';
+    ctx.fillRect(px+ts*0.15,py+ts*0.7,ts*0.2,ts*0.1);
+    ctx.fillRect(px+ts*0.6,py+ts*0.75,ts*0.15,ts*0.08);
+    return;
+  }
+  const lvl=Math.max(1,b.level);
+  const color=colors[lvl-1];
+  const heights=[0,0.3,0.5,0.8];
+  const bh=ts*heights[lvl]*(b.animProgress||1);
+  const bw=ts*0.7;
+  const bx=px+(ts-bw)/2;
+  const by=py+ts-bh;
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.fillRect(bx+2,by+2,bw,bh);
+
+  // Building body
+  ctx.fillStyle=color;
+  ctx.fillRect(bx,by,bw,bh);
+
+  // Windows for level 2+
+  if(lvl>=2&&bh>ts*0.3){
+    ctx.fillStyle='rgba(255,255,200,0.6)';
+    const winSize=Math.max(1,ts*0.08);
+    const cols=lvl===2?2:3;
+    const rows=lvl===2?2:3;
+    for(let wy=0;wy<rows;wy++)for(let wx=0;wx<cols;wx++){
+      ctx.fillRect(bx+bw*0.15+wx*(bw*0.7/(cols)),by+bh*0.1+wy*(bh*0.8/(rows)),winSize,winSize);
+    }
+  }
+
+  // Roof accent
+  ctx.fillStyle=color;
+  ctx.fillRect(bx,by,bw,Math.max(1,ts*0.04));
+
+  // Building state indicator
+  if(b.state==='building'){
+    ctx.fillStyle='rgba(255,255,0,0.3)';
+    ctx.fillRect(px,py,ts,ts);
+  }
+}
+
+function drawSpecial(ctx,t,gx,gy,px,py,ts){
+  if(!t.special)return;
+  const def=SPECIAL_DEFS[t.special.type];
+  if(!def)return;
+
+  ctx.fillStyle=def.color;
+  ctx.fillRect(px,py,ts,ts);
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+  ctx.strokeRect(px,py,ts,ts);
+
+  // Only draw icon on origin tile
+  if(t.isOrigin){
+    ctx.font=`${Math.floor(ts*def.w*0.5)}px serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#000';
+    ctx.fillText(def.icon,px+ts*def.w/2,py+ts*def.h/2);
+  }
+}
+
+// ========== UI UPDATE ==========
+function updateUI(){
+  document.getElementById('sPop').textContent=G.population.toLocaleString();
+  const budgetEl=document.getElementById('sBudget');
+  budgetEl.textContent='$'+G.budget.toLocaleString();
+  budgetEl.className='val'+(G.budget<0?' neg':'');
+  document.getElementById('sDate').textContent=`${G.year}년 ${G.month}월`;
+  document.getElementById('sHappy').textContent=Math.round(G.happiness*100)+'%';
+  const bal=G.monthlyIncome-G.monthlyExpense;
+  const balEl=document.getElementById('sBalance');
+  balEl.textContent=(bal>=0?'+':'')+bal.toLocaleString();
+  balEl.className='val'+(bal<0?' neg':' pos');
+
+  document.getElementById('dR').style.width=Math.round(G.stats.demandR*100)+'%';
+  document.getElementById('dC').style.width=Math.round(G.stats.demandC*100)+'%';
+  document.getElementById('dI').style.width=Math.round(G.stats.demandI*100)+'%';
+
+  // Speed buttons
+  ['btnS1','btnS2','btnS5'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  const sBtn=document.getElementById('btnS'+G.speed);
+  if(sBtn)sBtn.classList.add('active');
+  document.getElementById('btnPause').textContent=G.paused?'▶️':'⏸';
+
+  // Event banner
+  if(eventBannerTimer>0){
+    eventBannerTimer--;
+    if(eventBannerTimer<=0)document.getElementById('eventBanner').style.display='none';
+  }
+}
+
+function showEvent(msg){
+  const el=document.getElementById('eventBanner');
+  el.textContent=msg;
+  el.style.display='block';
+  eventBannerTimer=120;
+}
+
+// ========== TOOLTIP ==========
+function showTooltip(mx,my,gx,gy){
+  if(gx<0||gx>=COLS||gy<0||gy>=ROWS){hideTooltip();return;}
+  const t=G.grid[gy][gx];
+  const tip=document.getElementById('tooltip');
+  let html=`(${gx},${gy}) `;
+  if(t.type==='empty')html+='빈 터';
+  else if(t.type==='road')html+=t.roadType==='avenue'?'대로':'도로';
+  else if(t.type==='zone'){
+    const zn={R:'주거',C:'상업',I:'공업'}[t.zoneType];
+    html+=zn+'구역';
+    if(t.building){
+      const b=t.building;
+      html+=`<br>Lv.${b.level} ${b.state==='ruin'?'폐허':b.state==='building'?'건설중':''}`;
+      if(b.population)html+=` 인구:${b.population}`;
+      if(b.jobs)html+=` 일자리:${b.jobs}`;
+      html+=`<br>만족도:${Math.round((b.satisfaction||0)*100)}%`;
+    }
+  } else if(t.type==='special'&&t.special){
+    const def=SPECIAL_DEFS[t.special.type];
+    html+=def?def.name:'특수건물';
+  }
+  if(t.services.power)html+=' ⚡';
+  if(t.services.water)html+=' 💧';
+  tip.innerHTML=html;
+  tip.style.display='block';
+  tip.style.left=(mx+15)+'px';
+  tip.style.top=(my+15)+'px';
+}
+function hideTooltip(){document.getElementById('tooltip').style.display='none';}
+
+// ========== MODALS ==========
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function showStats(){
+  const m=document.getElementById('statsModal');
+  m.classList.add('show');
+  updateStatsModal();
+}
+function updateStatsModal(){
+  document.getElementById('taxR').value=G.taxRates.residential;
+  document.getElementById('taxC').value=G.taxRates.commercial;
+  document.getElementById('taxI').value=G.taxRates.industrial;
+  document.getElementById('taxRV').textContent=G.taxRates.residential+'%';
+  document.getElementById('taxCV').textContent=G.taxRates.commercial+'%';
+  document.getElementById('taxIV').textContent=G.taxRates.industrial+'%';
+  document.getElementById('stResCount').textContent=G.stats.totalRes;
+  document.getElementById('stComCount').textContent=G.stats.totalCom;
+  document.getElementById('stIndCount').textContent=G.stats.totalInd;
+  document.getElementById('stJobs').textContent=G.stats.totalJobs;
+  document.getElementById('stCrime').textContent=Math.round(G.stats.crimeRate*100)+'%';
+  document.getElementById('stPower').textContent=Math.round(G.stats.powerCov*100)+'%';
+  document.getElementById('stWater').textContent=Math.round(G.stats.waterCov*100)+'%';
+
+  // Happiness breakdown
+  const bd=G.stats._happyBreakdown||{tax:0.5,traffic:0.5,safety:0.5,health:0,education:0,environment:0,service:0};
+  const labels={tax:'세금',traffic:'교통',safety:'안전',health:'건강',education:'교육',environment:'환경',service:'서비스'};
+  let hhtml='';
+  for(const[k,v]of Object.entries(bd)){
+    const pct=Math.round(v*100);
+    hhtml+=`<div class="happinessRow"><span class="hLabel">${labels[k]}</span><div class="hBar"><div class="hFill" style="width:${pct}%;background:${pct>60?'#48bb78':pct>30?'#ecc94b':'#fc8181'}"></div></div><span class="hVal">${pct}%</span></div>`;
+  }
+  document.getElementById('happinessBreakdown').innerHTML=hhtml;
+
+  // Charts
+  drawMiniChart('chartPop',G.history.population,'#48bb78');
+  drawMiniChart('chartBudget',G.history.budget,'#63b3ed');
+}
+
+function drawMiniChart(canvasId,data,color){
+  const c=document.getElementById(canvasId);
+  const cx=c.getContext('2d');
+  const w=c.width=c.clientWidth;
+  const h=c.height=c.clientHeight;
+  cx.clearRect(0,0,w,h);
+  if(data.length<2)return;
+  const max=Math.max(...data,1);
+  const min=Math.min(...data,0);
+  const range=max-min||1;
+  cx.strokeStyle=color;cx.lineWidth=2;
+  cx.beginPath();
+  data.forEach((v,i)=>{
+    const x=i/(data.length-1)*w;
+    const y=h-(v-min)/range*(h-10)-5;
+    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+  });
+  cx.stroke();
+  // Fill
+  cx.lineTo(w,h);cx.lineTo(0,h);cx.closePath();
+  cx.fillStyle=color.replace(')',',0.1)').replace('rgb','rgba');
+  cx.globalAlpha=0.3;cx.fill();cx.globalAlpha=1;
+}
+
+function updateTax(type,val){
+  G.taxRates[type]=parseInt(val);
+  document.getElementById('tax'+(type==='residential'?'R':type==='commercial'?'C':'I')+'V').textContent=val+'%';
+}
+
+function showSaveLoad(){
+  const m=document.getElementById('saveModal');
+  m.classList.add('show');
+  renderSaveSlots();
+}
+
+function renderSaveSlots(){
+  let html='';
+  for(let i=1;i<=3;i++){
+    const key='cityBuilder_save_'+i;
+    const data=localStorage.getItem(key);
+    let info='빈 슬롯';
+    if(data){
+      try{
+        const d=JSON.parse(data);
+        info=`${d.gameState.year}년 ${d.gameState.month}월 | 인구: ${d.gameState.population} | $${d.gameState.budget}`;
+      }catch(e){info='손상된 데이터';}
+    }
+    html+=`<div class="saveSlot">
+      <span style="font-weight:bold;color:var(--accent)">슬롯 ${i}</span>
+      <span class="slotInfo">${info}</span>
+      <button class="ctrlBtn" onclick="saveGame(${i})">저장</button>
+      <button class="ctrlBtn" onclick="loadGame(${i})" ${!data?'disabled':''}>불러오기</button>
+    </div>`;
+  }
+  document.getElementById('saveSlots').innerHTML=html;
+}
+
+function saveGame(slot){
+  const saveData={version:1,timestamp:Date.now(),gameState:serializeState()};
+  localStorage.setItem('cityBuilder_save_'+slot,JSON.stringify(saveData));
+  renderSaveSlots();
+  showEvent('💾 저장 완료!');
+}
+
+function loadGame(slot){
+  const data=localStorage.getItem('cityBuilder_save_'+slot);
+  if(!data)return;
+  try{
+    const d=JSON.parse(data);
+    deserializeState(d.gameState);
+    closeModal('saveModal');
+    recalcServices();
+    showEvent('📂 불러오기 완료!');
+  }catch(e){showEvent('❌ 불러오기 실패!');}
+}
+
+function autoSave(){
+  const saveData={version:1,timestamp:Date.now(),gameState:serializeState()};
+  localStorage.setItem('cityBuilder_autosave',JSON.stringify(saveData));
+}
+
+function tryAutoLoad(){
+  const data=localStorage.getItem('cityBuilder_autosave');
+  if(data){
+    try{
+      const d=JSON.parse(data);
+      deserializeState(d.gameState);
+      recalcServices();
+    }catch(e){}
+  }
+}
+
+function serializeState(){
+  // Compress grid: only save non-empty tiles
+  const gridData=[];
+  for(let y=0;y<ROWS;y++){
+    gridData[y]=[];
+    for(let x=0;x<COLS;x++){
+      const t=G.grid[y][x];
+      if(t.type==='empty')gridData[y][x]=null;
+      else gridData[y][x]={type:t.type,roadType:t.roadType,zoneType:t.zoneType,
+        building:t.building?{...t.building}:null,
+        special:t.special?{...t.special}:null,
+        isOrigin:t.isOrigin,parentX:t.parentX,parentY:t.parentY};
+    }
+  }
+  return{month:G.month,year:G.year,budget:G.budget,population:G.population,
+    taxRates:{...G.taxRates},grid:gridData,milestones:{...G.milestones},
+    history:{population:[...G.history.population],budget:[...G.history.budget],happiness:[...G.history.happiness]},
+    scenario:G.scenario,happyMonths:G.happyMonths,
+    happiness:G.happiness,hasCityHall:G.hasCityHall,
+    monthlyIncome:G.monthlyIncome,monthlyExpense:G.monthlyExpense,
+    events:G.events.map(e=>({...e}))};
+}
+
+function deserializeState(s){
+  G.month=s.month;G.year=s.year;G.budget=s.budget;G.population=s.population;
+  G.taxRates={...s.taxRates};G.milestones={...s.milestones};
+  G.history={population:[...(s.history?.population||[])],budget:[...(s.history?.budget||[])],happiness:[...(s.history?.happiness||[])]};
+  G.scenario=s.scenario||null;G.happyMonths=s.happyMonths||0;
+  G.happiness=s.happiness||0.5;G.hasCityHall=s.hasCityHall||false;
+  G.monthlyIncome=s.monthlyIncome||0;G.monthlyExpense=s.monthlyExpense||0;
+  G.events=(s.events||[]).map(e=>({...e}));
+  // Rebuild grid
+  initGrid();
+  if(s.grid){
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+      if(s.grid[y]&&s.grid[y][x]){
+        const d=s.grid[y][x];
+        const t=G.grid[y][x];
+        t.type=d.type;t.roadType=d.roadType;t.zoneType=d.zoneType;
+        t.building=d.building?{...d.building,animProgress:1}:null;
+        t.special=d.special?{...d.special}:null;
+        t.isOrigin=d.isOrigin||false;t.parentX=d.parentX||-1;t.parentY=d.parentY||-1;
+        if(t.type==='road')t.trafficCap=t.roadType==='avenue'?30:10;
+      }
+    }
+  }
+}
+
+function newGame(){
+  G.month=1;G.year=1;G.speed=2;G.paused=false;
+  G.budget=5000;G.monthlyIncome=0;G.monthlyExpense=0;
+  G.population=0;G.happiness=0.5;
+  G.taxRates={residential:10,commercial:10,industrial:10};
+  G.events=[];G.history={population:[],budget:[],happiness:[]};
+  G.milestones={100:false,500:false,1000:false,5000:false};
+  G.advisorMessages=[];G.scenario=null;G.happyMonths=0;G.hasCityHall=false;
+  initGrid();
+  document.getElementById('gameOverOverlay').classList.remove('show');
+  closeModal('saveModal');closeModal('scenarioModal');
+  camX=(canvas.width-COLS*tileSize*zoom)/2;
+  camY=(canvas.height-ROWS*tileSize*zoom)/2;
+  localStorage.removeItem('cityBuilder_autosave');
+}
+
+function showScenario(){document.getElementById('scenarioModal').classList.add('show');}
+function startScenario(type){
+  newGame();
+  G.scenario=type==='free'?null:type;
+  closeModal('scenarioModal');
+  if(type==='pop500')showEvent('🎯 목표: 인구 500명 달성!');
+  if(type==='money')showEvent('🎯 목표: 예산 $20,000 달성!');
+  if(type==='happy')showEvent('🎯 목표: 행복도 90% 12개월 유지!');
+}
+
+// ========== CONTROLS ==========
+function togglePause(){G.paused=!G.paused;}
+function setSpeed(s){G.speed=s;G.paused=false;}
+function cycleSpeed(dir){
+  const speeds=[1,2,5];
+  let idx=speeds.indexOf(G.speed);
+  idx=Math.max(0,Math.min(speeds.length-1,idx+dir));
+  G.speed=speeds[idx];
+}
+
+// ========== GAME LOOP ==========
+let simTickAccum=0,monthAccum=0;
+function gameLoop(now){
+  const dt=Math.min(now-lastTime,100);
+  lastTime=now;
+
+  if(!G.paused){
+    const speedMult=G.speed;
+    const tickInterval=500;// sim tick every 500ms at x1
+    const monthInterval=MONTH_MS;
+
+    simTickAccum+=dt*speedMult;
+    monthAccum+=dt*speedMult;
+
+    while(simTickAccum>=tickInterval){
+      simTickAccum-=tickInterval;
+      simTick();
+    }
+    while(monthAccum>=monthInterval){
+      monthAccum-=monthInterval;
+      monthTick();
+    }
+  }
+
+  updateParticles();
+  render();
+  updateUI();
+  requestAnimationFrame(gameLoop);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});
+});
+
+init();
+</script>
+</body>
+</html>
