@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>우주 탐사</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0a0a2e;color:#fff;font-family:'Segoe UI',sans-serif;overflow:hidden;width:100vw;height:100vh;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.overlay{position:absolute;pointer-events:none}
+.ui-panel{position:absolute;background:rgba(0,0,0,0.75);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:13px;pointer-events:auto}
+.ui-panel.top-bar{top:0;left:0;right:0;border-radius:0;display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-top:none;border-left:none;border-right:none}
+.ui-panel.stats{bottom:0;left:0;right:0;border-radius:0;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:8px 14px;border-bottom:none;border-left:none;border-right:none}
+.bar-wrap{display:inline-flex;align-items:center;gap:4px}
+.bar{width:80px;height:12px;background:#222;border-radius:6px;overflow:hidden;display:inline-block;vertical-align:middle}
+.bar-fill{height:100%;border-radius:6px;transition:width .2s}
+.fuel-fill{background:linear-gradient(90deg,#00b4d8,#00d4ff)}
+.hull-fill{background:linear-gradient(90deg,#2ecc71,#27ae60)}
+.btn{background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.5);color:#00d4ff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;pointer-events:auto;user-select:none;transition:background .15s}
+.btn:hover,.btn:active{background:rgba(0,212,255,0.35)}
+.btn:disabled{opacity:0.3;cursor:default}
+.btn.active{background:rgba(0,212,255,0.4);box-shadow:0 0 8px rgba(0,212,255,0.3)}
+.neon{color:#00d4ff}
+.warn{color:#ff6b6b}
+.gold{color:#ffd700}
+#menu-screen,#gameover-screen,#victory-screen{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(10,10,46,0.95);z-index:100}
+#menu-screen h1{font-size:42px;margin-bottom:8px;background:linear-gradient(135deg,#00d4ff,#7b2ff7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#menu-screen .subtitle{color:#888;margin-bottom:32px;font-size:15px}
+.menu-btn{display:block;width:220px;padding:14px;margin:6px;font-size:17px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;border-radius:10px;cursor:pointer;transition:all .2s}
+.menu-btn:hover{background:rgba(0,212,255,0.3);transform:scale(1.03)}
+.modal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,10,46,0.95);border:1px solid rgba(0,212,255,0.4);border-radius:12px;padding:20px;z-index:90;max-width:90vw;max-height:80vh;overflow-y:auto;pointer-events:auto}
+.modal h2{color:#00d4ff;margin-bottom:12px;font-size:18px}
+.modal .close-btn{position:absolute;top:8px;right:12px;background:none;border:none;color:#ff6b6b;font-size:20px;cursor:pointer}
+.facility-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.1)}
+.facility-row .name{font-weight:bold}
+.facility-row .cost{color:#aaa;font-size:12px}
+.discovery-toast{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,212,255,0.15);border:1px solid #00d4ff;padding:12px 24px;border-radius:10px;font-size:15px;z-index:80;animation:toastIn .5s ease-out;pointer-events:none;text-align:center;max-width:90vw}
+@keyframes toastIn{from{opacity:0;top:40px}to{opacity:1;top:60px}}
+.mobile-controls{position:absolute;bottom:60px;display:flex;gap:8px;z-index:50;pointer-events:auto}
+.mobile-controls.left{left:12px}
+.mobile-controls.right{right:12px}
+.mobile-btn{width:50px;height:50px;border-radius:50%;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none}
+.mobile-btn:active{background:rgba(0,212,255,0.4)}
+.joystick-area{position:absolute;bottom:70px;left:12px;width:120px;height:120px;z-index:50;pointer-events:auto}
+.joystick-base{width:120px;height:120px;border-radius:50%;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);position:relative}
+.joystick-knob{width:44px;height:44px;border-radius:50%;background:rgba(0,212,255,0.3);border:1px solid rgba(0,212,255,0.5);position:absolute;top:38px;left:38px;transition:none}
+.minimap-container{position:absolute;bottom:55px;left:8px;pointer-events:auto}
+.minimap-container canvas{border:1px solid rgba(0,212,255,0.3);border-radius:6px}
+.log-panel{position:absolute;top:40px;right:8px;width:220px;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.7);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:8px;font-size:11px;pointer-events:auto;z-index:40}
+.log-entry{padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);color:#aaa}
+.log-entry .time{color:#00d4ff;font-size:10px}
+@media(max-width:600px){
+.ui-panel{font-size:11px;padding:5px 8px}
+.bar{width:55px;height:10px}
+.btn{padding:4px 8px;font-size:11px}
+.log-panel{width:160px;font-size:10px}
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Menu Screen -->
+<div id="menu-screen">
+<h1>우주 탐사</h1>
+<p class="subtitle">태양계를 탐험하고 화성 기지를 건설하라</p>
+<button class="menu-btn" onclick="startNewGame()">새 게임</button>
+<button class="menu-btn" id="continue-btn" onclick="loadGame()" style="display:none">이어하기</button>
+<div style="margin-top:30px;color:#666;font-size:12px;text-align:center;max-width:320px">
+WASD: 추력 | 1-4: 시간 와프 | E: 탐사<br>
+마우스 휠: 줌 | Tab: 미니맵 | M: 기지
+</div>
+</div>
+
+<!-- Game Over Screen -->
+<div id="gameover-screen" style="display:none">
+<h1 style="color:#ff6b6b;font-size:36px">임무 실패</h1>
+<p style="color:#888;margin:16px 0">우주선이 파괴되었습니다</p>
+<button class="menu-btn" onclick="startNewGame()">다시 시작</button>
+</div>
+
+<!-- Victory Screen -->
+<div id="victory-screen" style="display:none">
+<h1 style="color:#ffd700;font-size:36px">임무 완료!</h1>
+<p style="color:#ccc;margin:16px 0">화성 기지의 모든 시설을 건설했습니다!</p>
+<p id="victory-stats" style="color:#888;margin-bottom:20px"></p>
+<button class="menu-btn" onclick="startNewGame()">새 게임</button>
+</div>
+
+<!-- Top Bar -->
+<div class="ui-panel top-bar" id="top-bar" style="display:none">
+<span>🚀 <span class="neon">우주 탐사</span> &nbsp; 시간: <span id="time-display">0</span>s</span>
+<span>와프: <span id="warp-display" class="neon">x1</span></span>
+</div>
+
+<!-- Stats Bar -->
+<div class="ui-panel stats" id="stats-bar" style="display:none">
+<span class="bar-wrap">연료 <span class="bar"><span class="bar-fill fuel-fill" id="fuel-bar" style="width:100%"></span></span> <span id="fuel-text">100%</span></span>
+<span class="bar-wrap">선체 <span class="bar"><span class="bar-fill hull-fill" id="hull-bar" style="width:100%"></span></span> <span id="hull-text">100%</span></span>
+<span>화물: <span id="cargo-text">0/50</span></span>
+<span>속도: <span id="speed-text">0.0</span></span>
+<span id="nearest-text" style="color:#aaa"></span>
+<span style="margin-left:auto;display:flex;gap:4px">
+<button class="btn" id="btn-explore" onclick="tryExplore()" disabled>탐사</button>
+<button class="btn" id="btn-base" onclick="toggleBaseModal()">기지</button>
+<button class="btn" onclick="changeWarp(-1)">◀</button>
+<button class="btn" onclick="changeWarp(1)">▶</button>
+<button class="btn" onclick="saveGame()">저장</button>
+</span>
+</div>
+
+<!-- Planet Exploration Stats -->
+<div class="ui-panel stats" id="explore-stats" style="display:none">
+<span id="explore-planet-name" class="neon"></span>
+<span>중력: <span id="explore-gravity">1.0</span>g</span>
+<span>화물: <span id="explore-cargo">0/50</span></span>
+<span id="explore-mining" style="color:#ffd700"></span>
+<span style="margin-left:auto;display:flex;gap:4px">
+<button class="btn" onclick="doMine()">채취</button>
+<button class="btn" onclick="leaveExploration()">복귀</button>
+</span>
+</div>
+
+<!-- Minimap -->
+<div class="minimap-container" id="minimap-container" style="display:none">
+<canvas id="minimapCanvas" width="150" height="150"></canvas>
+</div>
+
+<!-- Log Panel -->
+<div class="log-panel" id="log-panel" style="display:none"></div>
+
+<!-- Base Modal -->
+<div class="modal" id="base-modal" style="display:none">
+<button class="close-btn" onclick="toggleBaseModal()">✕</button>
+<h2>화성 기지 관리</h2>
+<div id="base-inventory" style="margin-bottom:12px;color:#aaa;font-size:12px"></div>
+<div id="base-facilities"></div>
+</div>
+
+<!-- Module Info Modal -->
+<div class="modal" id="module-modal" style="display:none">
+<button class="close-btn" onclick="document.getElementById('module-modal').style.display='none'">✕</button>
+<h2>우주선 모듈</h2>
+<div id="module-list"></div>
+</div>
+
+<!-- Discovery Toast -->
+<div class="discovery-toast" id="toast" style="display:none"></div>
+
+<!-- Mobile Controls -->
+<div class="joystick-area" id="joystick-area" style="display:none">
+<div class="joystick-base" id="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div>
+</div>
+<div class="mobile-controls right" id="mobile-btns" style="display:none">
+<div class="mobile-btn" ontouchstart="mobileAction('boost',true)" ontouchend="mobileAction('boost',false)">⚡</div>
+<div class="mobile-btn" ontouchstart="mobileAction('explore')">🔍</div>
+<div class="mobile-btn" ontouchstart="changeWarp(1)">⏩</div>
+</div>
+
+<script>
+// ===================== CONSTANTS =====================
+const G_CONST = 0.8;
+const DT = 0.016;
+const ORBIT_PREDICT_STEPS = 120;
+const ASTEROID_COUNT = 25;
+const STAR_COUNT = 150;
+
+// ===================== PERLIN NOISE =====================
+class PerlinNoise {
+  constructor(seed) {
+    this.p = [];
+    let s = seed || 0;
+    const rng = () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+    for (let i = 0; i < 256; i++) this.p[i] = i;
+    for (let i = 255; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [this.p[i], this.p[j]] = [this.p[j], this.p[i]]; }
+    for (let i = 0; i < 256; i++) this.p[256 + i] = this.p[i];
+  }
+  fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  lerp(a, b, t) { return a + t * (b - a); }
+  grad(hash, x) { return (hash & 1) === 0 ? x : -x; }
+  noise(x) {
+    const xi = Math.floor(x) & 255;
+    const xf = x - Math.floor(x);
+    const u = this.fade(xf);
+    return this.lerp(this.grad(this.p[xi], xf), this.grad(this.p[xi + 1], xf - 1), u);
+  }
+  octave(x, octaves, persistence) {
+    let total = 0, frequency = 1, amplitude = 1, maxVal = 0;
+    for (let i = 0; i < octaves; i++) {
+      total += this.noise(x * frequency) * amplitude;
+      maxVal += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+    return total / maxVal;
+  }
+}
+
+// ===================== GAME STATE =====================
+const PLANETS = [
+  { name: '태양', mass: 10000, orbitRadius: 0, orbitSpeed: 0, angle: 0, radius: 30, color: '#FFD700', gravity: 0, resources: [], explorable: false, surfaceSeed: 1 },
+  { name: '수성', mass: 5, orbitRadius: 80, orbitSpeed: 2 * Math.PI / (8 / DT), angle: 0.5, radius: 4, color: '#A0522D', gravity: 0.38, resources: ['iron', 'gold'], explorable: true, surfaceSeed: 111,
+    desc: '태양에 가장 가까운 세계. 극심한 온도 차이가 광물을 결정화시켰다.', module: 'scanner' },
+  { name: '금성', mass: 15, orbitRadius: 130, orbitSpeed: 2 * Math.PI / (15 / DT), angle: 1.2, radius: 6, color: '#DEB887', gravity: 0.9, resources: ['titanium'], explorable: true, surfaceSeed: 222,
+    desc: '두꺼운 대기 아래 숨겨진 보물. 산성 구름 사이로 티타늄 광맥이 보인다.', module: 'cargo_ext' },
+  { name: '지구', mass: 15, orbitRadius: 190, orbitSpeed: 2 * Math.PI / (25 / DT), angle: 0, radius: 7, color: '#4169E1', gravity: 1.0, resources: ['water'], explorable: true, surfaceSeed: 333,
+    desc: '푸른 행성. 우리의 출발점이자 귀환지.' },
+  { name: '달', mass: 2, orbitRadius: 22, orbitSpeed: 2 * Math.PI / (6 / DT), angle: 0, radius: 3, color: '#C0C0C0', gravity: 0.16, resources: ['helium3'], explorable: true, surfaceSeed: 334,
+    parentIndex: 3, desc: '지구의 위성. 헬륨-3의 풍부한 매장지.' },
+  { name: '화성', mass: 8, orbitRadius: 260, orbitSpeed: 2 * Math.PI / (40 / DT), angle: 2.5, radius: 5, color: '#CD5C5C', gravity: 0.38, resources: ['iron', 'water'], explorable: true, surfaceSeed: 444,
+    desc: '붉은 사막 아래 얼어붙은 물의 흔적. 이곳이 우리의 새 터전이 될 것이다.', module: 'fuel_tank' },
+  { name: '목성', mass: 200, orbitRadius: 380, orbitSpeed: 2 * Math.PI / (80 / DT), angle: 3.8, radius: 15, color: '#DAA520', gravity: 2.5, resources: ['helium3'], explorable: true, surfaceSeed: 555,
+    gasGiant: true, desc: '거대한 가스 행성의 위성에서 헬륨-3를 발견. 무한 에너지의 열쇠.', module: 'engine' },
+  { name: '토성', mass: 150, orbitRadius: 500, orbitSpeed: 2 * Math.PI / (120 / DT), angle: 5.0, radius: 13, color: '#F4A460', gravity: 1.1, resources: ['water', 'crystal'], explorable: true, surfaceSeed: 666,
+    gasGiant: true, hasRing: true, desc: '아름다운 고리는 얼음과 크리스탈의 보물창고였다.', module: 'shield' }
+];
+
+const RESOURCE_NAMES = { iron: '철', helium3: '헬륨-3', water: '물', gold: '금', titanium: '티타늄', crystal: '크리스탈' };
+const RESOURCE_COLORS = { iron: '#8B7355', helium3: '#87CEEB', water: '#4169E1', gold: '#FFD700', titanium: '#B0C4DE', crystal: '#DA70D6' };
+
+const MODULE_INFO = {
+  fuel_tank: { name: '대형 연료탱크', desc: '연료 용량 +50', planet: '화성' },
+  engine: { name: '고효율 엔진', desc: '연료 소비 -30%', planet: '목성' },
+  cargo_ext: { name: '화물 확장', desc: '화물 용량 +30', planet: '금성' },
+  shield: { name: '방어막', desc: '소행성 충돌 무효화', planet: '토성' },
+  scanner: { name: '스캐너', desc: '행성 자원 사전 탐지', planet: '수성' }
+};
+
+const FACILITIES = [
+  { id: 'habitat', name: '거주 모듈', cost: { iron: 10 }, desc: '기지 활성화 (필수)', required: true },
+  { id: 'fuel_plant', name: '연료 공장', cost: { iron: 15, water: 5 }, desc: '물→연료 변환' },
+  { id: 'lab', name: '연구실', cost: { iron: 20, gold: 5 }, desc: '모듈 연구 해금' },
+  { id: 'launchpad', name: '발사대', cost: { iron: 30, titanium: 10 }, desc: '화성에서 재발사' },
+  { id: 'comms', name: '통신탑', cost: { iron: 10, crystal: 3 }, desc: '행성 정보 원격 확인' }
+];
+
+let gs; // gameState
+let canvas, ctx, mmCanvas, mmCtx;
+let keys = {};
+let stars = [];
+let toastTimer = null;
+let isMobile = false;
+let joystickActive = false, joystickDx = 0, joystickDy = 0;
+let cameraDrag = false, dragStart = { x: 0, y: 0 }, camStart = { x: 0, y: 0 };
+let pinchDist = 0;
+let animFrame;
+let lastFrameTime = 0;
+
+function createInitialState() {
+  const earthAngle = PLANETS[3].angle;
+  const earthX = PLANETS[3].orbitRadius * Math.cos(earthAngle);
+  const earthY = PLANETS[3].orbitRadius * Math.sin(earthAngle);
+  const orbSpeed = Math.sqrt(G_CONST * PLANETS[0].mass / PLANETS[3].orbitRadius);
+  return {
+    mode: 'solar',
+    time: 0,
+    timeScale: 1,
+    ship: {
+      x: earthX, y: earthY - 15,
+      vx: orbSpeed * 1.0, vy: 0,
+      fuel: 100, maxFuel: 100,
+      hull: 100, maxHull: 100,
+      cargo: [],
+      cargoCapacity: 50, cargoUsed: 0,
+      thrustPower: 0.5,
+      throttle: 0,
+      thrustAngle: 0,
+      modules: [],
+      orbitingPlanet: null
+    },
+    bodies: PLANETS.map(p => ({ ...p, angle: p.angle })),
+    asteroids: [],
+    base: { built: false, facilities: [], inventory: {} },
+    exploration: {
+      planetIndex: null,
+      terrain: [],
+      playerX: 400, playerY: 0, playerVY: 0,
+      resourceNodes: [],
+      discovered: {},
+      mining: false, miningProgress: 0, miningNode: null
+    },
+    discoveryLog: [],
+    camera: { x: 0, y: 0, zoom: 1.2 },
+    events: { solarWind: false, solarWindTimer: 0, solarWindAngle: 0 },
+    orbitPrediction: [],
+    victory: false
+  };
+}
+
+function initAsteroids() {
+  gs.asteroids = [];
+  for (let i = 0; i < ASTEROID_COUNT; i++) {
+    const r = 300 + Math.random() * 80;
+    const angle = Math.random() * Math.PI * 2;
+    const ecc = 0.05 + Math.random() * 0.15;
+    const speed = Math.sqrt(G_CONST * PLANETS[0].mass / r) * (0.8 + Math.random() * 0.4);
+    gs.asteroids.push({
+      x: r * Math.cos(angle),
+      y: r * Math.sin(angle),
+      vx: -speed * Math.sin(angle) * (1 + ecc * (Math.random() - 0.5)),
+      vy: speed * Math.cos(angle) * (1 + ecc * (Math.random() - 0.5)),
+      radius: 1.5 + Math.random() * 2.5,
+      vertices: generateAsteroidShape()
+    });
+  }
+}
+
+function generateAsteroidShape() {
+  const pts = [];
+  const n = 6 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const r = 0.6 + Math.random() * 0.4;
+    pts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+  }
+  return pts;
+}
+
+function initStars() {
+  stars = [];
+  for (let i = 0; i < STAR_COUNT; i++) {
+    stars.push({
+      x: (Math.random() - 0.5) * 3000,
+      y: (Math.random() - 0.5) * 3000,
+      size: 0.5 + Math.random() * 1.2,
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.5 + Math.random() * 2
+    });
+  }
+}
+
+// ===================== PHYSICS =====================
+function updateBodies(dt) {
+  for (let i = 0; i < gs.bodies.length; i++) {
+    const b = gs.bodies[i];
+    if (b.orbitRadius === 0) continue;
+    if (b.parentIndex !== undefined) {
+      const parent = gs.bodies[b.parentIndex];
+      b.angle += b.orbitSpeed * dt;
+      b.x = parent.x + b.orbitRadius * Math.cos(b.angle);
+      b.y = parent.y + b.orbitRadius * Math.sin(b.angle);
+    } else {
+      b.angle += b.orbitSpeed * dt;
+      b.x = b.orbitRadius * Math.cos(b.angle);
+      b.y = b.orbitRadius * Math.sin(b.angle);
+    }
+  }
+}
+
+function computeGravity(px, py) {
+  let ax = 0, ay = 0;
+  for (const b of gs.bodies) {
+    const dx = b.x - px;
+    const dy = b.y - py;
+    const r2 = dx * dx + dy * dy;
+    const r = Math.sqrt(r2);
+    if (r < 2) continue;
+    const F = G_CONST * b.mass / r2;
+    ax += F * dx / r;
+    ay += F * dy / r;
+  }
+  return { ax, ay };
+}
+
+function updateShip(dt) {
+  const s = gs.ship;
+  if (s.hull <= 0) return;
+
+  // Thrust
+  let thrustX = 0, thrustY = 0;
+  if (s.throttle > 0 && s.fuel > 0) {
+    const eff = s.modules.includes('engine') ? 0.7 : 1.0;
+    const fuelUse = s.thrustPower * dt * s.throttle * eff;
+    s.fuel = Math.max(0, s.fuel - fuelUse);
+    const tMag = s.thrustPower * s.throttle;
+    thrustX = Math.cos(s.thrustAngle) * tMag;
+    thrustY = Math.sin(s.thrustAngle) * tMag;
+  }
+
+  // Gravity
+  const grav = computeGravity(s.x, s.y);
+
+  // Solar wind event
+  let windX = 0, windY = 0;
+  if (gs.events.solarWind) {
+    const wa = gs.events.solarWindAngle;
+    windX = Math.cos(wa) * 0.02;
+    windY = Math.sin(wa) * 0.02;
+  }
+
+  // Velocity Verlet
+  s.vx += (grav.ax + thrustX + windX) * dt;
+  s.vy += (grav.ay + thrustY + windY) * dt;
+  s.x += s.vx * dt;
+  s.y += s.vy * dt;
+
+  // Check collisions with bodies
+  for (let i = 0; i < gs.bodies.length; i++) {
+    const b = gs.bodies[i];
+    const dx = s.x - b.x;
+    const dy = s.y - b.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < b.radius * 0.8 && i > 0) {
+      // Crash into planet
+      const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
+      if (speed > 3) {
+        s.hull -= 30;
+        showToast('⚠️ 행성 충돌! 선체 손상!', '#ff6b6b');
+      }
+      // Bounce out
+      const nx = dx / dist;
+      const ny = dy / dist;
+      s.x = b.x + nx * (b.radius + 5);
+      s.y = b.y + ny * (b.radius + 5);
+      s.vx = nx * 1;
+      s.vy = ny * 1;
+    }
+    if (dist < b.radius * 1.5 && i === 0) {
+      s.hull -= 5;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      s.x = b.x + nx * (b.radius * 2);
+      s.y = b.y + ny * (b.radius * 2);
+      s.vx = nx * 3;
+      s.vy = ny * 3;
+      showToast('🔥 태양에 너무 가까움!', '#ff6b6b');
+    }
+  }
+
+  // Asteroid collisions
+  for (let i = gs.asteroids.length - 1; i >= 0; i--) {
+    const a = gs.asteroids[i];
+    const dx = s.x - a.x;
+    const dy = s.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < a.radius + 3) {
+      if (!s.modules.includes('shield')) {
+        s.hull -= 20;
+        showToast('☄️ 소행성 충돌! 선체 -20', '#ff6b6b');
+      } else {
+        showToast('🛡️ 방어막이 충돌을 흡수!', '#00d4ff');
+      }
+      gs.asteroids.splice(i, 1);
+    }
+  }
+
+  // Orbiting planet check
+  s.orbitingPlanet = null;
+  for (let i = 1; i < gs.bodies.length; i++) {
+    const b = gs.bodies[i];
+    const dx = s.x - b.x;
+    const dy = s.y - b.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < b.radius * 3.5) {
+      s.orbitingPlanet = i;
+      break;
+    }
+  }
+
+  // Auto-cancel warp near planet
+  if (s.orbitingPlanet !== null && gs.timeScale > 10) {
+    gs.timeScale = 1;
+  }
+
+  // Hull check
+  if (s.hull <= 0) {
+    s.hull = 0;
+    document.getElementById('gameover-screen').style.display = 'flex';
+  }
+
+  // Fuel warning
+  if (s.fuel < s.maxFuel * 0.2 && s.fuel > 0 && Math.floor(gs.time) % 60 === 0) {
+    showToast('⚠️ 연료 부족!', '#ff6b6b');
+  }
+}
+
+function updateAsteroids(dt) {
+  for (const a of gs.asteroids) {
+    const grav = computeGravity(a.x, a.y);
+    a.vx += grav.ax * dt;
+    a.vy += grav.ay * dt;
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+  }
+}
+
+function updateEvents(dt) {
+  // Solar wind
+  if (gs.events.solarWind) {
+    gs.events.solarWindTimer -= dt;
+    if (gs.events.solarWindTimer <= 0) {
+      gs.events.solarWind = false;
+      showToast('태양풍이 멈췄습니다', '#00d4ff');
+    }
+  } else {
+    if (Math.random() < 0.00003 * dt) {
+      gs.events.solarWind = true;
+      gs.events.solarWindTimer = 30 / DT;
+      gs.events.solarWindAngle = Math.atan2(gs.ship.y, gs.ship.x);
+      showToast('🌞 태양풍 발생! 주의!', '#ffd700');
+    }
+  }
+}
+
+function computeOrbitPrediction() {
+  const s = gs.ship;
+  let px = s.x, py = s.y, pvx = s.vx, pvy = s.vy;
+  const pts = [];
+  const predDt = 1;
+  for (let i = 0; i < ORBIT_PREDICT_STEPS; i++) {
+    const grav = computeGravity(px, py);
+    pvx += grav.ax * predDt;
+    pvy += grav.ay * predDt;
+    px += pvx * predDt;
+    py += pvy * predDt;
+    pts.push({ x: px, y: py });
+  }
+  gs.orbitPrediction = pts;
+}
+
+// ===================== EXPLORATION =====================
+function enterExploration(planetIndex) {
+  const b = gs.bodies[planetIndex];
+  gs.mode = 'planet';
+  gs.exploration.planetIndex = planetIndex;
+  gs.exploration.playerX = 400;
+  gs.exploration.playerY = 0;
+  gs.exploration.playerVY = 0;
+  gs.exploration.mining = false;
+  gs.exploration.miningProgress = 0;
+  gs.exploration.miningNode = null;
+
+  // Generate terrain
+  const perlin = new PerlinNoise(b.surfaceSeed);
+  gs.exploration.terrain = [];
+  for (let x = 0; x < 800; x++) {
+    let h = 0;
+    if (b.name === '수성') {
+      h = 200 + perlin.octave(x * 0.02, 4, 0.5) * 80 + (Math.random() < 0.02 ? -40 : 0);
+    } else if (b.name === '금성') {
+      h = 220 + perlin.octave(x * 0.01, 3, 0.4) * 40;
+    } else if (b.name === '화성') {
+      h = 180 + perlin.octave(x * 0.015, 5, 0.6) * 100;
+    } else if (b.name === '목성' || b.name === '토성') {
+      h = 250 + perlin.octave(x * 0.008, 3, 0.3) * 30;
+    } else if (b.name === '달') {
+      h = 200 + perlin.octave(x * 0.025, 4, 0.5) * 60;
+    } else {
+      h = 200 + perlin.octave(x * 0.015, 4, 0.5) * 60;
+    }
+    gs.exploration.terrain.push(Math.floor(h));
+  }
+
+  // Generate resource nodes
+  gs.exploration.resourceNodes = [];
+  const numNodes = 4 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < numNodes; i++) {
+    const rx = 50 + Math.floor(Math.random() * 700);
+    const rtype = b.resources[Math.floor(Math.random() * b.resources.length)];
+    gs.exploration.resourceNodes.push({
+      x: rx, type: rtype, amount: 5 + Math.floor(Math.random() * 10),
+      discovered: gs.ship.modules.includes('scanner')
+    });
+  }
+
+  // Discovery log
+  if (!gs.exploration.discovered[b.name]) {
+    gs.exploration.discovered[b.name] = true;
+    const logEntry = { time: Math.floor(gs.time * DT), text: b.desc || `${b.name}을(를) 탐사했다!` };
+    gs.discoveryLog.push(logEntry);
+    showToast(`🌍 ${b.name} 발견! ${logEntry.text}`, '#ffd700', 5000);
+    // Module unlock
+    if (b.module && !gs.ship.modules.includes(b.module)) {
+      gs.ship.modules.push(b.module);
+      const mi = MODULE_INFO[b.module];
+      showToast(`🔧 모듈 획득: ${mi.name} - ${mi.desc}`, '#00d4ff', 4000);
+      applyModules();
+    }
+    autoSave();
+  }
+
+  updateExploreUI();
+}
+
+function applyModules() {
+  const s = gs.ship;
+  if (s.modules.includes('fuel_tank')) s.maxFuel = 150;
+  if (s.modules.includes('cargo_ext')) s.cargoCapacity = 80;
+}
+
+function leaveExploration() {
+  gs.mode = 'solar';
+  gs.exploration.mining = false;
+  updateSolarUI();
+  autoSave();
+}
+
+function updateExploration(dt) {
+  const ex = gs.exploration;
+  const b = gs.bodies[ex.planetIndex];
+  const grav = (b.gravity || 1) * 0.5;
+
+  // Input
+  let moveDir = 0;
+  let jump = false;
+  if (gs.mode === 'planet') {
+    if (keys['a'] || keys['arrowleft']) moveDir = -1;
+    if (keys['d'] || keys['arrowright']) moveDir = 1;
+    if (keys[' ']) jump = true;
+    if (isMobile) {
+      moveDir = joystickDx > 0.3 ? 1 : (joystickDx < -0.3 ? -1 : 0);
+      if (joystickDy < -0.4) jump = true;
+    }
+  }
+
+  ex.playerX += moveDir * 3;
+  ex.playerX = Math.max(10, Math.min(790, ex.playerX));
+
+  const terrainIdx = Math.floor(ex.playerX);
+  const groundY = ex.terrain[Math.min(terrainIdx, 799)] || 200;
+  const canvasH = canvas.height;
+  const groundScreen = canvasH - groundY;
+
+  // Apply gravity
+  ex.playerVY += grav;
+  ex.playerY += ex.playerVY;
+
+  if (ex.playerY >= groundScreen) {
+    ex.playerY = groundScreen;
+    ex.playerVY = 0;
+    if (jump) ex.playerVY = -8 * (1 / Math.max(0.3, grav));
+  }
+
+  // Resource proximity discovery
+  for (const node of ex.resourceNodes) {
+    if (!node.discovered && Math.abs(ex.playerX - node.x) < 30) {
+      node.discovered = true;
+    }
+  }
+
+  // Mining
+  if (ex.mining && ex.miningNode) {
+    ex.miningProgress += dt * 0.8;
+    if (ex.miningProgress >= 100) {
+      const node = ex.miningNode;
+      const takeAmt = Math.min(node.amount, gs.ship.cargoCapacity - gs.ship.cargoUsed);
+      if (takeAmt > 0) {
+        let found = gs.ship.cargo.find(c => c.type === node.type);
+        if (found) found.amount += takeAmt;
+        else gs.ship.cargo.push({ type: node.type, amount: takeAmt });
+        gs.ship.cargoUsed += takeAmt;
+        node.amount -= takeAmt;
+        showToast(`⛏️ ${RESOURCE_NAMES[node.type]} +${takeAmt}`, '#ffd700');
+      } else {
+        showToast('화물이 가득 찼습니다!', '#ff6b6b');
+      }
+      ex.mining = false;
+      ex.miningProgress = 0;
+      ex.miningNode = null;
+    }
+  }
+}
+
+function doMine() {
+  const ex = gs.exploration;
+  if (ex.mining) return;
+  if (gs.ship.cargoUsed >= gs.ship.cargoCapacity) {
+    showToast('화물이 가득 찼습니다!', '#ff6b6b');
+    return;
+  }
+  // Find nearest node
+  let nearest = null, minDist = 50;
+  for (const node of ex.resourceNodes) {
+    if (node.amount <= 0) continue;
+    const d = Math.abs(ex.playerX - node.x);
+    if (d < minDist) { minDist = d; nearest = node; }
+  }
+  if (nearest) {
+    ex.mining = true;
+    ex.miningProgress = 0;
+    ex.miningNode = nearest;
+    showToast(`⛏️ ${RESOURCE_NAMES[nearest.type]} 채취 중...`, '#ffd700');
+  } else {
+    showToast('근처에 자원이 없습니다', '#aaa');
+  }
+}
+
+function tryExplore() {
+  const s = gs.ship;
+  if (s.orbitingPlanet === null) return;
+  const b = gs.bodies[s.orbitingPlanet];
+  if (!b.explorable) return;
+  enterExploration(s.orbitingPlanet);
+}
+
+// ===================== BASE =====================
+function toggleBaseModal() {
+  const modal = document.getElementById('base-modal');
+  if (modal.style.display === 'none' || !modal.style.display) {
+    renderBaseUI();
+    modal.style.display = 'block';
+  } else {
+    modal.style.display = 'none';
+  }
+}
+
+function depositResources() {
+  for (const item of gs.ship.cargo) {
+    gs.base.inventory[item.type] = (gs.base.inventory[item.type] || 0) + item.amount;
+  }
+  const total = gs.ship.cargoUsed;
+  gs.ship.cargo = [];
+  gs.ship.cargoUsed = 0;
+  if (total > 0) showToast(`📦 자원 ${total} 단위 보관 완료`, '#00d4ff');
+}
+
+function buildFacility(facilityId) {
+  const fac = FACILITIES.find(f => f.id === facilityId);
+  if (!fac || gs.base.facilities.includes(facilityId)) return;
+  if (facilityId !== 'habitat' && !gs.base.facilities.includes('habitat')) {
+    showToast('먼저 거주 모듈을 건설하세요', '#ff6b6b');
+    return;
+  }
+  for (const [res, amt] of Object.entries(fac.cost)) {
+    if ((gs.base.inventory[res] || 0) < amt) {
+      showToast(`자원 부족: ${RESOURCE_NAMES[res]}`, '#ff6b6b');
+      return;
+    }
+  }
+  for (const [res, amt] of Object.entries(fac.cost)) {
+    gs.base.inventory[res] -= amt;
+  }
+  gs.base.facilities.push(facilityId);
+  gs.base.built = true;
+  showToast(`🏗️ ${fac.name} 건설 완료!`, '#ffd700');
+  autoSave();
+  renderBaseUI();
+
+  // Check victory
+  if (gs.base.facilities.length >= FACILITIES.length) {
+    gs.victory = true;
+    document.getElementById('victory-stats').textContent =
+      `탐사 시간: ${Math.floor(gs.time * DT)}초 | 발견: ${Object.keys(gs.exploration.discovered).length}개 행성`;
+    document.getElementById('victory-screen').style.display = 'flex';
+  }
+}
+
+function refuelAtBase() {
+  if (!gs.base.facilities.includes('fuel_plant')) return;
+  const waterAvail = gs.base.inventory.water || 0;
+  if (waterAvail < 5) { showToast('물이 부족합니다 (5 필요)', '#ff6b6b'); return; }
+  const fuelNeeded = gs.ship.maxFuel - gs.ship.fuel;
+  const batches = Math.min(Math.floor(waterAvail / 5), Math.ceil(fuelNeeded / 20));
+  if (batches <= 0) { showToast('연료가 이미 가득 찼습니다', '#aaa'); return; }
+  gs.base.inventory.water -= batches * 5;
+  gs.ship.fuel = Math.min(gs.ship.maxFuel, gs.ship.fuel + batches * 20);
+  showToast(`⛽ 연료 충전: +${batches * 20}`, '#00d4ff');
+  renderBaseUI();
+}
+
+function renderBaseUI() {
+  // Check if ship is near Mars for deposit
+  const nearMars = gs.ship.orbitingPlanet !== null && gs.bodies[gs.ship.orbitingPlanet].name === '화성';
+
+  let invHtml = '<strong>보관 자원:</strong> ';
+  if (Object.keys(gs.base.inventory).length === 0) {
+    invHtml += '<span style="color:#666">없음</span>';
+  } else {
+    for (const [k, v] of Object.entries(gs.base.inventory)) {
+      if (v > 0) invHtml += `<span style="color:${RESOURCE_COLORS[k]}">${RESOURCE_NAMES[k]}: ${v}</span> &nbsp;`;
+    }
+  }
+  // Ship cargo
+  if (gs.ship.cargo.length > 0) {
+    invHtml += '<br><strong>우주선 화물:</strong> ';
+    for (const c of gs.ship.cargo) {
+      invHtml += `<span style="color:${RESOURCE_COLORS[c.type]}">${RESOURCE_NAMES[c.type]}: ${c.amount}</span> &nbsp;`;
+    }
+    if (nearMars || gs.mode === 'planet') {
+      invHtml += `<br><button class="btn" onclick="depositResources()" style="margin-top:6px">자원 보관</button>`;
+    }
+  }
+  document.getElementById('base-inventory').innerHTML = invHtml;
+
+  let facHtml = '';
+  for (const fac of FACILITIES) {
+    const built = gs.base.facilities.includes(fac.id);
+    const costStr = Object.entries(fac.cost).map(([r, a]) => `${RESOURCE_NAMES[r]} ${a}`).join(', ');
+    facHtml += `<div class="facility-row">
+      <div><span class="name">${built ? '✅' : '🔨'} ${fac.name}</span><br><span class="cost">${fac.desc} | 비용: ${costStr}</span></div>
+      ${built ? '<span class="neon">건설됨</span>' : `<button class="btn" onclick="buildFacility('${fac.id}')">건설</button>`}
+    </div>`;
+  }
+  if (gs.base.facilities.includes('fuel_plant')) {
+    facHtml += `<div style="margin-top:12px"><button class="btn" onclick="refuelAtBase()">⛽ 연료 충전 (물 5 → 연료 20)</button></div>`;
+  }
+  document.getElementById('base-facilities').innerHTML = facHtml;
+}
+
+// ===================== RENDERING =====================
+function render() {
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (gs.mode === 'solar') renderSolar();
+  else if (gs.mode === 'planet') renderPlanet();
+}
+
+function worldToScreen(wx, wy) {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  return {
+    x: cx + (wx - gs.camera.x) * gs.camera.zoom,
+    y: cy + (wy - gs.camera.y) * gs.camera.zoom
+  };
+}
+
+function renderSolar() {
+  const w = canvas.width, h = canvas.height;
+  const cam = gs.camera;
+
+  // Background
+  ctx.fillStyle = '#0a0a2e';
+  ctx.fillRect(0, 0, w, h);
+
+  // Stars
+  for (const star of stars) {
+    const sp = worldToScreen(star.x, star.y);
+    if (sp.x < -10 || sp.x > w + 10 || sp.y < -10 || sp.y > h + 10) continue;
+    const bright = 0.4 + 0.6 * Math.abs(Math.sin(gs.time * star.twinkleSpeed * 0.001 + star.twinkle));
+    ctx.fillStyle = `rgba(255,255,255,${bright})`;
+    ctx.fillRect(sp.x, sp.y, star.size * cam.zoom, star.size * cam.zoom);
+  }
+
+  // Orbit lines
+  ctx.setLineDash([3, 6]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.5;
+  for (const b of gs.bodies) {
+    if (b.orbitRadius === 0 || b.parentIndex !== undefined) continue;
+    const cp = worldToScreen(0, 0);
+    const r = b.orbitRadius * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // Moon orbit
+  for (const b of gs.bodies) {
+    if (b.parentIndex === undefined) continue;
+    const parent = gs.bodies[b.parentIndex];
+    const pp = worldToScreen(parent.x, parent.y);
+    const r = b.orbitRadius * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Bodies
+  for (let i = 0; i < gs.bodies.length; i++) {
+    const b = gs.bodies[i];
+    const sp = worldToScreen(b.x, b.y);
+    const r = Math.max(b.radius * cam.zoom, 2);
+
+    if (i === 0) {
+      // Sun with glow
+      const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, r * 2.5);
+      grad.addColorStop(0, '#FFF8DC');
+      grad.addColorStop(0.3, '#FFD700');
+      grad.addColorStop(0.7, '#FF8C00');
+      grad.addColorStop(1, 'rgba(255,140,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, r * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Atmosphere glow
+      if (r > 3) {
+        ctx.fillStyle = b.color + '33';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, r * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Saturn ring
+      if (b.hasRing) {
+        ctx.strokeStyle = 'rgba(244,164,96,0.4)';
+        ctx.lineWidth = 2 * cam.zoom;
+        ctx.beginPath();
+        ctx.ellipse(sp.x, sp.y, r * 2.2, r * 0.6, 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Planet body
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // Label
+      if (cam.zoom > 0.4) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = `${Math.max(9, 11 * cam.zoom)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(b.name, sp.x, sp.y - r - 4 * cam.zoom);
+      }
+    }
+  }
+
+  // Asteroids
+  ctx.fillStyle = '#888';
+  for (const a of gs.asteroids) {
+    const sp = worldToScreen(a.x, a.y);
+    const r = Math.max(a.radius * cam.zoom, 1);
+    ctx.beginPath();
+    const verts = a.vertices;
+    for (let j = 0; j < verts.length; j++) {
+      const vx = sp.x + verts[j].x * r;
+      const vy = sp.y + verts[j].y * r;
+      j === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Orbit prediction
+  if (gs.orbitPrediction.length > 0) {
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(0,212,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < gs.orbitPrediction.length; i++) {
+      const pp = worldToScreen(gs.orbitPrediction[i].x, gs.orbitPrediction[i].y);
+      i === 0 ? ctx.moveTo(pp.x, pp.y) : ctx.lineTo(pp.x, pp.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Ship
+  const s = gs.ship;
+  if (s.hull > 0) {
+    const sp = worldToScreen(s.x, s.y);
+    const sz = Math.max(5, 6 * cam.zoom);
+
+    // Thrust flame
+    if (s.throttle > 0 && s.fuel > 0) {
+      const flameAngle = s.thrustAngle + Math.PI;
+      const flameLen = sz * 1.5 * s.throttle;
+      for (let f = 0; f < 3; f++) {
+        const fa = flameAngle + (Math.random() - 0.5) * 0.5;
+        const fl = flameLen * (0.5 + Math.random() * 0.5);
+        ctx.strokeStyle = f === 0 ? '#FF6600' : (f === 1 ? '#FF9900' : '#FFCC00');
+        ctx.lineWidth = 2 - f * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(sp.x, sp.y);
+        ctx.lineTo(sp.x + Math.cos(fa) * fl, sp.y + Math.sin(fa) * fl);
+        ctx.stroke();
+      }
+    }
+
+    // Ship triangle
+    ctx.save();
+    ctx.translate(sp.x, sp.y);
+    ctx.rotate(s.thrustAngle);
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.moveTo(sz, 0);
+    ctx.lineTo(-sz * 0.6, -sz * 0.5);
+    ctx.lineTo(-sz * 0.6, sz * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Speed indicator near ship
+    if (cam.zoom > 0.5) {
+      const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
+      ctx.fillStyle = 'rgba(0,212,255,0.6)';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${speed.toFixed(1)}`, sp.x + sz + 4, sp.y - 2);
+    }
+  }
+
+  // Solar wind indicator
+  if (gs.events.solarWind) {
+    ctx.fillStyle = 'rgba(255,215,0,0.15)';
+    const sunP = worldToScreen(0, 0);
+    const grad2 = ctx.createRadialGradient(sunP.x, sunP.y, 30 * cam.zoom, sunP.x, sunP.y, 600 * cam.zoom);
+    grad2.addColorStop(0, 'rgba(255,215,0,0.2)');
+    grad2.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.fillStyle = grad2;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // Landing speed gauge when near planet
+  if (s.orbitingPlanet !== null) {
+    const b = gs.bodies[s.orbitingPlanet];
+    const relVx = s.vx;
+    const relVy = s.vy;
+    const speed = Math.sqrt(relVx * relVx + relVy * relVy);
+    const safeSpeed = 3;
+    const dangerSpeed = 6;
+    const gaugeX = canvas.width - 30;
+    const gaugeY = 60;
+    const gaugeH = 100;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(gaugeX - 12, gaugeY - 5, 24, gaugeH + 20);
+    // Green/yellow/red zones
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX - 6, gaugeY + gaugeH * 0.6, 12, gaugeH * 0.4);
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(gaugeX - 6, gaugeY + gaugeH * 0.3, 12, gaugeH * 0.3);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(gaugeX - 6, gaugeY, 12, gaugeH * 0.3);
+    // Speed marker
+    const normalizedSpeed = Math.min(1, speed / dangerSpeed);
+    const markerY = gaugeY + gaugeH * (1 - normalizedSpeed);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(gaugeX - 10, markerY - 2, 20, 4);
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('속도', gaugeX, gaugeY + gaugeH + 14);
+  }
+
+  // Render minimap
+  renderMinimap();
+}
+
+function renderMinimap() {
+  if (!document.getElementById('minimap-container').style.display ||
+    document.getElementById('minimap-container').style.display === 'none') return;
+  const mc = mmCanvas;
+  const mx = mmCtx;
+  const mw = mc.width, mh = mc.height;
+  const scale = mw / 1200;
+
+  mx.fillStyle = '#0a0a1a';
+  mx.fillRect(0, 0, mw, mh);
+
+  const cx = mw / 2, cy = mh / 2;
+  for (const b of gs.bodies) {
+    const bx = cx + b.x * scale;
+    const by = cy + b.y * scale;
+    mx.fillStyle = b.color;
+    mx.beginPath();
+    mx.arc(bx, by, Math.max(1.5, b.radius * scale * 0.5), 0, Math.PI * 2);
+    mx.fill();
+  }
+  // Ship
+  mx.fillStyle = '#00d4ff';
+  mx.fillRect(cx + gs.ship.x * scale - 1.5, cy + gs.ship.y * scale - 1.5, 3, 3);
+
+  // Camera box
+  const camW = (canvas.width / gs.camera.zoom) * scale;
+  const camH = (canvas.height / gs.camera.zoom) * scale;
+  mx.strokeStyle = 'rgba(0,212,255,0.5)';
+  mx.lineWidth = 1;
+  mx.strokeRect(cx + gs.camera.x * scale - camW / 2, cy + gs.camera.y * scale - camH / 2, camW, camH);
+}
+
+function renderPlanet() {
+  const w = canvas.width, h = canvas.height;
+  const ex = gs.exploration;
+  const b = gs.bodies[ex.planetIndex];
+
+  // Sky gradient
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+  const baseColor = b.color;
+  skyGrad.addColorStop(0, '#0a0a2e');
+  skyGrad.addColorStop(0.5, baseColor + '33');
+  skyGrad.addColorStop(1, baseColor + '66');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Stars in sky
+  for (let i = 0; i < 40; i++) {
+    const sx = ((i * 73 + 17) % w);
+    const sy = ((i * 31 + 7) % (h * 0.5));
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.4})`;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+
+  // Fog for Venus
+  if (b.name === '금성') {
+    ctx.fillStyle = 'rgba(222,184,135,0.15)';
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 8; i++) {
+      const fy = h * 0.3 + Math.sin(gs.time * 0.0001 + i) * 50 + i * 40;
+      ctx.fillStyle = 'rgba(222,184,135,0.08)';
+      ctx.fillRect(0, fy, w, 40);
+    }
+  }
+
+  // Scale terrain to screen
+  const scaleX = w / 800;
+  const terrain = ex.terrain;
+
+  // Terrain
+  ctx.fillStyle = b.color + 'CC';
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let x = 0; x < 800; x++) {
+    ctx.lineTo(x * scaleX, h - terrain[x] * (h / 400));
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Terrain surface line
+  ctx.strokeStyle = b.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x < 800; x++) {
+    const sx = x * scaleX;
+    const sy = h - terrain[x] * (h / 400);
+    x === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+
+  // Resource nodes
+  for (const node of ex.resourceNodes) {
+    if (!node.discovered || node.amount <= 0) {
+      // Show hidden indicator if not discovered
+      if (!node.discovered) {
+        const nx = node.x * scaleX;
+        const ny = h - (terrain[Math.min(Math.floor(node.x), 799)] || 200) * (h / 400) + 10;
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillText('?', nx, ny);
+      }
+      continue;
+    }
+    const nx = node.x * scaleX;
+    const terrH = terrain[Math.min(Math.floor(node.x), 799)] || 200;
+    const ny = h - terrH * (h / 400) - 5;
+    // Glow
+    ctx.fillStyle = RESOURCE_COLORS[node.type] + '44';
+    ctx.beginPath();
+    ctx.arc(nx, ny, 12, 0, Math.PI * 2);
+    ctx.fill();
+    // Icon
+    ctx.fillStyle = RESOURCE_COLORS[node.type];
+    ctx.beginPath();
+    ctx.arc(nx, ny, 5, 0, Math.PI * 2);
+    ctx.fill();
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${RESOURCE_NAMES[node.type]} x${node.amount}`, nx, ny - 12);
+  }
+
+  // Player
+  const px = ex.playerX * scaleX;
+  const terrIdx = Math.floor(ex.playerX);
+  const groundH = terrain[Math.min(terrIdx, 799)] || 200;
+  const playerScreenY = h - groundH * (h / 400) - 15 - (h - groundH * (h / 400) - ex.playerY > 0 ? h - groundH * (h / 400) - ex.playerY : 0);
+  const py = Math.min(ex.playerY, h - groundH * (h / 400));
+  const actualPY = py - 20;
+
+  // Astronaut
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(px, actualPY - 8, 6, 0, Math.PI * 2); // head
+  ctx.fill();
+  ctx.fillStyle = '#00d4ff';
+  ctx.fillRect(px - 4, actualPY - 2, 8, 12); // body
+  ctx.fillStyle = '#1a1a3e';
+  ctx.fillRect(px - 5, actualPY + 10, 4, 8); // left leg
+  ctx.fillRect(px + 1, actualPY + 10, 4, 8); // right leg
+  // Visor
+  ctx.fillStyle = '#00d4ff';
+  ctx.beginPath();
+  ctx.arc(px, actualPY - 8, 4, -0.5, 0.5);
+  ctx.fill();
+
+  // Mining progress bar
+  if (ex.mining) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(px - 25, actualPY - 30, 50, 8);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(px - 25, actualPY - 30, 50 * (ex.miningProgress / 100), 8);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(px - 25, actualPY - 30, 50, 8);
+  }
+}
+
+// ===================== UI =====================
+function updateSolarUI() {
+  document.getElementById('top-bar').style.display = 'flex';
+  document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('explore-stats').style.display = 'none';
+  document.getElementById('minimap-container').style.display = 'block';
+  document.getElementById('log-panel').style.display = 'block';
+  if (isMobile) {
+    document.getElementById('joystick-area').style.display = 'block';
+    document.getElementById('mobile-btns').style.display = 'flex';
+  }
+}
+
+function updateExploreUI() {
+  document.getElementById('top-bar').style.display = 'flex';
+  document.getElementById('stats-bar').style.display = 'none';
+  document.getElementById('explore-stats').style.display = 'flex';
+  document.getElementById('minimap-container').style.display = 'none';
+  document.getElementById('log-panel').style.display = 'none';
+  if (isMobile) {
+    document.getElementById('joystick-area').style.display = 'block';
+    document.getElementById('mobile-btns').style.display = 'flex';
+  }
+  const b = gs.bodies[gs.exploration.planetIndex];
+  document.getElementById('explore-planet-name').textContent = `${b.name} 탐사`;
+  document.getElementById('explore-gravity').textContent = b.gravity.toFixed(2);
+}
+
+function updateUI() {
+  const s = gs.ship;
+  document.getElementById('time-display').textContent = Math.floor(gs.time * DT);
+  document.getElementById('warp-display').textContent = `x${gs.timeScale}`;
+  document.getElementById('fuel-bar').style.width = `${(s.fuel / s.maxFuel) * 100}%`;
+  document.getElementById('fuel-text').textContent = `${Math.floor(s.fuel)}%`;
+  if (s.fuel < s.maxFuel * 0.2) {
+    document.getElementById('fuel-text').className = 'warn';
+  } else {
+    document.getElementById('fuel-text').className = '';
+  }
+  document.getElementById('hull-bar').style.width = `${(s.hull / s.maxHull) * 100}%`;
+  document.getElementById('hull-text').textContent = `${Math.floor(s.hull)}%`;
+  if (s.hull < 30) {
+    document.getElementById('hull-text').className = 'warn';
+  } else {
+    document.getElementById('hull-text').className = '';
+  }
+  document.getElementById('cargo-text').textContent = `${s.cargoUsed}/${s.cargoCapacity}`;
+  const speed = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
+  document.getElementById('speed-text').textContent = speed.toFixed(1);
+
+  // Nearest planet
+  let nearest = null, nearDist = Infinity;
+  for (let i = 1; i < gs.bodies.length; i++) {
+    const b = gs.bodies[i];
+    const dx = s.x - b.x;
+    const dy = s.y - b.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < nearDist) { nearDist = d; nearest = b; }
+  }
+  if (nearest) {
+    document.getElementById('nearest-text').textContent = `${nearest.name} (${Math.floor(nearDist)}px)`;
+  }
+
+  // Explore button
+  const btnExplore = document.getElementById('btn-explore');
+  if (s.orbitingPlanet !== null && gs.bodies[s.orbitingPlanet].explorable) {
+    btnExplore.disabled = false;
+    btnExplore.textContent = `탐사 (${gs.bodies[s.orbitingPlanet].name})`;
+  } else {
+    btnExplore.disabled = true;
+    btnExplore.textContent = '탐사';
+  }
+
+  // Explore mode UI
+  if (gs.mode === 'planet') {
+    const cargoStr = gs.ship.cargo.map(c => `${RESOURCE_NAMES[c.type]}x${c.amount}`).join(', ') || '없음';
+    document.getElementById('explore-cargo').textContent = `${cargoStr} (${gs.ship.cargoUsed}/${gs.ship.cargoCapacity})`;
+    document.getElementById('explore-mining').textContent = gs.exploration.mining ?
+      `채취 중... ${Math.floor(gs.exploration.miningProgress)}%` : '';
+  }
+
+  // Log panel
+  const logPanel = document.getElementById('log-panel');
+  if (logPanel.style.display !== 'none') {
+    let logHtml = '<div style="color:#00d4ff;font-weight:bold;margin-bottom:4px">발견 로그</div>';
+    for (const entry of gs.discoveryLog.slice().reverse()) {
+      logHtml += `<div class="log-entry"><span class="time">[${entry.time}s]</span> ${entry.text}</div>`;
+    }
+    if (gs.discoveryLog.length === 0) logHtml += '<div style="color:#666">아직 발견한 것이 없습니다</div>';
+    logPanel.innerHTML = logHtml;
+  }
+}
+
+function showToast(msg, color = '#00d4ff', duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.borderColor = color;
+  el.style.color = color;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.display = 'none', duration);
+}
+
+function changeWarp(dir) {
+  const levels = [1, 10, 100, 1000];
+  let idx = levels.indexOf(gs.timeScale);
+  if (idx === -1) idx = 0;
+  idx = Math.max(0, Math.min(levels.length - 1, idx + dir));
+  gs.timeScale = levels[idx];
+}
+
+// ===================== INPUT =====================
+function setupInput() {
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key >= '1' && e.key <= '4') {
+      gs.timeScale = [1, 10, 100, 1000][parseInt(e.key) - 1];
+    }
+    if (e.key.toLowerCase() === 'e' && gs.mode === 'solar') tryExplore();
+    if (e.key.toLowerCase() === 'e' && gs.mode === 'planet') doMine();
+    if (e.key.toLowerCase() === 'q' && gs.mode === 'planet') leaveExploration();
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const mm = document.getElementById('minimap-container');
+      mm.style.display = mm.style.display === 'none' ? 'block' : 'none';
+      const lp = document.getElementById('log-panel');
+      lp.style.display = lp.style.display === 'none' ? 'block' : 'none';
+    }
+    if (e.key.toLowerCase() === 'm') toggleBaseModal();
+  });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+  // Mouse
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    gs.camera.zoom = Math.max(0.15, Math.min(8, gs.camera.zoom * zoomFactor));
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 0) {
+      cameraDrag = true;
+      dragStart = { x: e.clientX, y: e.clientY };
+      camStart = { x: gs.camera.x, y: gs.camera.y };
+    }
+  });
+  window.addEventListener('mousemove', e => {
+    if (cameraDrag) {
+      gs.camera.x = camStart.x - (e.clientX - dragStart.x) / gs.camera.zoom;
+      gs.camera.y = camStart.y - (e.clientY - dragStart.y) / gs.camera.zoom;
+    }
+  });
+  window.addEventListener('mouseup', () => { cameraDrag = false; });
+
+  // Touch
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+  // Joystick
+  const jArea = document.getElementById('joystick-area');
+  const jKnob = document.getElementById('joystick-knob');
+  const jBase = document.getElementById('joystick-base');
+
+  jArea.addEventListener('touchstart', e => {
+    e.preventDefault();
+    joystickActive = true;
+    updateJoystick(e.touches[0]);
+  }, { passive: false });
+  jArea.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (joystickActive) updateJoystick(e.touches[0]);
+  }, { passive: false });
+  jArea.addEventListener('touchend', e => {
+    e.preventDefault();
+    joystickActive = false;
+    joystickDx = 0; joystickDy = 0;
+    jKnob.style.left = '38px';
+    jKnob.style.top = '38px';
+  }, { passive: false });
+
+  function updateJoystick(touch) {
+    const rect = jBase.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    const maxR = 40;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > maxR) { dx = dx / dist * maxR; dy = dy / dist * maxR; }
+    jKnob.style.left = (38 + dx) + 'px';
+    jKnob.style.top = (38 + dy) + 'px';
+    joystickDx = dx / maxR;
+    joystickDy = dy / maxR;
+  }
+}
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    pinchDist = getTouchDist(e.touches);
+  } else if (e.touches.length === 1) {
+    cameraDrag = true;
+    dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    camStart = { x: gs.camera.x, y: gs.camera.y };
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    const newDist = getTouchDist(e.touches);
+    const scale = newDist / pinchDist;
+    gs.camera.zoom = Math.max(0.15, Math.min(8, gs.camera.zoom * scale));
+    pinchDist = newDist;
+  } else if (e.touches.length === 1 && cameraDrag) {
+    gs.camera.x = camStart.x - (e.touches[0].clientX - dragStart.x) / gs.camera.zoom;
+    gs.camera.y = camStart.y - (e.touches[0].clientY - dragStart.y) / gs.camera.zoom;
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  cameraDrag = false;
+}
+
+function getTouchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function mobileAction(type, state) {
+  if (type === 'boost') {
+    // handled in input processing
+  }
+  if (type === 'explore') tryExplore();
+}
+
+function processInput() {
+  if (gs.mode !== 'solar' || gs.ship.hull <= 0) return;
+  const s = gs.ship;
+
+  // Calculate thrust direction from input
+  let thrusting = false;
+  if (keys['w'] || keys['arrowup']) {
+    // Forward thrust (maintain current direction)
+    thrusting = true;
+  }
+  if (keys['s'] || keys['arrowdown']) {
+    // Reverse thrust
+    s.thrustAngle += Math.PI;
+    thrusting = true;
+  }
+  if (keys['a'] || keys['arrowleft']) {
+    s.thrustAngle -= 0.04;
+  }
+  if (keys['d'] || keys['arrowright']) {
+    s.thrustAngle += 0.04;
+  }
+
+  // Mobile joystick
+  if (isMobile && (Math.abs(joystickDx) > 0.2 || Math.abs(joystickDy) > 0.2)) {
+    s.thrustAngle = Math.atan2(joystickDy, joystickDx);
+    thrusting = true;
+  }
+
+  const boost = keys['shift'] ? 1.0 : 0.5;
+  s.throttle = thrusting ? boost : 0;
+
+  // Camera follow ship
+  gs.camera.x += (s.x - gs.camera.x) * 0.05;
+  gs.camera.y += (s.y - gs.camera.y) * 0.05;
+}
+
+// ===================== SAVE/LOAD =====================
+function saveGame() {
+  const data = {
+    version: 1,
+    timestamp: Date.now(),
+    gameState: {
+      time: gs.time,
+      ship: { ...gs.ship },
+      base: { ...gs.base },
+      discovered: { ...gs.exploration.discovered },
+      discoveryLog: [...gs.discoveryLog],
+      bodyAngles: gs.bodies.map(b => b.angle),
+      modules: [...gs.ship.modules],
+      events: { ...gs.events },
+      victory: gs.victory
+    }
+  };
+  try {
+    localStorage.setItem('spaceExplorer_save', JSON.stringify(data));
+    showToast('💾 게임 저장 완료', '#00d4ff');
+  } catch (e) {
+    showToast('저장 실패', '#ff6b6b');
+  }
+}
+
+function autoSave() {
+  try {
+    const data = {
+      version: 1, timestamp: Date.now(),
+      gameState: {
+        time: gs.time, ship: { ...gs.ship }, base: { ...gs.base },
+        discovered: { ...gs.exploration.discovered },
+        discoveryLog: [...gs.discoveryLog],
+        bodyAngles: gs.bodies.map(b => b.angle),
+        modules: [...gs.ship.modules],
+        events: { ...gs.events },
+        victory: gs.victory
+      }
+    };
+    localStorage.setItem('spaceExplorer_save', JSON.stringify(data));
+  } catch (e) { /* silent */ }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem('spaceExplorer_save');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    const saved = data.gameState;
+
+    gs = createInitialState();
+    gs.time = saved.time;
+    Object.assign(gs.ship, saved.ship);
+    gs.ship.modules = saved.modules || saved.ship.modules || [];
+    Object.assign(gs.base, saved.base);
+    gs.exploration.discovered = saved.discovered || {};
+    gs.discoveryLog = saved.discoveryLog || [];
+    gs.victory = saved.victory || false;
+    if (saved.events) Object.assign(gs.events, saved.events);
+    if (saved.bodyAngles) {
+      for (let i = 0; i < gs.bodies.length && i < saved.bodyAngles.length; i++) {
+        gs.bodies[i].angle = saved.bodyAngles[i];
+      }
+    }
+    applyModules();
+    initAsteroids();
+    // Update body positions from angles
+    for (let i = 0; i < gs.bodies.length; i++) {
+      const b = gs.bodies[i];
+      if (b.orbitRadius === 0) continue;
+      if (b.parentIndex !== undefined) {
+        const parent = gs.bodies[b.parentIndex];
+        b.x = parent.x + b.orbitRadius * Math.cos(b.angle);
+        b.y = parent.y + b.orbitRadius * Math.sin(b.angle);
+      } else {
+        b.x = b.orbitRadius * Math.cos(b.angle);
+        b.y = b.orbitRadius * Math.sin(b.angle);
+      }
+    }
+
+    document.getElementById('menu-screen').style.display = 'none';
+    gs.mode = 'solar';
+    updateSolarUI();
+    showToast('게임을 불러왔습니다', '#00d4ff');
+  } catch (e) {
+    showToast('불러오기 실패', '#ff6b6b');
+  }
+}
+
+function hasSaveData() {
+  return !!localStorage.getItem('spaceExplorer_save');
+}
+
+// ===================== GAME LOOP =====================
+function startNewGame() {
+  gs = createInitialState();
+  initStars();
+  initAsteroids();
+  // Initialize body positions
+  updateBodies(0);
+  // Set ship to orbit near Earth
+  const earth = gs.bodies[3];
+  gs.ship.x = earth.x;
+  gs.ship.y = earth.y - 15;
+  const orbSpeed = Math.sqrt(G_CONST * PLANETS[0].mass / PLANETS[3].orbitRadius);
+  gs.ship.vx = orbSpeed;
+  gs.ship.vy = 0;
+  gs.ship.thrustAngle = Math.atan2(gs.ship.vy, gs.ship.vx);
+
+  document.getElementById('menu-screen').style.display = 'none';
+  document.getElementById('gameover-screen').style.display = 'none';
+  document.getElementById('victory-screen').style.display = 'none';
+  gs.mode = 'solar';
+  updateSolarUI();
+  computeOrbitPrediction();
+}
+
+function gameLoop(timestamp) {
+  animFrame = requestAnimationFrame(gameLoop);
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const elapsed = Math.min(timestamp - lastFrameTime, 50);
+  lastFrameTime = timestamp;
+
+  if (gs.mode === 'menu') return;
+
+  // Simulation steps based on time warp
+  const steps = Math.min(gs.timeScale, 100);
+  const substeps = gs.timeScale > 100 ? gs.timeScale / 100 : 1;
+
+  for (let s = 0; s < steps; s++) {
+    for (let ss = 0; ss < substeps; ss++) {
+      gs.time++;
+      updateBodies(1);
+      if (gs.mode === 'solar') {
+        updateShip(1);
+        updateAsteroids(1);
+        updateEvents(1);
+      } else if (gs.mode === 'planet') {
+        updateExploration(1);
+      }
+    }
+  }
+
+  processInput();
+
+  // Update orbit prediction periodically
+  if (gs.mode === 'solar' && gs.time % 10 === 0) {
+    computeOrbitPrediction();
+  }
+
+  render();
+  updateUI();
+}
+
+// ===================== INIT =====================
+function init() {
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+  mmCanvas = document.getElementById('minimapCanvas');
+  mmCtx = mmCanvas.getContext('2d');
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  gs = createInitialState();
+  gs.mode = 'menu';
+  initStars();
+
+  if (hasSaveData()) {
+    document.getElementById('continue-btn').style.display = 'block';
+  }
+
+  setupInput();
+  requestAnimationFrame(gameLoop);
+
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+}
+
+init();
+</script>
+</body>
+</html>
