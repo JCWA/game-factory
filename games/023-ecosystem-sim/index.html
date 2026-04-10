@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>생태계 시뮬레이터</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#1a1a2e;color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow-x:hidden;touch-action:manipulation;}
+#app{max-width:1100px;margin:0 auto;padding:8px;}
+header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#16213e;border-radius:10px;margin-bottom:8px;flex-wrap:wrap;gap:4px;}
+header h1{font-size:1.1em;color:#4CAF50;}
+.header-info{display:flex;gap:16px;align-items:center;font-size:0.9em;}
+.header-info span{color:#aaa;}
+.header-info .val{color:#fff;font-weight:bold;}
+#main{display:flex;gap:8px;align-items:flex-start;}
+#field-wrap{position:relative;flex-shrink:0;border-radius:8px;overflow:hidden;border:2px solid #333;background:#5D4037;}
+#fieldCanvas{display:block;cursor:crosshair;}
+.rain-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;display:none;}
+.rain-overlay.active{display:block;}
+.rain-drop{position:absolute;width:1px;height:12px;background:rgba(100,180,255,0.5);animation:rain-fall 0.4s linear infinite;}
+@keyframes rain-fall{0%{transform:translateY(-20px);}100%{transform:translateY(420px);}}
+.drought-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;background:rgba(255,152,0,0.15);display:none;}
+.drought-overlay.active{display:block;}
+#sidebar{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;}
+.panel{background:#16213e;border-radius:10px;padding:10px;}
+.panel h3{font-size:0.85em;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;}
+#graphCanvas{width:100%;border-radius:6px;background:#0f0f23;}
+.pop-counts{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+.pop-row{display:flex;align-items:center;gap:6px;font-size:0.95em;}
+.pop-dot{width:10px;height:10px;border-radius:50%;}
+.pop-dot.grass{background:#4CAF50;}
+.pop-dot.rabbit{background:#fff;}
+.pop-dot.fox{background:#FF9800;}
+.pop-val{font-weight:bold;margin-left:auto;}
+#toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:#16213e;border-radius:10px;margin-top:8px;align-items:center;justify-content:center;}
+.tool-btn{padding:6px 12px;border:2px solid #333;border-radius:8px;background:#0f3460;color:#e0e0e0;cursor:pointer;font-size:0.85em;transition:all 0.15s;user-select:none;-webkit-user-select:none;}
+.tool-btn:hover{border-color:#4CAF50;background:#1a4a7a;}
+.tool-btn.active{border-color:#4CAF50;background:#2e7d32;color:#fff;}
+.tool-btn.speed-btn.active{border-color:#FFD54F;background:#F57F17;}
+.tool-sep{width:1px;height:28px;background:#333;}
+#challenge-bar{background:#16213e;border-radius:10px;padding:8px 12px;margin-top:8px;font-size:0.85em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#challenge-bar .label{color:#FFD54F;font-weight:bold;}
+#challenge-bar .desc{color:#ccc;flex:1;}
+#challenge-bar .progress{color:#4CAF50;font-weight:bold;}
+.particle{position:absolute;pointer-events:none;font-size:10px;animation:particle-fade 0.6s forwards;}
+@keyframes particle-fade{0%{opacity:1;transform:translateY(0) scale(1);}100%{opacity:0;transform:translateY(-15px) scale(0.5);}}
+#game-over-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;z-index:100;}
+#game-over-overlay.active{display:flex;}
+#game-over-box{background:#16213e;border:2px solid #e74c3c;border-radius:16px;padding:32px 40px;text-align:center;}
+#game-over-box h2{color:#e74c3c;font-size:1.5em;margin-bottom:8px;}
+#game-over-box p{color:#aaa;margin-bottom:16px;}
+#game-over-box button{padding:10px 28px;background:#e74c3c;border:none;color:#fff;border-radius:8px;font-size:1em;cursor:pointer;}
+#game-over-box button:hover{background:#c0392b;}
+@media(max-width:768px){
+  #main{flex-direction:column;align-items:stretch;}
+  #field-wrap{width:100%!important;}
+  #fieldCanvas{width:100%!important;height:auto!important;}
+  #sidebar{min-width:unset;}
+  header h1{font-size:0.95em;}
+  .tool-btn{padding:5px 8px;font-size:0.8em;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🌿 생태계 시뮬레이터</h1>
+    <div class="header-info">
+      <span>Day: <span class="val" id="dayCount">0</span></span>
+      <span>속도: <span class="val" id="speedLabel">1x</span></span>
+    </div>
+  </header>
+  <div id="main">
+    <div id="field-wrap">
+      <canvas id="fieldCanvas" width="600" height="400"></canvas>
+      <div class="rain-overlay" id="rainOverlay"></div>
+      <div class="drought-overlay" id="droughtOverlay"></div>
+    </div>
+    <div id="sidebar">
+      <div class="panel">
+        <h3>개체 수 그래프</h3>
+        <canvas id="graphCanvas" width="280" height="160"></canvas>
+        <div class="pop-counts">
+          <div class="pop-row"><div class="pop-dot grass"></div><span>풀</span><span class="pop-val" id="popGrass">0</span></div>
+          <div class="pop-row"><div class="pop-dot rabbit"></div><span>토끼</span><span class="pop-val" id="popRabbit">0</span></div>
+          <div class="pop-row"><div class="pop-dot fox"></div><span>여우</span><span class="pop-val" id="popFox">0</span></div>
+        </div>
+      </div>
+      <div class="panel" id="challenge-panel">
+        <h3>챌린지</h3>
+        <div id="challenge-bar">
+          <span class="label" id="chLabel">🏆</span>
+          <span class="desc" id="chDesc">-</span>
+          <span class="progress" id="chProgress"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toolbar">
+    <button class="tool-btn" data-tool="rain" title="1">🌧 비</button>
+    <button class="tool-btn" data-tool="drought" title="2">☀ 가뭄</button>
+    <button class="tool-btn" data-tool="disease" title="3">🦠 질병</button>
+    <button class="tool-btn" data-tool="rabbit" title="4">🐇 +토끼</button>
+    <button class="tool-btn" data-tool="fox" title="5">🦊 +여우</button>
+    <button class="tool-btn" data-tool="fence" title="6">🧱 울타리</button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn speed-btn" data-speed="1">1x</button>
+    <button class="tool-btn speed-btn active" data-speed="1">1x</button>
+    <button class="tool-btn speed-btn" data-speed="2">2x</button>
+    <button class="tool-btn speed-btn" data-speed="5">5x</button>
+  </div>
+  <div id="game-over-overlay">
+    <div id="game-over-box">
+      <h2>생태계 붕괴</h2>
+      <p>모든 동물이 멸종했습니다.<br><span id="goDay"></span>일 동안 생태계가 유지되었습니다.</p>
+      <button id="restartBtn">다시 시작</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ========== CONSTANTS ==========
+const GRID_W = 60, GRID_H = 40, CELL = 10;
+const CANVAS_W = GRID_W * CELL, CANVAS_H = GRID_H * CELL;
+const MAX_RABBITS = 200, MAX_FOXES = 50;
+const GRAPH_POINTS = 200;
+const SAVE_KEY = 'eco-sim-023';
+
+// ========== DOM ==========
+const fieldCanvas = document.getElementById('fieldCanvas');
+const fieldCtx = fieldCanvas.getContext('2d');
+const graphCanvas = document.getElementById('graphCanvas');
+const graphCtx = graphCanvas.getContext('2d');
+const rainOverlay = document.getElementById('rainOverlay');
+const droughtOverlay = document.getElementById('droughtOverlay');
+const dayEl = document.getElementById('dayCount');
+const speedLabelEl = document.getElementById('speedLabel');
+const popGrassEl = document.getElementById('popGrass');
+const popRabbitEl = document.getElementById('popRabbit');
+const popFoxEl = document.getElementById('popFox');
+const goOverlay = document.getElementById('game-over-overlay');
+const goDayEl = document.getElementById('goDay');
+const chLabelEl = document.getElementById('chLabel');
+const chDescEl = document.getElementById('chDesc');
+const chProgressEl = document.getElementById('chProgress');
+
+// Fix speed buttons - remove duplicate
+const toolbar = document.getElementById('toolbar');
+
+// ========== STATE ==========
+let grid = []; // 0-3 grass density, -1 = fence
+let rabbits = [];
+let foxes = [];
+let particles = [];
+let tick = 0;
+let day = 0;
+let speed = 1;
+let baseGrowthRate = 0.05;
+let growthRate = 0.05;
+let selectedTool = null;
+let gameOver = false;
+
+// Events
+let activeEvent = null; // {type, remaining}
+
+// Graph data
+let graphData = {grass:[], rabbit:[], fox:[]};
+
+// Challenges
+const CHALLENGES = [
+  {id:'rabbit50', desc:'토끼 50마리 이상 유지하기 (10일)', check: (s)=> s.rabbits >= 50, duration: 600, label:'🐇 50+'},
+  {id:'fox_survive', desc:'여우를 멸종시키지 않고 30일 버티기', check: (s)=> s.foxes > 0, duration: 1800, label:'🦊 생존'},
+  {id:'balance', desc:'풀 200+ 토끼 20+ 여우 5+ 유지 (15일)', check: (s)=> s.grass >= 200 && s.rabbits >= 20 && s.foxes >= 5, duration: 900, label:'⚖ 균형'},
+];
+let currentChallenge = null;
+let challengeProgress = 0;
+let challengeCompleted = [];
+
+// ========== CREATURE CLASS ==========
+class Creature {
+  constructor(type, x, y) {
+    this.type = type;
+    this.x = x;
+    this.y = y;
+    this.energy = 50;
+    this.age = 0;
+    this.maxAge = type === 'rabbit' ? 300 : 500;
+    this.vx = 0;
+    this.vy = 0;
+    this.dead = false;
+  }
+  get gridX(){ return Math.floor(this.x / CELL); }
+  get gridY(){ return Math.floor(this.y / CELL); }
+}
+
+// ========== SPATIAL GRID FOR LOOKUP ==========
+const SPATIAL_CELL = 40; // pixels
+const SPATIAL_W = Math.ceil(CANVAS_W / SPATIAL_CELL);
+const SPATIAL_H = Math.ceil(CANVAS_H / SPATIAL_CELL);
+let spatialRabbits = [];
+let spatialFoxes = [];
+
+function buildSpatial(list) {
+  const g = new Array(SPATIAL_W * SPATIAL_H);
+  for (let i = 0; i < g.length; i++) g[i] = [];
+  for (const c of list) {
+    const sx = Math.floor(c.x / SPATIAL_CELL);
+    const sy = Math.floor(c.y / SPATIAL_CELL);
+    if (sx >= 0 && sx < SPATIAL_W && sy >= 0 && sy < SPATIAL_H)
+      g[sy * SPATIAL_W + sx].push(c);
+  }
+  return g;
+}
+
+function findNearby(spatial, x, y, radius) {
+  const results = [];
+  const r = radius;
+  const sx0 = Math.max(0, Math.floor((x - r) / SPATIAL_CELL));
+  const sy0 = Math.max(0, Math.floor((y - r) / SPATIAL_CELL));
+  const sx1 = Math.min(SPATIAL_W - 1, Math.floor((x + r) / SPATIAL_CELL));
+  const sy1 = Math.min(SPATIAL_H - 1, Math.floor((y + r) / SPATIAL_CELL));
+  const r2 = r * r;
+  for (let sy = sy0; sy <= sy1; sy++) {
+    for (let sx = sx0; sx <= sx1; sx++) {
+      for (const c of spatial[sy * SPATIAL_W + sx]) {
+        const dx = c.x - x, dy = c.y - y;
+        if (dx*dx + dy*dy <= r2) results.push(c);
+      }
+    }
+  }
+  return results;
+}
+
+function findNearest(spatial, x, y, radius) {
+  const nearby = findNearby(spatial, x, y, radius);
+  let best = null, bestD = Infinity;
+  for (const c of nearby) {
+    const d = (c.x-x)**2 + (c.y-y)**2;
+    if (d > 0 && d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+// ========== INIT ==========
+function initGrid() {
+  grid = [];
+  for (let y = 0; y < GRID_H; y++) {
+    grid[y] = [];
+    for (let x = 0; x < GRID_W; x++) {
+      grid[y][x] = Math.random() < 0.5 ? Math.floor(Math.random()*3)+1 : 0;
+    }
+  }
+}
+
+function initCreatures() {
+  rabbits = [];
+  foxes = [];
+  for (let i = 0; i < 30; i++) {
+    rabbits.push(new Creature('rabbit',
+      Math.random()*CANVAS_W,
+      Math.random()*CANVAS_H));
+  }
+  for (let i = 0; i < 8; i++) {
+    foxes.push(new Creature('fox',
+      Math.random()*CANVAS_W,
+      Math.random()*CANVAS_H));
+  }
+}
+
+function resetGame() {
+  initGrid();
+  initCreatures();
+  tick = 0; day = 0;
+  speed = 1;
+  growthRate = baseGrowthRate;
+  selectedTool = null;
+  activeEvent = null;
+  gameOver = false;
+  particles = [];
+  graphData = {grass:[], rabbit:[], fox:[]};
+  challengeProgress = 0;
+  challengeCompleted = [];
+  pickChallenge();
+  goOverlay.classList.remove('active');
+  rainOverlay.classList.remove('active');
+  droughtOverlay.classList.remove('active');
+  updateToolUI();
+  updateSpeedUI();
+  saveState();
+}
+
+// ========== GRASS UPDATE ==========
+function updateGrass() {
+  if (growthRate <= 0) return;
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      if (grid[y][x] === -1) continue; // fence
+      if (grid[y][x] < 3 && grid[y][x] >= 0) {
+        if (Math.random() < growthRate) {
+          grid[y][x] = Math.min(3, grid[y][x] + 1);
+        }
+      }
+      if (grid[y][x] === 0) {
+        let neighbors = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x+dx, ny = y+dy;
+            if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && grid[ny][nx] > 0)
+              neighbors++;
+          }
+        }
+        if (neighbors > 0 && Math.random() < neighbors * 0.02) {
+          grid[y][x] = 1;
+        }
+      }
+    }
+  }
+}
+
+// ========== CREATURE UPDATE ==========
+function clampPos(c) {
+  c.x = Math.max(2, Math.min(CANVAS_W - 2, c.x));
+  c.y = Math.max(2, Math.min(CANVAS_H - 2, c.y));
+  // fence check
+  const gx = c.gridX, gy = c.gridY;
+  if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H && grid[gy][gx] === -1) {
+    // push back
+    c.x -= c.vx * 2;
+    c.y -= c.vy * 2;
+    c.x = Math.max(2, Math.min(CANVAS_W - 2, c.x));
+    c.y = Math.max(2, Math.min(CANVAS_H - 2, c.y));
+  }
+}
+
+function findNearestGrass(cx, cy) {
+  const gx = Math.floor(cx / CELL), gy = Math.floor(cy / CELL);
+  let best = null, bestD = Infinity;
+  const range = 5;
+  for (let dy = -range; dy <= range; dy++) {
+    for (let dx = -range; dx <= range; dx++) {
+      const nx = gx+dx, ny = gy+dy;
+      if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && grid[ny][nx] > 0) {
+        const d = dx*dx + dy*dy;
+        if (d < bestD) { bestD = d; best = {x: nx*CELL+CELL/2, y: ny*CELL+CELL/2}; }
+      }
+    }
+  }
+  return best;
+}
+
+function moveToward(c, tx, ty, spd) {
+  const dx = tx - c.x, dy = ty - c.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 1) return;
+  c.vx = (dx/dist) * spd;
+  c.vy = (dy/dist) * spd;
+  c.x += c.vx;
+  c.y += c.vy;
+}
+
+function moveAway(c, fx, fy, spd) {
+  const dx = c.x - fx, dy = c.y - fy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 0.1) { c.x += (Math.random()-0.5)*spd; c.y += (Math.random()-0.5)*spd; return; }
+  c.vx = (dx/dist) * spd;
+  c.vy = (dy/dist) * spd;
+  c.x += c.vx;
+  c.y += c.vy;
+}
+
+function randomMove(c, spd) {
+  c.vx += (Math.random()-0.5)*1.5;
+  c.vy += (Math.random()-0.5)*1.5;
+  const mag = Math.sqrt(c.vx*c.vx + c.vy*c.vy);
+  if (mag > spd) { c.vx = (c.vx/mag)*spd; c.vy = (c.vy/mag)*spd; }
+  c.x += c.vx;
+  c.y += c.vy;
+}
+
+let newborn = [];
+
+function updateRabbit(r) {
+  r.age++;
+  r.energy -= 0.3;
+
+  // Flee from fox
+  const nearFox = findNearest(spatialFoxes, r.x, r.y, 50);
+  if (nearFox) {
+    moveAway(r, nearFox.x, nearFox.y, 2.5);
+  } else {
+    const grass = findNearestGrass(r.x, r.y);
+    if (grass) moveToward(r, grass.x, grass.y, 1.5);
+    else randomMove(r, 1.5);
+  }
+  clampPos(r);
+
+  // Eat grass
+  const gx = r.gridX, gy = r.gridY;
+  if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H && grid[gy][gx] > 0) {
+    r.energy += 20;
+    grid[gy][gx] = 0;
+  }
+
+  // Breed
+  if (r.energy > 80 && rabbits.length + newborn.length < MAX_RABBITS) {
+    const mate = findNearest(spatialRabbits, r.x, r.y, 30);
+    if (mate && mate !== r && mate.energy > 60) {
+      r.energy -= 30;
+      mate.energy -= 30;
+      const baby = new Creature('rabbit', r.x + (Math.random()-0.5)*10, r.y + (Math.random()-0.5)*10);
+      baby.energy = 40;
+      newborn.push(baby);
+      spawnParticle(r.x, r.y, '❤');
+    }
+  }
+
+  if (r.energy <= 0 || r.age >= r.maxAge) {
+    r.dead = true;
+    spawnParticle(r.x, r.y, '✕');
+  }
+}
+
+function updateFox(f) {
+  f.age++;
+  f.energy -= 0.2;
+
+  // Chase rabbit
+  const prey = findNearest(spatialRabbits, f.x, f.y, 80);
+  if (prey) {
+    moveToward(f, prey.x, prey.y, 2.0);
+    // catch
+    const dx = f.x - prey.x, dy = f.y - prey.y;
+    if (dx*dx + dy*dy < 64) {
+      f.energy += 40;
+      prey.dead = true;
+      spawnParticle(prey.x, prey.y, '✕');
+    }
+  } else {
+    randomMove(f, 1.2);
+  }
+  clampPos(f);
+
+  // Breed
+  if (f.energy > 80 && foxes.length + newborn.filter(c=>c.type==='fox').length < MAX_FOXES) {
+    const mate = findNearest(spatialFoxes, f.x, f.y, 40);
+    if (mate && mate !== f && mate.energy > 60) {
+      f.energy -= 30;
+      mate.energy -= 30;
+      const baby = new Creature('fox', f.x + (Math.random()-0.5)*10, f.y + (Math.random()-0.5)*10);
+      baby.energy = 40;
+      newborn.push(baby);
+      spawnParticle(f.x, f.y, '❤');
+    }
+  }
+
+  if (f.energy <= 0 || f.age >= f.maxAge) {
+    f.dead = true;
+    spawnParticle(f.x, f.y, '✕');
+  }
+}
+
+// ========== PARTICLES ==========
+function spawnParticle(x, y, text) {
+  particles.push({x, y, text, life: 30});
+}
+
+// ========== EVENTS ==========
+function applyEvent(type) {
+  if (activeEvent) return;
+  if (type === 'rain') {
+    activeEvent = {type:'rain', remaining: 300};
+    growthRate = baseGrowthRate * 2;
+    rainOverlay.classList.add('active');
+  } else if (type === 'drought') {
+    activeEvent = {type:'drought', remaining: 300};
+    growthRate = 0;
+    droughtOverlay.classList.add('active');
+  }
+}
+
+function applyDisease(targetType) {
+  const list = targetType === 'rabbit' ? rabbits : foxes;
+  const killCount = Math.floor(list.length * 0.3);
+  for (let i = 0; i < killCount; i++) {
+    const idx = Math.floor(Math.random() * list.length);
+    if (list[idx]) {
+      spawnParticle(list[idx].x, list[idx].y, '☠');
+      list[idx].dead = true;
+    }
+  }
+}
+
+function updateEvent() {
+  if (!activeEvent) return;
+  activeEvent.remaining--;
+  if (activeEvent.remaining <= 0) {
+    if (activeEvent.type === 'rain') {
+      rainOverlay.classList.remove('active');
+    } else if (activeEvent.type === 'drought') {
+      droughtOverlay.classList.remove('active');
+    }
+    growthRate = baseGrowthRate;
+    activeEvent = null;
+  }
+}
+
+// ========== CHALLENGE ==========
+function pickChallenge() {
+  const available = CHALLENGES.filter(c => !challengeCompleted.includes(c.id));
+  if (available.length === 0) {
+    challengeCompleted = [];
+    currentChallenge = CHALLENGES[0];
+  } else {
+    currentChallenge = available[Math.floor(Math.random()*available.length)];
+  }
+  challengeProgress = 0;
+  chDescEl.textContent = currentChallenge.desc;
+  chLabelEl.textContent = currentChallenge.label;
+  chProgressEl.textContent = '';
+}
+
+function updateChallenge() {
+  if (!currentChallenge) return;
+  const grassCount = countGrass();
+  const state = {grass: grassCount, rabbits: rabbits.length, foxes: foxes.length};
+  if (currentChallenge.check(state)) {
+    challengeProgress++;
+    const pct = Math.min(100, Math.floor(challengeProgress / currentChallenge.duration * 100));
+    chProgressEl.textContent = pct + '%';
+    if (challengeProgress >= currentChallenge.duration) {
+      challengeCompleted.push(currentChallenge.id);
+      chProgressEl.textContent = '완료!';
+      setTimeout(pickChallenge, 2000);
+    }
+  } else {
+    challengeProgress = Math.max(0, challengeProgress - 1);
+    const pct = Math.floor(challengeProgress / currentChallenge.duration * 100);
+    chProgressEl.textContent = pct > 0 ? pct + '%' : '';
+  }
+}
+
+// ========== GRAPH ==========
+function countGrass() {
+  let c = 0;
+  for (let y = 0; y < GRID_H; y++)
+    for (let x = 0; x < GRID_W; x++)
+      if (grid[y][x] > 0) c++;
+  return c;
+}
+
+function recordGraph() {
+  graphData.grass.push(countGrass());
+  graphData.rabbit.push(rabbits.length);
+  graphData.fox.push(foxes.length);
+  if (graphData.grass.length > GRAPH_POINTS) {
+    graphData.grass.shift();
+    graphData.rabbit.shift();
+    graphData.fox.shift();
+  }
+}
+
+function drawGraph() {
+  const w = graphCanvas.width, h = graphCanvas.height;
+  graphCtx.fillStyle = '#0f0f23';
+  graphCtx.fillRect(0,0,w,h);
+
+  if (graphData.grass.length < 2) return;
+
+  // Find max for scaling
+  let maxVal = 1;
+  for (let i = 0; i < graphData.grass.length; i++) {
+    maxVal = Math.max(maxVal, graphData.grass[i]/10, graphData.rabbit[i], graphData.fox[i]);
+  }
+  maxVal *= 1.1;
+
+  function drawLine(data, color, scale) {
+    graphCtx.strokeStyle = color;
+    graphCtx.lineWidth = 1.5;
+    graphCtx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / (GRAPH_POINTS-1)) * w;
+      const y = h - (data[i]*scale / maxVal) * (h - 10) - 5;
+      if (i === 0) graphCtx.moveTo(x, y);
+      else graphCtx.lineTo(x, y);
+    }
+    graphCtx.stroke();
+  }
+
+  drawLine(graphData.grass, '#4CAF50', 1/10);
+  drawLine(graphData.rabbit, '#ffffff', 1);
+  drawLine(graphData.fox, '#FF9800', 1);
+}
+
+// ========== RENDER ==========
+const GRASS_COLORS = ['#8D6E63', '#81C784', '#4CAF50', '#2E7D32'];
+const FENCE_COLOR = '#5D4037';
+
+function render() {
+  // Grid
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const v = grid[y][x];
+      if (v === -1) {
+        fieldCtx.fillStyle = '#4E342E';
+        fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
+        fieldCtx.fillStyle = '#3E2723';
+        fieldCtx.fillRect(x*CELL+1, y*CELL+1, CELL-2, CELL-2);
+        // brick pattern
+        fieldCtx.fillStyle = '#5D4037';
+        fieldCtx.fillRect(x*CELL+2, y*CELL+2, CELL-4, 3);
+        fieldCtx.fillRect(x*CELL+2, y*CELL+6, CELL-4, 3);
+      } else {
+        fieldCtx.fillStyle = GRASS_COLORS[v];
+        fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
+      }
+    }
+  }
+
+  // Rabbits
+  fieldCtx.fillStyle = '#ffffff';
+  for (const r of rabbits) {
+    fieldCtx.beginPath();
+    fieldCtx.arc(r.x, r.y, 3, 0, Math.PI*2);
+    fieldCtx.fill();
+    // trail
+    fieldCtx.fillStyle = 'rgba(255,255,255,0.2)';
+    fieldCtx.beginPath();
+    fieldCtx.arc(r.x - r.vx*2, r.y - r.vy*2, 2, 0, Math.PI*2);
+    fieldCtx.fill();
+    fieldCtx.fillStyle = '#ffffff';
+  }
+
+  // Foxes
+  fieldCtx.fillStyle = '#FF9800';
+  for (const f of foxes) {
+    fieldCtx.beginPath();
+    fieldCtx.arc(f.x, f.y, 4, 0, Math.PI*2);
+    fieldCtx.fill();
+    // trail
+    fieldCtx.fillStyle = 'rgba(255,152,0,0.2)';
+    fieldCtx.beginPath();
+    fieldCtx.arc(f.x - f.vx*2, f.y - f.vy*2, 3, 0, Math.PI*2);
+    fieldCtx.fill();
+    fieldCtx.fillStyle = '#FF9800';
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life--;
+    const alpha = p.life / 30;
+    fieldCtx.globalAlpha = alpha;
+    fieldCtx.font = '10px sans-serif';
+    fieldCtx.fillStyle = p.text === '❤' ? '#ff4081' : (p.text === '☠' ? '#9C27B0' : '#ff5252');
+    fieldCtx.fillText(p.text, p.x - 5, p.y - 5 + (30-p.life)*0.5);
+    fieldCtx.globalAlpha = 1;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // UI counts
+  popGrassEl.textContent = countGrass();
+  popRabbitEl.textContent = rabbits.length;
+  popFoxEl.textContent = foxes.length;
+  dayEl.textContent = day;
+}
+
+// ========== MAIN LOOP ==========
+function simStep() {
+  tick++;
+  if (tick % 60 === 0) day++;
+
+  // Rebuild spatial grids
+  spatialRabbits = buildSpatial(rabbits);
+  spatialFoxes = buildSpatial(foxes);
+
+  // Update grass (every 3 ticks for performance)
+  if (tick % 3 === 0) updateGrass();
+
+  // Update creatures
+  newborn = [];
+  for (const r of rabbits) updateRabbit(r);
+  for (const f of foxes) updateFox(f);
+
+  rabbits = rabbits.filter(r => !r.dead);
+  foxes = foxes.filter(f => !f.dead);
+
+  // Add newborn
+  for (const b of newborn) {
+    if (b.type === 'rabbit') rabbits.push(b);
+    else foxes.push(b);
+  }
+
+  updateEvent();
+  updateChallenge();
+
+  // Record graph every 10 ticks
+  if (tick % 10 === 0) recordGraph();
+
+  // Game over check
+  if (rabbits.length === 0 && foxes.length === 0 && day > 1) {
+    gameOver = true;
+    goDayEl.textContent = day;
+    goOverlay.classList.add('active');
+  }
+
+  // Auto save every 30 seconds
+  if (tick % 1800 === 0) saveState();
+}
+
+let lastTime = 0;
+const TARGET_DT = 1000/60;
+let accumulator = 0;
+
+function gameLoop(timestamp) {
+  if (gameOver) {
+    render();
+    drawGraph();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  accumulator += Math.min(dt, 100);
+
+  while (accumulator >= TARGET_DT) {
+    for (let s = 0; s < speed; s++) {
+      simStep();
+    }
+    accumulator -= TARGET_DT;
+  }
+
+  render();
+  drawGraph();
+  requestAnimationFrame(gameLoop);
+}
+
+// ========== INPUT ==========
+function updateToolUI() {
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === selectedTool);
+  });
+}
+
+function updateSpeedUI() {
+  document.querySelectorAll('.speed-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.speed) === speed);
+  });
+  speedLabelEl.textContent = speed + 'x';
+}
+
+// Remove the duplicate 1x speed button
+(function fixToolbar(){
+  const speedBtns = toolbar.querySelectorAll('.speed-btn');
+  if (speedBtns.length > 3) speedBtns[0].remove();
+})();
+
+toolbar.addEventListener('click', e => {
+  const btn = e.target.closest('.tool-btn');
+  if (!btn) return;
+  if (btn.dataset.tool) {
+    if (btn.dataset.tool === 'rain') { applyEvent('rain'); return; }
+    if (btn.dataset.tool === 'drought') { applyEvent('drought'); return; }
+    if (btn.dataset.tool === 'disease') {
+      // Toggle disease selection: apply to whichever has more
+      if (rabbits.length >= foxes.length) applyDisease('rabbit');
+      else applyDisease('fox');
+      return;
+    }
+    selectedTool = selectedTool === btn.dataset.tool ? null : btn.dataset.tool;
+    updateToolUI();
+  }
+  if (btn.dataset.speed) {
+    speed = parseInt(btn.dataset.speed);
+    updateSpeedUI();
+  }
+});
+
+function handleFieldClick(px, py) {
+  if (gameOver) return;
+  // Convert to canvas coords
+  const rect = fieldCanvas.getBoundingClientRect();
+  const scaleX = CANVAS_W / rect.width;
+  const scaleY = CANVAS_H / rect.height;
+  const cx = (px - rect.left) * scaleX;
+  const cy = (py - rect.top) * scaleY;
+
+  if (selectedTool === 'rabbit') {
+    if (rabbits.length < MAX_RABBITS) {
+      rabbits.push(new Creature('rabbit', cx, cy));
+    }
+  } else if (selectedTool === 'fox') {
+    if (foxes.length < MAX_FOXES) {
+      foxes.push(new Creature('fox', cx, cy));
+    }
+  } else if (selectedTool === 'fence') {
+    const gx = Math.floor(cx / CELL), gy = Math.floor(cy / CELL);
+    if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H) {
+      grid[gy][gx] = grid[gy][gx] === -1 ? 0 : -1;
+    }
+  }
+}
+
+fieldCanvas.addEventListener('click', e => {
+  handleFieldClick(e.clientX, e.clientY);
+});
+fieldCanvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  handleFieldClick(t.clientX, t.clientY);
+}, {passive:false});
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  const tools = ['rain','drought','disease','rabbit','fox','fence'];
+  const idx = parseInt(e.key) - 1;
+  if (idx >= 0 && idx < tools.length) {
+    if (idx <= 2) {
+      if (idx === 0) applyEvent('rain');
+      else if (idx === 1) applyEvent('drought');
+      else {
+        if (rabbits.length >= foxes.length) applyDisease('rabbit');
+        else applyDisease('fox');
+      }
+    } else {
+      selectedTool = selectedTool === tools[idx] ? null : tools[idx];
+      updateToolUI();
+    }
+  }
+});
+
+document.getElementById('restartBtn').addEventListener('click', resetGame);
+
+// ========== SAVE/LOAD ==========
+function saveState() {
+  try {
+    const state = {
+      grid, tick, day, speed,
+      rabbits: rabbits.map(r=>({x:r.x,y:r.y,energy:r.energy,age:r.age})),
+      foxes: foxes.map(f=>({x:f.x,y:f.y,energy:f.energy,age:f.age})),
+      graphData,
+      challengeCompleted
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  } catch(e){}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    grid = s.grid;
+    tick = s.tick;
+    day = s.day;
+    speed = s.speed || 1;
+    rabbits = s.rabbits.map(r => {
+      const c = new Creature('rabbit', r.x, r.y);
+      c.energy = r.energy; c.age = r.age;
+      return c;
+    });
+    foxes = s.foxes.map(f => {
+      const c = new Creature('fox', f.x, f.y);
+      c.energy = f.energy; c.age = f.age;
+      return c;
+    });
+    graphData = s.graphData || {grass:[], rabbit:[], fox:[]};
+    challengeCompleted = s.challengeCompleted || [];
+    updateSpeedUI();
+    pickChallenge();
+    return true;
+  } catch(e) { return false; }
+}
+
+// ========== RAIN DROPS ==========
+function createRainDrops() {
+  rainOverlay.innerHTML = '';
+  for (let i = 0; i < 60; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'rain-drop';
+    drop.style.left = Math.random()*100 + '%';
+    drop.style.animationDelay = Math.random()*0.4 + 's';
+    drop.style.opacity = 0.3 + Math.random()*0.4;
+    rainOverlay.appendChild(drop);
+  }
+}
+createRainDrops();
+
+// ========== RESPONSIVE CANVAS ==========
+function resizeGraphCanvas() {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) {
+    const w = Math.min(sidebar.clientWidth - 20, 400);
+    graphCanvas.width = Math.max(200, w);
+    graphCanvas.height = Math.max(100, Math.floor(w * 0.55));
+  }
+}
+window.addEventListener('resize', resizeGraphCanvas);
+resizeGraphCanvas();
+
+// ========== START ==========
+if (!loadState()) {
+  resetGame();
+} else {
+  pickChallenge();
+}
+lastTime = performance.now();
+requestAnimationFrame(gameLoop);
+
+})();
+</script>
+</body>
+</html>
