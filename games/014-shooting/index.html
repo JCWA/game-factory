@@ -293,7 +293,6 @@ function playerFire() {
 // ── Enemy Fire ──
 function enemyFire(e) {
     const spd = 2.5 + wave * 0.15;
-    if (spd > 5) spd_cap = 5;
     const s = Math.min(spd, 5);
 
     switch (e.type) {
