@@ -1548,27 +1548,52 @@
 
   window.Assets = {
     init: function() {
+      console.log('[Assets] 스프라이트 생성 시작...');
+
       // Generate all terrain sprites
       for (const type in terrainDrawers) {
-        terrainCache.set(type, terrainDrawers[type]());
+        try {
+          terrainCache.set(type, terrainDrawers[type]());
+          console.log('[Assets] 지형:', type, '✓');
+        } catch (e) {
+          console.error('[Assets] 지형 생성 실패:', type, e);
+        }
       }
 
       // Generate all unit sprites (one per type per civ color)
       for (const type in unitDrawers) {
         for (let i = 0; i < CIV_COLORS.length; i++) {
-          unitCache.set(type + '_' + i, unitDrawers[type](CIV_COLORS[i]));
+          try {
+            unitCache.set(type + '_' + i, unitDrawers[type](CIV_COLORS[i]));
+          } catch (e) {
+            console.error('[Assets] 유닛 생성 실패:', type, i, e);
+          }
         }
+        console.log('[Assets] 유닛:', type, '✓');
       }
 
       // Generate city sprites (one per civ color)
       for (let i = 0; i < CIV_COLORS.length; i++) {
-        cityCache.set(i, drawCity(CIV_COLORS[i]));
+        try {
+          cityCache.set(i, drawCity(CIV_COLORS[i]));
+        } catch (e) {
+          console.error('[Assets] 도시 생성 실패:', i, e);
+        }
       }
+      console.log('[Assets] 도시 ✓');
 
       // Generate resource sprites
       for (const type in resourceDrawers) {
-        resourceCache.set(type, resourceDrawers[type]());
+        try {
+          resourceCache.set(type, resourceDrawers[type]());
+          console.log('[Assets] 자원:', type, '✓');
+        } catch (e) {
+          console.error('[Assets] 자원 생성 실패:', type, e);
+        }
       }
+
+      console.log('[Assets] 스프라이트 생성 완료. 지형:', terrainCache.size,
+        '유닛:', unitCache.size, '도시:', cityCache.size, '자원:', resourceCache.size);
     },
 
     getTerrainSprite: function(terrainType) {

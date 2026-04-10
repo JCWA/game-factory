@@ -254,6 +254,139 @@
       return Game.state;
     },
 
+    /**
+     * 새 게임 시작: 맵 생성 → 자원 배치 → 문명 배치 (도시+유닛) → 시야 공개 → 카메라 센터링
+     */
+    newGame: function () {
+      // 1) 상태 초기화
+      Game.init();
+
+      // 2) 맵 생성
+      const seed = (Math.random() * 2147483647) | 0;
+      if (window.HexMap) {
+        HexMap.setSeed(seed);
+        const tiles = HexMap.generate(MAP_WIDTH, MAP_HEIGHT, seed);
+        Game.state.tiles = tiles;
+
+        // 3) 특수 자원 배치
+        HexMap.placeSpecialResources(tiles, seed);
+
+        // 4) 문명 시작 위치 결정
+        const starts = HexMap.findStartPositions(tiles, 3, MAP_WIDTH, MAP_HEIGHT);
+
+        // 5) 각 문명에 도시 + 전사 + 개척자 배치
+        for (let i = 0; i < Game.state.civilizations.length; i++) {
+          const civ = Game.state.civilizations[i];
+          const pos = starts[i] || { col: 2 + i * 7, row: 7 }; // fallback
+
+          // 도시 건설
+          Game.createCity(i, pos.col, pos.row);
+          // 첫 도시를 수도로
+          if (civ.cities.length > 0) {
+            civ.cities[0].isCapital = true;
+          }
+
+          // 전사 배치 (도시 옆)
+          const neighbors = getNeighbors(pos.col, pos.row);
+          let placed = false;
+          for (const n of neighbors) {
+            const tile = getTile(n.col, n.row);
+            if (tile && TERRAINS[tile.terrain].passable && !Game.getUnitAt(n.col, n.row)) {
+              Game._spawnUnit(i, 'warrior', n.col, n.row);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            Game._spawnUnit(i, 'warrior', pos.col, pos.row);
+          }
+
+          // 시야 공개
+          Game._revealTiles(i, pos.col, pos.row, 2);
+          if (placed) {
+            for (const n of neighbors) {
+              const tile = getTile(n.col, n.row);
+              if (tile && TERRAINS[tile.terrain].passable) {
+                Game._revealTiles(i, n.col, n.row, 2);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // 6) 카메라를 플레이어 첫 도시로 이동
+      const playerCiv = Game.state.civilizations[0];
+      if (playerCiv && playerCiv.cities.length > 0 && window.Renderer) {
+        const city = playerCiv.cities[0];
+        const size = Renderer.camera.hexSize;
+        const px = HexMap.hexToPixel(city.x, city.y, size);
+        const mapCanvas = document.getElementById('map-canvas');
+        if (mapCanvas) {
+          Renderer.camera.centerOn(px.x, px.y, mapCanvas.width, mapCanvas.height);
+        }
+      }
+
+      Game._log('새 게임이 시작되었습니다!');
+      return Game.state;
+    },
+
+    /**
+     * 유닛 생성 헬퍼
+     */
+    _spawnUnit: function (civId, type, x, y) {
+      const civ = Game.state.civilizations[civId];
+      if (!civ) return null;
+      const def = UNITS[type];
+      if (!def) return null;
+
+      const unit = {
+        id: uid('u'),
+        type: type,
+        civId: civId,
+        x: x,
+        y: y,
+        hp: UNIT_MAX_HP,
+        maxHp: UNIT_MAX_HP,
+        movesLeft: def.moves,
+        maxMoves: def.moves,
+      };
+      civ.units.push(unit);
+      return unit;
+    },
+
+    /**
+     * main.js 호환용
+     */
+    placeCivilizations: function () {
+      // newGame()에서 이미 처리됨 — 호환성을 위해 빈 함수
+    },
+
+    endPlayerTurn: function () {
+      // nextTurn에서 처리
+    },
+
+    startNewTurn: function () {
+      Game.nextTurn();
+      Game.checkVictory();
+    },
+
+    getState: function () {
+      return Game.state;
+    },
+
+    loadState: function (state) {
+      Game.state = state;
+    },
+
+    calculateScoreVictory: function () {
+      Game._resolveScoreVictory();
+    },
+
+    startResearch: function (civId, techId) {
+      Game.setResearch(civId, techId);
+    },
+
     // ─────────────────────────────────────────
     // CITY MANAGEMENT
     // ─────────────────────────────────────────
