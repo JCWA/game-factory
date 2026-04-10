@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>시간 되감기 - Time Rewind</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;color:#fff}
+#wrap{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#hud{width:100%;max-width:800px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#16162e,#12122a);border-bottom:1px solid #2a2a4a;font-size:13px;flex-shrink:0;z-index:10}
+#hud .left{display:flex;gap:10px;align-items:center}
+#hud .left span{color:#8af}
+#hud .right{display:flex;gap:5px}
+.hud-btn{background:#1a1a3a;border:1px solid #3a3a5a;color:#8af;padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;transition:all .15s}
+.hud-btn:hover{background:#2a2a5a;border-color:#66f}
+.hud-btn:active,.hud-btn.active{background:#2a2a6a;border-color:#88f}
+.hud-btn.rec{color:#f88}
+.hud-btn.rec.active{color:#ff4444;border-color:#f44;animation:recPulse .5s infinite alternate}
+@keyframes recPulse{from{box-shadow:0 0 3px #f00}to{box-shadow:0 0 12px #f00}}
+canvas{display:block;background:#0f0f1a}
+#controls{width:100%;max-width:800px;display:none;padding:10px 16px;background:linear-gradient(0deg,#16162e,#12122a);border-top:1px solid #2a2a4a;flex-shrink:0}
+#controls .row{display:flex;justify-content:space-between;align-items:center}
+.ctrl-btn{width:54px;height:54px;border-radius:50%;background:#1a1a3a;border:2px solid #3a3a5a;color:#8af;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .1s}
+.ctrl-btn:active{background:#2a2a6a;border-color:#88f;transform:scale(.92)}
+.dpad{display:flex;gap:6px;align-items:center}
+.action-btns{display:flex;gap:8px;align-items:center}
+#overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:100;background:rgba(8,8,16,.94);backdrop-filter:blur(4px)}
+#overlay.hidden{display:none}
+.panel{background:linear-gradient(135deg,#16162e,#1a1a38);border:2px solid #3a3a6a;border-radius:14px;padding:28px 32px;text-align:center;max-width:440px;width:92%;box-shadow:0 0 40px rgba(0,255,255,.08)}
+.panel h2{font-size:24px;margin-bottom:14px;color:#0ff;text-shadow:0 0 20px rgba(0,255,255,.4)}
+.panel p{font-size:14px;color:#99a;margin-bottom:8px;line-height:1.6}
+.panel .big-btn{display:inline-block;margin-top:14px;padding:11px 30px;background:linear-gradient(135deg,#08bbaa,#0066cc);border:none;color:#fff;font-size:15px;border-radius:8px;cursor:pointer;transition:all .2s;box-shadow:0 2px 12px rgba(0,180,255,.25)}
+.panel .big-btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.panel .big-btn:active{transform:translateY(1px)}
+.stars{color:#fc0;font-size:22px;margin:10px 0;letter-spacing:4px}
+.lvl-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin:14px 0}
+.lvl-btn{width:40px;height:40px;border-radius:6px;border:1px solid #333;background:#111;color:#444;font-size:14px;cursor:default;transition:all .15s}
+.lvl-btn.unlocked{border-color:#0aa;background:#1a2a3a;color:#0ff;cursor:pointer}
+.lvl-btn.unlocked:hover{background:#2a3a5a;border-color:#0ff}
+.lvl-btn.current{border-color:#0ff;background:#0a3a4a;box-shadow:0 0 8px rgba(0,255,255,.3)}
+#vhs{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:50;opacity:0;transition:opacity .12s}
+#vhs.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="left">
+      <span id="stageLabel">Stage 1/15</span>
+      <span id="rewindLabel">되감기: 0/3</span>
+      <span id="ghostLabel">잔상: 0</span>
+    </div>
+    <div class="right">
+      <button class="hud-btn" id="btnRestart" onclick="game.restartLevel()">↻ 재시작</button>
+      <button class="hud-btn rec" id="btnRec" onclick="game.toggleRecording()">● 녹화</button>
+      <button class="hud-btn" id="btnRewind" onclick="game.doRewind()">⏪ 되감기</button>
+    </div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="controls">
+    <div class="row">
+      <div class="dpad">
+        <button class="ctrl-btn" id="ml" data-key="left">◀</button>
+        <button class="ctrl-btn" id="mu" data-key="jump">▲</button>
+        <button class="ctrl-btn" id="mr" data-key="right">▶</button>
+      </div>
+      <div class="action-btns">
+        <button class="ctrl-btn" style="font-size:12px;color:#f88;width:48px;height:48px" onclick="game.toggleRecording()">●R</button>
+        <button class="ctrl-btn" style="font-size:12px;width:48px;height:48px" onclick="game.doRewind()">⏪T</button>
+        <button class="ctrl-btn" data-key="jump" style="background:#152535;border-color:#0af;font-size:16px;font-weight:bold">A</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="overlay">
+  <div class="panel" id="panelContent"></div>
+</div>
+<div id="vhs"><canvas id="vhsCanvas" style="width:100%;height:100%"></canvas></div>
+
+<script>
+'use strict';
+
+// ===================== CONSTANTS =====================
+const TILE = 32, CHAR_W = 20, CHAR_H = 24;
+const PHYSICS = { gravity: 0.48, moveSpeed: 2.9, jumpForce: -9, friction: 0.8 };
+const GHOST_COLORS = ['#ff00ff', '#ffff00', '#00ff00'];
+const SW_COLORS = ['#ff4444', '#44aaff', '#ffaa00', '#44ff44'];
+
+// ===================== LEVEL BUILDER =====================
+function mkTiles(w, h, fn) {
+  const t = [];
+  for (let y = 0; y < h; y++) { t[y] = []; for (let x = 0; x < w; x++) t[y][x] = fn(x, y); }
+  return t;
+}
+function walled(w, h, inner) {
+  return mkTiles(w, h, (x, y) => {
+    if (y === 0 || y === h - 1 || x === 0 || x === w - 1) return 1;
+    return inner ? inner(x, y) : 0;
+  });
+}
+// ground helper: fill from gy down (exclusive of border)
+function ground(gy, x, w2, h) { return (xx, yy) => yy >= gy && yy < h - 1 ? true : false; }
+
+// ===================== 15 LEVELS =====================
+const LEVELS = [
+  // ── Stage 1: Tutorial ──
+  {
+    width: 20, height: 12,
+    tiles: walled(20, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (y === 8 && x >= 9 && x <= 11) return 1; // step
+      return 0;
+    }),
+    switches: [], doors: [],
+    spawn: { x: 2, y: 8 }, exit: { x: 17, y: 9 }, maxGhosts: 0,
+    hint: '화살표/WASD로 이동, ↑/W로 점프\n흰색 출구 문으로 이동하세요!'
+  },
+  // ── Stage 2: Switch Basics ──
+  {
+    width: 20, height: 12,
+    tiles: walled(20, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 10 && y >= 4 && y <= 9) return 1;
+      return 0;
+    }),
+    switches: [{ x: 4, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 10, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 17, y: 9 }, maxGhosts: 1,
+    hint: 'R: 녹화 시작 → 스위치(SW)를 밟고 서있기\nT: 되감기 → 잔상이 스위치를 유지하는 동안 문 통과!'
+  },
+  // ── Stage 3: Timing ──
+  {
+    width: 22, height: 12,
+    tiles: walled(22, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 11 && y >= 3 && y <= 9) return 1;
+      return 0;
+    }),
+    switches: [{ x: 5, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 11, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 19, y: 9 }, maxGhosts: 1,
+    hint: '녹화 중 스위치 위에서 충분히 오래 서있으세요!\n되감기 후 잔상이 스위치를 유지하는 타이밍에 문 통과'
+  },
+  // ── Stage 4: Two Switches ──
+  {
+    width: 24, height: 12,
+    tiles: walled(24, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 8 && y >= 3 && y <= 9) return 1;
+      if (x === 16 && y >= 3 && y <= 9) return 1;
+      return 0;
+    }),
+    switches: [{ x: 4, y: 9, color: 0, doorId: 0 }, { x: 12, y: 9, color: 1, doorId: 1 }],
+    doors: [{ x: 8, y: 9, color: 0, id: 0 }, { x: 16, y: 9, color: 1, id: 1 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 21, y: 9 }, maxGhosts: 2,
+    hint: '잔상 2개 필요!\n1차 녹화: SW1 밟기 → 되감기\n2차 녹화: SW2 밟기 → 되감기 후 통과'
+  },
+  // ── Stage 5: Vertical ──
+  {
+    width: 20, height: 15,
+    tiles: walled(20, 15, (x, y) => {
+      if (y >= 13) return 1;
+      if (y === 10 && x >= 2 && x <= 7) return 1;
+      if (y === 7 && x >= 5 && x <= 11) return 1;
+      if (y === 4 && x >= 9 && x <= 17) return 1;
+      if (x === 13 && y >= 2 && y <= 3) return 1; // wall above exit
+      return 0;
+    }),
+    switches: [{ x: 4, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 13, y: 3, color: 0, id: 0 }],
+    spawn: { x: 3, y: 8 }, exit: { x: 16, y: 3 }, maxGhosts: 1,
+    hint: '위로 올라가는 구조!\n잔상이 아래 스위치를 밟는 동안 위쪽 문 통과'
+  },
+  // ── Stage 6: Spike Dodge ──
+  {
+    width: 22, height: 12,
+    tiles: walled(22, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (y === 9 && (x === 6 || x === 7)) return 2;
+      if (y === 9 && (x === 13 || x === 14)) return 2;
+      if (x === 10 && y >= 4 && y <= 9) return 1;
+      return 0;
+    }),
+    switches: [{ x: 4, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 10, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 19, y: 9 }, maxGhosts: 1,
+    hint: '스파이크를 점프로 넘으세요!\n잔상으로 스위치 유지 → 문 통과'
+  },
+  // ── Stage 7: Long Corridor ──
+  {
+    width: 28, height: 12,
+    tiles: walled(28, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 14 && y >= 3 && y <= 9) return 1;
+      if (y === 7 && x >= 17 && x <= 22) return 1;
+      return 0;
+    }),
+    switches: [{ x: 3, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 14, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 25, y: 9 }, maxGhosts: 2,
+    hint: '긴 코스! 녹화 시간을 잘 관리하세요\n잔상이 스위치에 오래 서 있어야 합니다'
+  },
+  // ── Stage 8: Chain Switches ──
+  {
+    width: 28, height: 12,
+    tiles: walled(28, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 7 && y >= 3 && y <= 9) return 1;
+      if (x === 14 && y >= 3 && y <= 9) return 1;
+      if (x === 21 && y >= 3 && y <= 9) return 1;
+      return 0;
+    }),
+    switches: [
+      { x: 4, y: 9, color: 0, doorId: 0 },
+      { x: 11, y: 9, color: 1, doorId: 1 },
+      { x: 18, y: 9, color: 2, doorId: 2 }
+    ],
+    doors: [
+      { x: 7, y: 9, color: 0, id: 0 },
+      { x: 14, y: 9, color: 1, id: 1 },
+      { x: 21, y: 9, color: 2, id: 2 }
+    ],
+    spawn: { x: 2, y: 8 }, exit: { x: 25, y: 9 }, maxGhosts: 3,
+    hint: '스위치 3개! 잔상 3개를 모두 활용하세요\n각 잔상이 하나씩 스위치를 담당합니다'
+  },
+  // ── Stage 9: Reverse Direction ──
+  {
+    width: 22, height: 12,
+    tiles: walled(22, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 6 && y >= 3 && y <= 9) return 1;
+      if (y === 7 && x >= 9 && x <= 14) return 1;
+      return 0;
+    }),
+    switches: [{ x: 18, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 6, y: 9, color: 0, id: 0 }],
+    spawn: { x: 10, y: 8 }, exit: { x: 3, y: 9 }, maxGhosts: 1,
+    hint: '출구는 왼쪽! 스위치는 오른쪽!\n녹화: 오른쪽으로 → 되감기 후: 왼쪽으로 이동'
+  },
+  // ── Stage 10: Elevator Wall ──
+  {
+    width: 22, height: 14,
+    tiles: walled(22, 14, (x, y) => {
+      if (y >= 12) return 1;
+      if (y === 9 && x >= 3 && x <= 8) return 1;
+      if (y === 5 && x >= 12 && x <= 18) return 1;
+      if (x === 11 && y >= 5 && y <= 8) return 1;
+      return 0;
+    }),
+    switches: [{ x: 5, y: 8, color: 0, doorId: 0 }],
+    doors: [
+      { x: 11, y: 8, color: 0, id: 0 },
+      { x: 11, y: 7, color: 0, id: 0 },
+      { x: 11, y: 6, color: 0, id: 0 }
+    ],
+    spawn: { x: 2, y: 10 }, exit: { x: 16, y: 4 }, maxGhosts: 1,
+    hint: '벽의 문들을 열어 통과하세요!\n잔상이 스위치를 밟는 동안 점프해서 올라가기'
+  },
+  // ── Stage 11: Narrow + Spikes ──
+  {
+    width: 24, height: 12,
+    tiles: walled(24, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (x === 8 && y >= 2 && y <= 8) return 1;
+      if (x === 9 && y >= 2 && y <= 7) return 1;
+      if (x === 15 && y >= 4 && y <= 9) return 1;
+      if (y === 9 && (x === 12 || x === 13)) return 2;
+      return 0;
+    }),
+    switches: [{ x: 4, y: 9, color: 0, doorId: 0 }],
+    doors: [{ x: 15, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 21, y: 9 }, maxGhosts: 2,
+    hint: '좁은 통로와 스파이크! 정밀한 조작이 필요합니다'
+  },
+  // ── Stage 12: Maze ──
+  {
+    width: 26, height: 14,
+    tiles: walled(26, 14, (x, y) => {
+      if (y >= 12) return 1;
+      if (x === 6 && y >= 2 && y <= 9) return 1;
+      if (x === 12 && y >= 4 && y <= 11) return 1;
+      if (x === 18 && y >= 2 && y <= 9) return 1;
+      if (y === 8 && x >= 8 && x <= 11) return 1;
+      if (y === 6 && x >= 14 && x <= 17) return 1;
+      return 0;
+    }),
+    switches: [
+      { x: 3, y: 11, color: 0, doorId: 0 },
+      { x: 9, y: 7, color: 1, doorId: 1 },
+      { x: 15, y: 5, color: 2, doorId: 2 }
+    ],
+    doors: [
+      { x: 6, y: 10, color: 0, id: 0 },
+      { x: 12, y: 3, color: 1, id: 1 },
+      { x: 18, y: 10, color: 2, id: 2 }
+    ],
+    spawn: { x: 2, y: 10 }, exit: { x: 23, y: 11 }, maxGhosts: 3,
+    hint: '복잡한 미로! 잔상 3개를 전략적으로 배치하세요'
+  },
+  // ── Stage 13: Trap Zone ──
+  {
+    width: 24, height: 12,
+    tiles: walled(24, 12, (x, y) => {
+      if (y >= 10) return 1;
+      if (y === 9 && (x === 4 || x === 5 || x === 9 || x === 10 || x === 15 || x === 16)) return 2;
+      if (x === 12 && y >= 3 && y <= 9) return 1;
+      if (y === 6 && x >= 6 && x <= 9) return 1;
+      return 0;
+    }),
+    switches: [{ x: 7, y: 5, color: 0, doorId: 0 }],
+    doors: [{ x: 12, y: 9, color: 0, id: 0 }],
+    spawn: { x: 2, y: 8 }, exit: { x: 21, y: 9 }, maxGhosts: 2,
+    hint: '스파이크 지대! 점프 타이밍이 생존의 열쇠'
+  },
+  // ── Stage 14: Pre-Final ──
+  {
+    width: 28, height: 14,
+    tiles: walled(28, 14, (x, y) => {
+      if (y >= 12) return 1;
+      if (x === 7 && y >= 3 && y <= 11) return 1;
+      if (x === 14 && y >= 3 && y <= 11) return 1;
+      if (x === 21 && y >= 3 && y <= 11) return 1;
+      if (y === 8 && x >= 9 && x <= 12) return 1;
+      if (y === 6 && x >= 16 && x <= 19) return 1;
+      if (y === 11 && (x === 10 || x === 17)) return 2;
+      return 0;
+    }),
+    switches: [
+      { x: 4, y: 11, color: 0, doorId: 0 },
+      { x: 11, y: 7, color: 1, doorId: 1 },
+      { x: 18, y: 5, color: 2, doorId: 2 }
+    ],
+    doors: [
+      { x: 7, y: 11, color: 0, id: 0 },
+      { x: 14, y: 11, color: 1, id: 1 },
+      { x: 21, y: 11, color: 2, id: 2 }
+    ],
+    spawn: { x: 2, y: 10 }, exit: { x: 25, y: 11 }, maxGhosts: 3,
+    hint: '모든 메카닉 종합! 잔상 3개 + 스위치 3개 + 스파이크'
+  },
+  // ── Stage 15: Final ──
+  {
+    width: 30, height: 15,
+    tiles: walled(30, 15, (x, y) => {
+      if (y >= 13) return 1;
+      if (x === 7 && y >= 2 && y <= 12) return 1;
+      if (x === 14 && y >= 2 && y <= 12) return 1;
+      if (x === 21 && y >= 2 && y <= 12) return 1;
+      if (y === 9 && x >= 3 && x <= 6) return 1;
+      if (y === 7 && x >= 9 && x <= 12) return 1;
+      if (y === 5 && x >= 16 && x <= 19) return 1;
+      if (y === 9 && x >= 23 && x <= 26) return 1;
+      if (y === 12 && (x === 5 || x === 11 || x === 18 || x === 25)) return 2;
+      return 0;
+    }),
+    switches: [
+      { x: 4, y: 8, color: 0, doorId: 0 },
+      { x: 10, y: 6, color: 1, doorId: 1 },
+      { x: 17, y: 4, color: 2, doorId: 2 },
+      { x: 24, y: 8, color: 3, doorId: 3 }
+    ],
+    doors: [
+      { x: 7, y: 12, color: 0, id: 0 },
+      { x: 14, y: 12, color: 1, id: 1 },
+      { x: 21, y: 12, color: 2, id: 2 },
+      { x: 21, y: 4, color: 3, id: 3 }
+    ],
+    spawn: { x: 2, y: 11 }, exit: { x: 27, y: 12 }, maxGhosts: 3,
+    hint: '최종 스테이지! 잔상 3개로 스위치 4개를 해결하세요\n한 잔상이 2개의 스위치를 커버해야 합니다!'
+  }
+];
+
+// ===================== GAME ENGINE =====================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const vhsEl = document.getElementById('vhs');
+const vhsCanvas = document.getElementById('vhsCanvas');
+const vhsCtx = vhsCanvas.getContext('2d');
+
+const game = {
+  level: 0,        // current level index being played
+  maxUnlocked: 0,  // highest unlocked level
+  player: null,
+  ghosts: [],
+  recordings: [],
+  curRec: null,
+  isRec: false,
+  rewindCnt: 0,
+  keys: {},
+  touch: {},
+  lv: null,
+  swState: [],
+  drState: [],
+  state: 'menu',
+  camX: 0, camY: 0,
+  cw: 800, ch: 480,
+  frame: 0,
+  deathT: 0,
+  rewindT: 0,
+  msgT: 0, msgTxt: '',
+  particles: [],
+  jumpWas: false,  // for edge-triggered jump in recordings
+
+  // ── Init ──
+  init() {
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+      this.keys[k] = true;
+      if (k === 'r' && this.state === 'playing') this.toggleRec();
+      if (k === 't' && this.state === 'playing') this.doRewind();
+      if (k === 'escape' && this.state === 'playing') this.showMenu();
+    });
+    window.addEventListener('keyup', e => this.keys[e.key.toLowerCase()] = false);
+    this.setupTouch();
+    this.loadSave();
+    this.showMenu();
+    requestAnimationFrame(() => this.loop());
+  },
+
+  resize() {
+    const w = Math.min(800, window.innerWidth);
+    const mob = window.innerWidth < 640;
+    const ctrlH = mob ? 82 : 0;
+    const hudH = 38;
+    const h = Math.min(480, window.innerHeight - hudH - ctrlH - 8);
+    this.cw = w; this.ch = Math.max(200, h);
+    canvas.width = w; canvas.height = this.ch;
+    canvas.style.width = w + 'px'; canvas.style.height = this.ch + 'px';
+    vhsCanvas.width = w; vhsCanvas.height = this.ch;
+    document.getElementById('controls').style.display = mob ? 'block' : 'none';
+  },
+
+  setupTouch() {
+    document.querySelectorAll('.ctrl-btn[data-key]').forEach(b => {
+      const k = b.dataset.key;
+      const on = e => { e.preventDefault(); this.touch[k] = true; };
+      const off = e => { e.preventDefault(); this.touch[k] = false; };
+      b.addEventListener('touchstart', on, { passive: false });
+      b.addEventListener('touchend', off, { passive: false });
+      b.addEventListener('touchcancel', off, { passive: false });
+      b.addEventListener('mousedown', () => this.touch[k] = true);
+      b.addEventListener('mouseup', () => this.touch[k] = false);
+      b.addEventListener('mouseleave', () => this.touch[k] = false);
+    });
+  },
+
+  getInput() {
+    return {
+      left: this.keys['arrowleft'] || this.keys['a'] || this.touch['left'] || false,
+      right: this.keys['arrowright'] || this.keys['d'] || this.touch['right'] || false,
+      jump: this.keys['arrowup'] || this.keys['w'] || this.keys[' '] || this.touch['jump'] || false,
+    };
+  },
+
+  loadSave() {
+    try {
+      const d = JSON.parse(localStorage.getItem('timeRewind_save'));
+      if (d && typeof d.maxUnlocked === 'number') this.maxUnlocked = Math.min(d.maxUnlocked, LEVELS.length - 1);
+    } catch (e) {}
+  },
+  save() {
+    localStorage.setItem('timeRewind_save', JSON.stringify({ maxUnlocked: this.maxUnlocked }));
+  },
+
+  // ── Menu ──
+  showMenu() {
+    this.state = 'menu';
+    const p = document.getElementById('panelContent');
+    let btns = '';
+    for (let i = 0; i < LEVELS.length; i++) {
+      const ok = i <= this.maxUnlocked;
+      const cur = i === this.maxUnlocked;
+      btns += `<button class="lvl-btn${ok ? ' unlocked' : ''}${cur ? ' current' : ''}" ${ok ? `onclick="game.startLevel(${i})"` : 'disabled'}>${i + 1}</button>`;
+    }
+    p.innerHTML = `
+      <h2>⏪ 시간 되감기</h2>
+      <p>시간을 되감아 과거의 잔상과 협력하여<br>퍼즐을 풀고 탈출하세요!</p>
+      <p style="font-size:12px;color:#667">PC: WASD/화살표 이동 | R 녹화 | T 되감기 | ESC 메뉴<br>모바일: 하단 가상 버튼 사용</p>
+      <div class="lvl-grid">${btns}</div>
+      <button class="big-btn" onclick="game.startLevel(${this.maxUnlocked})">스테이지 ${this.maxUnlocked + 1} 시작</button>`;
+    document.getElementById('overlay').classList.remove('hidden');
+  },
+
+  startLevel(idx) {
+    if (idx > this.maxUnlocked || idx < 0 || idx >= LEVELS.length) return;
+    this.level = idx;
+    document.getElementById('overlay').classList.add('hidden');
+    this.loadLevel(idx);
+    this.state = 'playing';
+  },
+
+  loadLevel(idx) {
+    const lv = LEVELS[idx];
+    this.lv = lv;
+    this.player = {
+      x: lv.spawn.x * TILE + (TILE - CHAR_W) / 2,
+      y: lv.spawn.y * TILE + (TILE - CHAR_H),
+      w: CHAR_W, h: CHAR_H, vx: 0, vy: 0, onGround: false, facing: 1
+    };
+    this.ghosts = [];
+    this.recordings = [];
+    this.curRec = null;
+    this.isRec = false;
+    this.rewindCnt = 0;
+    this.swState = lv.switches.map(() => false);
+    this.drState = lv.doors.map(() => false);
+    this.deathT = 0; this.rewindT = 0;
+    this.frame = 0;
+    this.particles = [];
+    this.jumpWas = false;
+    this.camX = 0; this.camY = 0;
+    this.updateHUD();
+    if (lv.hint) this.showMsg(lv.hint, 200);
+    document.getElementById('btnRec').classList.remove('active');
+  },
+
+  restartLevel() { this.loadLevel(this.level); },
+
+  // ── Recording ──
+  toggleRec() {
+    if (this.state !== 'playing' || this.deathT > 0 || this.rewindT > 0) return;
+    if (!this.isRec) {
+      if (this.rewindCnt >= this.lv.maxGhosts) {
+        this.showMsg('최대 되감기 횟수 도달! ↻로 재시작 가능', 90);
+        return;
+      }
+      this.isRec = true;
+      this.curRec = { start: { x: this.player.x, y: this.player.y }, frames: [] };
+      document.getElementById('btnRec').classList.add('active');
+      this.showMsg('● 녹화 중... 행동을 기록합니다', 60);
+    } else {
+      this.isRec = false;
+      document.getElementById('btnRec').classList.remove('active');
+      if (this.curRec && this.curRec.frames.length > 5) {
+        this.showMsg('녹화 완료! T를 눌러 되감기', 60);
+      } else {
+        this.curRec = null;
+        this.showMsg('녹화가 너무 짧습니다 (더 오래 녹화하세요)', 70);
+      }
+    }
+  },
+
+  doRewind() {
+    if (this.state !== 'playing' || this.deathT > 0 || this.rewindT > 0) return;
+    // If recording, auto-stop first
+    if (this.isRec) {
+      this.isRec = false;
+      document.getElementById('btnRec').classList.remove('active');
+    }
+    if (!this.curRec || this.curRec.frames.length < 5) {
+      this.showMsg(this.curRec ? '더 많은 행동을 녹화하세요!' : '먼저 R로 녹화를 시작하세요!', 70);
+      return;
+    }
+    this.recordings.push(this.curRec);
+    this.rewindCnt++;
+    this.rewindT = 30;
+    this.showVHS();
+    // Reset player to recording start
+    this.player.x = this.curRec.start.x;
+    this.player.y = this.curRec.start.y;
+    this.player.vx = 0; this.player.vy = 0;
+    // Rebuild all ghosts
+    this.rebuildGhosts();
+    this.curRec = null;
+    this.updateHUD();
+    this.showMsg('⏪ 되감기! 잔상이 행동을 반복합니다', 70);
+    // Spawn particles
+    this.spawnParticles(this.player.x + CHAR_W / 2, this.player.y + CHAR_H / 2, '#0ff', 20);
+  },
+
+  rebuildGhosts() {
+    this.ghosts = this.recordings.map((rec, i) => ({
+      rec, fi: 0,
+      x: rec.start.x, y: rec.start.y,
+      w: CHAR_W, h: CHAR_H, vx: 0, vy: 0,
+      onGround: false, color: GHOST_COLORS[i % 3], done: false
+    }));
+  },
+
+  showVHS() {
+    vhsEl.classList.add('show');
+    setTimeout(() => vhsEl.classList.remove('show'), 500);
+    const w = vhsCanvas.width, h = vhsCanvas.height;
+    vhsCtx.clearRect(0, 0, w, h);
+    vhsCtx.fillStyle = 'rgba(0,0,0,0.4)';
+    vhsCtx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 60; i++) {
+      const y = Math.random() * h;
+      vhsCtx.fillStyle = `rgba(${Math.random() > .5 ? '0,255,255' : '255,0,255'},${Math.random() * .3})`;
+      vhsCtx.fillRect(0, y, w, 1 + Math.random() * 3);
+    }
+  },
+
+  showMsg(t, d) { this.msgTxt = t; this.msgT = d || 90; },
+
+  // ── Death ──
+  die() {
+    if (this.deathT > 0) return;
+    this.deathT = 45;
+    this.spawnParticles(this.player.x + CHAR_W / 2, this.player.y + CHAR_H / 2, '#f44', 25);
+    if (this.isRec) {
+      this.isRec = false;
+      this.curRec = null;
+      document.getElementById('btnRec').classList.remove('active');
+    }
+    setTimeout(() => {
+      if (this.state !== 'playing') return;
+      // Respawn at last recording start or spawn
+      if (this.recordings.length > 0) {
+        const last = this.recordings[this.recordings.length - 1];
+        this.player.x = last.start.x;
+        this.player.y = last.start.y;
+      } else {
+        this.player.x = this.lv.spawn.x * TILE + (TILE - CHAR_W) / 2;
+        this.player.y = this.lv.spawn.y * TILE + (TILE - CHAR_H);
+      }
+      this.player.vx = 0; this.player.vy = 0;
+      this.rebuildGhosts();
+      this.deathT = 0;
+    }, 700);
+  },
+
+  // ── Level Clear ──
+  levelClear() {
+    this.state = 'clear';
+    this.spawnParticles(this.player.x + CHAR_W / 2, this.player.y + CHAR_H / 2, '#fff', 30);
+    const lvIdx = this.level;
+    const usedRewinds = this.rewindCnt;
+    // Unlock next
+    if (lvIdx + 1 > this.maxUnlocked && lvIdx < LEVELS.length - 1) {
+      this.maxUnlocked = lvIdx + 1;
+    } else if (lvIdx === LEVELS.length - 1) {
+      this.maxUnlocked = LEVELS.length - 1; // keep at max
+    }
+    this.save();
+    const stars = usedRewinds === 0 ? 3 : (usedRewinds <= Math.max(1, this.lv.maxGhosts - 1) ? 2 : 1);
+    const isLast = lvIdx === LEVELS.length - 1;
+
+    setTimeout(() => {
+      const p = document.getElementById('panelContent');
+      const starStr = '<span style="color:#fc0">' + '★'.repeat(stars) + '</span>' + '<span style="color:#444">' + '☆'.repeat(3 - stars) + '</span>';
+      if (isLast) {
+        p.innerHTML = `
+          <h2>축하합니다!</h2>
+          <div class="stars">${starStr}</div>
+          <p>모든 스테이지를 클리어했습니다!</p>
+          <p style="color:#0ff;font-style:italic">"시간을 되감는 자, 시간을 정복한다."</p>
+          <button class="big-btn" onclick="game.showMenu()">메뉴로 돌아가기</button>`;
+      } else {
+        p.innerHTML = `
+          <h2>스테이지 ${lvIdx + 1} 클리어!</h2>
+          <div class="stars">${starStr}</div>
+          <p>되감기 사용: ${usedRewinds}회</p>
+          <button class="big-btn" onclick="game.startLevel(${lvIdx + 1})">다음 스테이지 →</button>
+          <br><button class="big-btn" style="background:#333;margin-top:8px;font-size:13px" onclick="game.showMenu()">메뉴</button>`;
+      }
+      document.getElementById('overlay').classList.remove('hidden');
+    }, 900);
+  },
+
+  updateHUD() {
+    document.getElementById('stageLabel').textContent = `Stage ${this.level + 1}/15`;
+    document.getElementById('rewindLabel').textContent = `되감기: ${this.rewindCnt}/${this.lv.maxGhosts}`;
+    document.getElementById('ghostLabel').textContent = `잔상: ${this.ghosts.length}`;
+  },
+
+  // ── Physics ──
+  isSolid(tx, ty) {
+    const lv = this.lv;
+    if (tx < 0 || ty < 0 || tx >= lv.width || ty >= lv.height) return true;
+    if (lv.tiles[ty][tx] === 1) return true;
+    // Closed doors are solid
+    for (let i = 0; i < lv.doors.length; i++) {
+      if (lv.doors[i].x === tx && lv.doors[i].y === ty && !this.drState[i]) return true;
+    }
+    return false;
+  },
+
+  updatePhys(c, inp) {
+    if (inp.left) { c.vx = -PHYSICS.moveSpeed; c.facing = -1; }
+    if (inp.right) { c.vx = PHYSICS.moveSpeed; c.facing = 1; }
+    if (!inp.left && !inp.right) c.vx *= PHYSICS.friction;
+    if (Math.abs(c.vx) < 0.08) c.vx = 0;
+    if (inp.jump && c.onGround) { c.vy = PHYSICS.jumpForce; c.onGround = false; }
+    c.vy += PHYSICS.gravity;
+    if (c.vy > 12) c.vy = 12;
+    // Move X
+    c.x += c.vx;
+    this.resolveX(c);
+    // Move Y
+    c.y += c.vy;
+    this.resolveY(c);
+  },
+
+  resolveX(c) {
+    const l = Math.floor(c.x / TILE), r = Math.floor((c.x + c.w - 1) / TILE);
+    const t = Math.floor(c.y / TILE), b = Math.floor((c.y + c.h - 1) / TILE);
+    for (let ty = t; ty <= b; ty++) {
+      if (c.vx < 0 && this.isSolid(l, ty)) { c.x = l * TILE + TILE; c.vx = 0; }
+      const r2 = Math.floor((c.x + c.w - 1) / TILE);
+      if (c.vx > 0 && this.isSolid(r2, ty)) { c.x = r2 * TILE - c.w; c.vx = 0; }
+    }
+  },
+
+  resolveY(c) {
+    const l = Math.floor(c.x / TILE), r = Math.floor((c.x + c.w - 1) / TILE);
+    const t = Math.floor(c.y / TILE), b = Math.floor((c.y + c.h - 1) / TILE);
+    c.onGround = false;
+    for (let tx = l; tx <= r; tx++) {
+      if (c.vy < 0 && this.isSolid(tx, t)) { c.y = t * TILE + TILE; c.vy = 0; }
+      const b2 = Math.floor((c.y + c.h - 1) / TILE);
+      if (c.vy >= 0 && this.isSolid(tx, b2)) { c.y = b2 * TILE - c.h; c.vy = 0; c.onGround = true; }
+    }
+  },
+
+  // ── Switches / Doors ──
+  checkSwitches() {
+    const lv = this.lv;
+    this.swState = lv.switches.map(() => false);
+    const chars = [this.player, ...this.ghosts.filter(g => !g.done)];
+    for (let si = 0; si < lv.switches.length; si++) {
+      const sw = lv.switches[si];
+      const sr = { x: sw.x * TILE, y: sw.y * TILE, w: TILE, h: TILE };
+      for (const c of chars) {
+        if (this.overlap(c, sr)) { this.swState[si] = true; break; }
+      }
+    }
+    this.drState = lv.doors.map(() => false);
+    for (let i = 0; i < lv.switches.length; i++) {
+      if (this.swState[i]) {
+        const did = lv.switches[i].doorId;
+        for (let j = 0; j < lv.doors.length; j++) {
+          if (lv.doors[j].id === did) this.drState[j] = true;
+        }
+      }
+    }
+  },
+
+  overlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  },
+
+  checkSpikes() {
+    const lv = this.lv, p = this.player;
+    const cl = Math.floor(p.x / TILE), cr = Math.floor((p.x + p.w - 1) / TILE);
+    const ct = Math.floor(p.y / TILE), cb = Math.floor((p.y + p.h - 1) / TILE);
+    for (let ty = ct; ty <= cb; ty++) {
+      for (let tx = cl; tx <= cr; tx++) {
+        if (tx >= 0 && ty >= 0 && tx < lv.width && ty < lv.height && lv.tiles[ty][tx] === 2) {
+          const sr = { x: tx * TILE + 6, y: ty * TILE + 10, w: TILE - 12, h: TILE - 10 };
+          if (this.overlap(p, sr)) return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  checkExit() {
+    const ex = { x: this.lv.exit.x * TILE + 4, y: this.lv.exit.y * TILE + 4, w: TILE - 8, h: TILE - 8 };
+    return this.overlap(this.player, ex);
+  },
+
+  // ── Particles ──
+  spawnParticles(px, py, col, n) {
+    for (let i = 0; i < n; i++) {
+      this.particles.push({
+        x: px, y: py,
+        vx: (Math.random() - .5) * 6,
+        vy: (Math.random() - .5) * 6 - 2,
+        life: 30 + Math.random() * 20,
+        color: col, size: 2 + Math.random() * 3
+      });
+    }
+  },
+
+  updateParticles() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
+      if (p.life <= 0) this.particles.splice(i, 1);
+    }
+  },
+
+  // ── Camera ──
+  updateCamera() {
+    const px = this.player.x + CHAR_W / 2, py = this.player.y + CHAR_H / 2;
+    const mw = this.lv.width * TILE, mh = this.lv.height * TILE;
+    let tx = px - this.cw / 2, ty = py - this.ch / 2;
+    tx = Math.max(0, Math.min(tx, mw - this.cw));
+    ty = Math.max(0, Math.min(ty, mh - this.ch));
+    if (mw <= this.cw) tx = (mw - this.cw) / 2;
+    if (mh <= this.ch) ty = (mh - this.ch) / 2;
+    this.camX += (tx - this.camX) * 0.12;
+    this.camY += (ty - this.camY) * 0.12;
+  },
+
+  // ── Main Update ──
+  update() {
+    if (this.state !== 'playing' && this.state !== 'clear') return;
+    this.updateParticles();
+    if (this.state === 'clear') return;
+    if (this.deathT > 0) { this.deathT--; return; }
+    if (this.rewindT > 0) { this.rewindT--; if (this.rewindT > 0) return; }
+    this.frame++;
+
+    const input = this.getInput();
+
+    // Record frames
+    if (this.isRec && this.curRec) {
+      this.curRec.frames.push({ left: input.left, right: input.right, jump: input.jump });
+      // Safety: limit recording to 600 frames (10 sec)
+      if (this.curRec.frames.length >= 600) {
+        this.isRec = false;
+        document.getElementById('btnRec').classList.remove('active');
+        this.showMsg('녹화 시간 초과! T로 되감기하세요', 80);
+      }
+    }
+
+    // Player physics
+    this.updatePhys(this.player, input);
+
+    // Ghost physics
+    for (const g of this.ghosts) {
+      if (g.done) continue;
+      if (g.fi >= g.rec.frames.length) { g.done = true; continue; }
+      this.updatePhys(g, g.rec.frames[g.fi]);
+      g.fi++;
+    }
+
+    // Switches
+    this.checkSwitches();
+
+    // Spikes
+    if (this.checkSpikes()) { this.die(); return; }
+
+    // Exit
+    if (this.checkExit()) { this.levelClear(); return; }
+
+    // Camera
+    this.updateCamera();
+
+    if (this.msgT > 0) this.msgT--;
+  },
+
+  // ── Drawing ──
+  draw() {
+    ctx.clearRect(0, 0, this.cw, this.ch);
+    if (this.state === 'menu') {
+      this.drawMenuBg();
+      return;
+    }
+    if (!this.lv) return;
+
+    ctx.save();
+    ctx.translate(Math.round(-this.camX), Math.round(-this.camY));
+
+    // Rewind visual
+    if (this.rewindT > 0) {
+      ctx.filter = `hue-rotate(${this.rewindT * 10}deg) brightness(${1 + this.rewindT * 0.015})`;
+    }
+
+    this.drawBg();
+    this.drawTiles();
+    this.drawSwitches();
+    this.drawDoors();
+    this.drawExit();
+    this.drawGhosts();
+    if (this.deathT <= 0 || this.deathT % 4 >= 2) this.drawPlayer();
+    this.drawParticlesWorld();
+
+    ctx.filter = 'none';
+    ctx.restore();
+
+    // Screen-space effects
+    if (this.rewindT > 0) {
+      ctx.fillStyle = `rgba(0,255,255,${this.rewindT * 0.008})`;
+      for (let y = 0; y < this.ch; y += 3) ctx.fillRect(0, y, this.cw, 1);
+    }
+    if (this.deathT > 0) {
+      ctx.fillStyle = `rgba(255,30,30,${this.deathT * 0.012})`;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+    }
+
+    this.drawRecIndicator();
+    this.drawMsg();
+  },
+
+  drawMenuBg() {
+    // Animated grid background
+    const t = Date.now() * 0.001;
+    ctx.fillStyle = '#0f0f1a';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.strokeStyle = 'rgba(0,255,255,0.04)';
+    for (let x = 0; x < this.cw; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.ch); ctx.stroke();
+    }
+    for (let y = 0; y < this.ch; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.cw, y); ctx.stroke();
+    }
+  },
+
+  drawBg() {
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(40,40,80,0.3)';
+    ctx.lineWidth = 0.5;
+    const sx = Math.floor(this.camX / TILE) * TILE;
+    const sy = Math.floor(this.camY / TILE) * TILE;
+    for (let x = sx; x < this.camX + this.cw + TILE; x += TILE) {
+      ctx.beginPath(); ctx.moveTo(x, sy); ctx.lineTo(x, sy + this.ch + TILE); ctx.stroke();
+    }
+    for (let y = sy; y < this.camY + this.ch + TILE; y += TILE) {
+      ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + this.cw + TILE, y); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+  },
+
+  drawTiles() {
+    const lv = this.lv;
+    const sx = Math.max(0, Math.floor(this.camX / TILE));
+    const sy = Math.max(0, Math.floor(this.camY / TILE));
+    const ex = Math.min(lv.width, Math.ceil((this.camX + this.cw) / TILE) + 1);
+    const ey = Math.min(lv.height, Math.ceil((this.camY + this.ch) / TILE) + 1);
+
+    for (let y = sy; y < ey; y++) {
+      for (let x = sx; x < ex; x++) {
+        const t = lv.tiles[y][x];
+        if (t === 1) {
+          // Wall tile with subtle pattern
+          ctx.fillStyle = '#2a2a3a';
+          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+          ctx.strokeStyle = '#3a3a5a';
+          ctx.strokeRect(x * TILE + .5, y * TILE + .5, TILE - 1, TILE - 1);
+          // Inner detail
+          ctx.fillStyle = '#242434';
+          ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+        } else if (t === 2) {
+          // Spike with vibration
+          const bx = x * TILE, by = y * TILE;
+          const bounce = Math.sin(this.frame * 0.12 + x * 2) * 1.5;
+          ctx.fillStyle = '#cc1111';
+          ctx.beginPath();
+          ctx.moveTo(bx + 2, by + TILE);
+          ctx.lineTo(bx + TILE / 4, by + 8 + bounce);
+          ctx.lineTo(bx + TILE / 2, by + TILE);
+          ctx.lineTo(bx + TILE * 3 / 4, by + 8 + bounce);
+          ctx.lineTo(bx + TILE - 2, by + TILE);
+          ctx.closePath();
+          ctx.fill();
+          // Highlight
+          ctx.fillStyle = '#ff4444';
+          ctx.beginPath();
+          ctx.moveTo(bx + 6, by + TILE);
+          ctx.lineTo(bx + TILE / 4, by + 14 + bounce);
+          ctx.lineTo(bx + TILE / 4 + 4, by + TILE);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(bx + TILE / 2 + 2, by + TILE);
+          ctx.lineTo(bx + TILE * 3 / 4, by + 14 + bounce);
+          ctx.lineTo(bx + TILE * 3 / 4 + 4, by + TILE);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+  },
+
+  drawSwitches() {
+    this.lv.switches.forEach((sw, i) => {
+      const x = sw.x * TILE, y = sw.y * TILE;
+      const on = this.swState[i];
+      const col = SW_COLORS[sw.color];
+      // Base
+      ctx.fillStyle = '#222';
+      ctx.fillRect(x + 2, y + TILE - 6, TILE - 4, 6);
+      // Button
+      ctx.fillStyle = on ? col : '#555';
+      const bh = on ? 3 : 8;
+      ctx.fillRect(x + 4, y + TILE - 6 - bh, TILE - 8, bh + 2);
+      if (on) {
+        ctx.shadowColor = col; ctx.shadowBlur = 12;
+        ctx.fillRect(x + 4, y + TILE - 6 - bh, TILE - 8, bh + 2);
+        ctx.shadowBlur = 0;
+      }
+      // Color indicator line
+      ctx.fillStyle = col;
+      ctx.fillRect(x + 2, y + TILE - 2, TILE - 4, 2);
+    });
+  },
+
+  drawDoors() {
+    this.lv.doors.forEach((d, i) => {
+      const x = d.x * TILE, y = d.y * TILE;
+      const open = this.drState[i];
+      const col = SW_COLORS[d.color];
+      if (!open) {
+        // Solid door
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = col;
+        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        ctx.lineWidth = 1;
+        // X pattern
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath();
+        ctx.moveTo(x + 6, y + 6); ctx.lineTo(x + TILE - 6, y + TILE - 6);
+        ctx.moveTo(x + TILE - 6, y + 6); ctx.lineTo(x + 6, y + TILE - 6);
+        ctx.stroke();
+      } else {
+        // Open door outline
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.25;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+    });
+  },
+
+  drawExit() {
+    const x = this.lv.exit.x * TILE, y = this.lv.exit.y * TILE;
+    const glow = Math.sin(this.frame * 0.06) * 0.3 + 0.7;
+    // Outer glow
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 20 * glow;
+    ctx.fillStyle = `rgba(255,255,255,${glow * 0.15})`;
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.shadowBlur = 0;
+    // Door frame
+    ctx.strokeStyle = `rgba(255,255,255,${glow * 0.9})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 3, y + 3, TILE - 6, TILE - 6);
+    ctx.lineWidth = 1;
+    // Inner light
+    ctx.fillStyle = `rgba(200,240,255,${glow * 0.25})`;
+    ctx.fillRect(x + 5, y + 5, TILE - 10, TILE - 10);
+    // Arrow
+    ctx.fillStyle = `rgba(255,255,255,${glow})`;
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('EXIT', x + TILE / 2, y + TILE / 2);
+    ctx.textBaseline = 'alphabetic';
+  },
+
+  drawPlayer() {
+    const p = this.player;
+    ctx.save();
+    // Glow
+    ctx.shadowColor = '#0ff'; ctx.shadowBlur = 14;
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.shadowBlur = 0;
+    // Eyes
+    const ex1 = p.facing > 0 ? 5 : 3, ex2 = p.facing > 0 ? 13 : 11;
+    ctx.fillStyle = '#003';
+    ctx.fillRect(p.x + ex1, p.y + 7, 3, 3);
+    ctx.fillRect(p.x + ex2, p.y + 7, 3, 3);
+    // Mouth
+    ctx.fillRect(p.x + 6, p.y + 15, 8, 2);
+    // Border
+    ctx.strokeStyle = '#088';
+    ctx.strokeRect(p.x + .5, p.y + .5, p.w - 1, p.h - 1);
+    ctx.restore();
+  },
+
+  drawGhosts() {
+    for (let i = 0; i < this.ghosts.length; i++) {
+      const g = this.ghosts[i];
+      ctx.globalAlpha = g.done ? 0.12 : 0.5;
+      ctx.save();
+      ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 3 : 10;
+      ctx.fillStyle = g.color;
+      ctx.fillRect(g.x, g.y, g.w, g.h);
+      ctx.shadowBlur = 0;
+      // Number label
+      ctx.globalAlpha = g.done ? 0.2 : 0.7;
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(i + 1, g.x + g.w / 2, g.y + g.h / 2 + 4);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  },
+
+  drawParticlesWorld() {
+    for (const p of this.particles) {
+      ctx.globalAlpha = Math.min(1, p.life / 15);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  drawRecIndicator() {
+    if (!this.isRec) return;
+    const blink = Math.floor(this.frame / 12) % 2;
+    ctx.fillStyle = blink ? '#ff0000' : '#660000';
+    ctx.beginPath();
+    ctx.arc(this.cw - 28, 28, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('REC', this.cw - 28, 46);
+    // Frame count
+    if (this.curRec) {
+      ctx.fillStyle = '#f88';
+      ctx.font = '9px sans-serif';
+      ctx.fillText(`${Math.floor(this.curRec.frames.length / 60)}s`, this.cw - 28, 56);
+    }
+  },
+
+  drawMsg() {
+    if (this.msgT <= 0) return;
+    const alpha = Math.min(1, this.msgT / 20);
+    const lines = this.msgTxt.split('\n');
+    const lh = 20, pad = 14;
+    const bh = lines.length * lh + pad * 2;
+    const bw = 380;
+    const bx = (this.cw - bw) / 2, by = this.ch - bh - 16;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(5,15,30,0.88)';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,200,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#9df';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    lines.forEach((l, i) => {
+      ctx.fillText(l, this.cw / 2, by + pad + 14 + i * lh);
+    });
+    ctx.restore();
+  },
+
+  // ── Game Loop ──
+  loop() {
+    this.update();
+    this.draw();
+    requestAnimationFrame(() => this.loop());
+  }
+};
+
+// ── roundRect polyfill ──
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    this.moveTo(x + r[0], y);
+    this.lineTo(x + w - r[1], y);
+    this.arcTo(x + w, y, x + w, y + r[1], r[1]);
+    this.lineTo(x + w, y + h - r[2]);
+    this.arcTo(x + w, y + h, x + w - r[2], y + h, r[2]);
+    this.lineTo(x + r[3], y + h);
+    this.arcTo(x, y + h, x, y + h - r[3], r[3]);
+    this.lineTo(x, y + r[0]);
+    this.arcTo(x, y, x + r[0], y, r[0]);
+    this.closePath();
+  };
+}
+
+game.init();
+</script>
+</body>
+</html>
