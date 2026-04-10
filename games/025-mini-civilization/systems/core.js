@@ -491,6 +491,19 @@
         prod = Math.floor(prod * 0.5);
       }
 
+      // Defense & HP from buildings
+      let defense = 2; // base defense
+      let maxHp = 100; // base max HP
+      for (const bId of city.buildings) {
+        const b = BUILDINGS[bId];
+        if (b && b.effect) {
+          if (b.effect.defense) defense += b.effect.defense;
+          if (b.effect.hp) maxHp += b.effect.hp;
+        }
+      }
+      city.defense = defense;
+      city.maxHp = maxHp;
+
       city.foodPerTurn = food;
       city.productionPerTurn = prod;
       city.goldPerTurn = gold;

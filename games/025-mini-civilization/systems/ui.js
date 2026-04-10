@@ -206,7 +206,7 @@ window.UI = (() => {
 
       /* ── 모달 기본 ─────────────────── */
       .ui-modal-overlay {
-        position: absolute; inset: 0;
+        position: fixed; inset: 0;
         background: rgba(0,0,0,0.65);
         display: flex; align-items: center; justify-content: center;
         z-index: 100;
@@ -340,7 +340,7 @@ window.UI = (() => {
 
       /* ── 알림 ────────────────────────── */
       #notification-container {
-        position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+        position: fixed; top: 50px; left: 50%; transform: translateX(-50%);
         z-index: 150; pointer-events: none;
         display: flex; flex-direction: column; gap: 6px; align-items: center;
       }
@@ -379,7 +379,83 @@ window.UI = (() => {
 
   // ─── DOM 구조 생성 ──────────────────────────────────────
   function _createDOMStructure() {
-    if (document.getElementById('game-container')) return;
+    // index.html already has game-container with its own DOM structure.
+    // We need to create ONLY the missing elements that ui.js relies on,
+    // and wire up the existing index.html buttons to ui.js handlers.
+    const hasGameContainer = !!document.getElementById('game-container');
+
+    if (hasGameContainer) {
+      // === Bridge mode: create missing elements needed by ui.js ===
+
+      // 1) unit-panel (for showUnitPanel)
+      if (!document.getElementById('unit-panel')) {
+        const unitPanel = document.createElement('div');
+        unitPanel.id = 'unit-panel';
+        unitPanel.innerHTML = `
+          <div class="unit-header">
+            <div class="unit-icon" id="up-icon"></div>
+            <div class="unit-name" id="up-name"></div>
+          </div>
+          <div class="hp-bar"><div class="hp-fill" id="up-hp-fill"></div></div>
+          <div class="unit-stats" id="up-stats"></div>
+          <div class="unit-actions" id="up-actions"></div>
+        `;
+        const canvasArea = document.getElementById('canvas-area');
+        if (canvasArea) {
+          canvasArea.appendChild(unitPanel);
+        } else {
+          document.body.appendChild(unitPanel);
+        }
+      }
+
+      // 2) modal-container (for _renderModal)
+      if (!document.getElementById('modal-container')) {
+        const mc = document.createElement('div');
+        mc.id = 'modal-container';
+        document.body.appendChild(mc);
+      }
+
+      // 3) notification-container (for showNotification)
+      if (!document.getElementById('notification-container')) {
+        const nc = document.createElement('div');
+        nc.id = 'notification-container';
+        document.body.appendChild(nc);
+      }
+
+      // 4) Wire up existing index.html toolbar buttons
+      const endTurnBtn = document.getElementById('btn-end-turn');
+      if (endTurnBtn) endTurnBtn.addEventListener('click', () => UI.endTurn());
+
+      const techBtn = document.getElementById('btn-tech-tree');
+      if (techBtn) techBtn.addEventListener('click', () => UI.showTechTree());
+
+      const diploBtn = document.getElementById('btn-diplomacy');
+      if (diploBtn) diploBtn.addEventListener('click', () => UI.showDiplomacy());
+
+      const saveBtn = document.getElementById('btn-save');
+      if (saveBtn) saveBtn.addEventListener('click', () => {
+        if (typeof Main !== 'undefined' && typeof Main.saveGame === 'function') {
+          Main.saveGame();
+        } else {
+          UI.showNotification('저장 기능을 사용할 수 없습니다');
+        }
+      });
+
+      const menuBtn = document.getElementById('btn-menu');
+      if (menuBtn) menuBtn.addEventListener('click', () => UI.showMainMenu());
+
+      // 5) Wire up city manage button
+      const manageCityBtn = document.getElementById('btn-manage-city');
+      if (manageCityBtn) {
+        manageCityBtn.addEventListener('click', () => {
+          if (UI.selectedCity) UI.showCityPanel(UI.selectedCity);
+        });
+      }
+
+      return;
+    }
+
+    // === Standalone mode: create full UI from scratch ===
     if (document.getElementById('game-ui-root')) return;
 
     const root = document.createElement('div');
@@ -466,6 +542,7 @@ window.UI = (() => {
     _clearModal();
     _activeModal = id;
     const mc = _el('modal-container');
+    if (!mc) { console.error('[UI] modal-container not found'); return; }
     mc.innerHTML = `
       <div class="ui-modal-overlay" id="modal-overlay-${id}">
         <div class="ui-modal" id="modal-${id}">
@@ -912,7 +989,7 @@ window.UI = (() => {
 
       const turnEl = _el('hud-turn');
       const goldEl = _el('hud-gold');
-      const resNameEl = _el('hud-research-name');
+      const resNameEl = _el('hud-research-name') || _el('hud-research');
       const resFillEl = _el('hud-research-fill');
       const happyEl = _el('hud-happiness');
 
@@ -955,24 +1032,32 @@ window.UI = (() => {
       const def = UNITS[unit.type] || { name: unit.type, icon: '?', cost: 0 };
       const hpRatio = unit.hp / unit.maxHp;
 
-      _el('up-icon').textContent = def.icon;
-      _el('up-name').textContent = def.name;
+      const iconEl = _el('up-icon');
+      const nameEl = _el('up-name');
+      if (iconEl) iconEl.textContent = def.icon;
+      if (nameEl) nameEl.textContent = def.name;
 
       const hpFill = _el('up-hp-fill');
-      hpFill.style.width = (hpRatio * 100) + '%';
-      hpFill.style.background = _hpColor(hpRatio);
+      if (hpFill) {
+        hpFill.style.width = (hpRatio * 100) + '%';
+        hpFill.style.background = _hpColor(hpRatio);
+      }
 
       const unitDef = (typeof Game !== 'undefined' && Game.UNITS && Game.UNITS[unit.type]) || {};
       const atkVal = unit.attack != null ? unit.attack : (unitDef.attack != null ? unitDef.attack : '?');
       const defVal = unit.defense != null ? unit.defense : (unitDef.defense != null ? unitDef.defense : '?');
-      _el('up-stats').innerHTML = `
-        <div>HP: <span>${unit.hp}/${unit.maxHp}</span></div>
-        <div>이동: <span>${unit.movesLeft}/${unit.maxMoves}</span></div>
-        <div>위치: <span>(${unit.x}, ${unit.y})</span></div>
-        <div>공격: <span>${atkVal}</span> / 방어: <span>${defVal}</span></div>
-      `;
+      const statsEl = _el('up-stats');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div>HP: <span>${unit.hp}/${unit.maxHp}</span></div>
+          <div>이동: <span>${unit.movesLeft}/${unit.maxMoves}</span></div>
+          <div>위치: <span>(${unit.x}, ${unit.y})</span></div>
+          <div>공격: <span>${atkVal}</span> / 방어: <span>${defVal}</span></div>
+        `;
+      }
 
       const actDiv = _el('up-actions');
+      if (!actDiv) return;
       actDiv.innerHTML = '';
 
       // 이동 버튼
@@ -1097,9 +1182,10 @@ window.UI = (() => {
       }
       unitBuildHtml += '</div>';
 
-      const hpRatio = city.hp / 100;
+      const cityMaxHp = city.maxHp || 100;
+      const hpRatio = city.hp / cityMaxHp;
       const html = `
-        <h2>${city.name} (인구 ${city.population}) &nbsp; HP: ${city.hp}/100</h2>
+        <h2>${city.name} (인구 ${city.population}) &nbsp; HP: ${city.hp}/${cityMaxHp}</h2>
         <div class="hp-bar" style="margin-bottom:10px"><div class="hp-fill" style="width:${hpRatio*100}%;background:${_hpColor(hpRatio)}"></div></div>
         <div class="city-stats-grid">
           <div>식량: <span>${city.foodPerTurn}/턴</span> (성장까지 ${turnsToGrow}턴)</div>
@@ -1126,15 +1212,18 @@ window.UI = (() => {
       _renderModal('city', html);
 
       // 닫기 버튼
-      _el('city-modal-close').addEventListener('click', () => UI.closeModal());
+      const closeBtn = _el('city-modal-close');
+      if (closeBtn) closeBtn.addEventListener('click', () => UI.closeModal());
 
       // 건설 항목 클릭
       document.querySelectorAll('#modal-city .buildable-item').forEach(el => {
         el.addEventListener('click', () => {
           const type = el.dataset.buildType;
           const id = el.dataset.buildId;
-          if (typeof Game.setProduction === 'function') {
-            Game.setProduction(city, type, id);
+          if (typeof Game.addToProductionQueue === 'function') {
+            Game.addToProductionQueue(city, type, id);
+          } else if (typeof Game.setProduction === 'function') {
+            Game.setProduction(city.id, type, id);
           } else {
             // fallback: 직접 큐에 추가
             const cost = type === 'unit'
@@ -1238,7 +1327,8 @@ window.UI = (() => {
 
       _renderModal('tech', html);
 
-      _el('tech-modal-close').addEventListener('click', () => UI.closeModal());
+      const techCloseBtn = _el('tech-modal-close');
+      if (techCloseBtn) techCloseBtn.addEventListener('click', () => UI.closeModal());
 
       // 기술 노드 클릭
       document.querySelectorAll('#modal-tech .tech-node.available, #modal-tech .tech-node.current').forEach(el => {
@@ -1306,7 +1396,8 @@ window.UI = (() => {
 
       _renderModal('diplo', html);
 
-      _el('diplo-modal-close').addEventListener('click', () => UI.closeModal());
+      const diploCloseBtn = _el('diplo-modal-close');
+      if (diploCloseBtn) diploCloseBtn.addEventListener('click', () => UI.closeModal());
 
       // 외교 액션 버튼
       document.querySelectorAll('[data-diplo-action]').forEach(btn => {
@@ -1437,14 +1528,16 @@ window.UI = (() => {
 
       _renderModal('gameover', html);
 
-      _el('gameover-new').addEventListener('click', () => {
+      const goNewBtn = _el('gameover-new');
+      if (goNewBtn) goNewBtn.addEventListener('click', () => {
         UI.closeModal();
         if (typeof Game.newGame === 'function') Game.newGame();
         UI.updateHUD();
         if (typeof Renderer.render === 'function') Renderer.render();
       });
 
-      _el('gameover-menu').addEventListener('click', () => {
+      const goMenuBtn = _el('gameover-menu');
+      if (goMenuBtn) goMenuBtn.addEventListener('click', () => {
         UI.closeModal();
         UI.showMainMenu();
       });
@@ -1454,7 +1547,7 @@ window.UI = (() => {
     // NOTIFICATION
     // ─────────────────────────────────────────────────────
     showNotification(text) {
-      const container = _el('notification-container');
+      const container = _el('notification-container') || _el('notification-area');
       if (!container) return;
 
       const notif = document.createElement('div');
