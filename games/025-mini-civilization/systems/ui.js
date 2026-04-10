@@ -502,6 +502,16 @@ window.UI = (() => {
     initInput(canvas) {
       _canvas = canvas;
 
+      // 뷰포트 좌표 → 캔버스 내부 좌표 변환 (devicePixelRatio 보정 포함)
+      function _canvasCoords(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        return {
+          x: (clientX - rect.left) * dpr,
+          y: (clientY - rect.top) * dpr,
+        };
+      }
+
       // ── 마우스 이벤트 ──
       canvas.addEventListener('mousedown', (e) => {
         if (e.button === 0) {
@@ -519,8 +529,8 @@ window.UI = (() => {
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
           _drag.moved = true;
           if (typeof Renderer !== 'undefined' && Renderer.camera) {
-            Renderer.camera.x -= dx;
-            Renderer.camera.y -= dy;
+            Renderer.camera.x += dx;
+            Renderer.camera.y += dy;
             if (typeof Renderer.render === 'function') Renderer.render();
           }
           _drag.startX = e.clientX;
@@ -531,8 +541,9 @@ window.UI = (() => {
       canvas.addEventListener('mouseup', (e) => {
         if (e.button === 0 && !_drag.moved) {
           // 클릭 — 선택
-          const world = Renderer.screenToWorld(e.clientX, e.clientY);
-          const hex = HexMap.pixelToHex(world.x, world.y);
+          const sc = _canvasCoords(e.clientX, e.clientY);
+          const world = Renderer.screenToWorld(sc.x, sc.y);
+          const hex = HexMap.pixelToHex(world.x, world.y, Renderer.camera.hexSize);
           if (hex) UI.selectTile(hex.col, hex.row);
         }
         _drag.active = false;
@@ -541,8 +552,9 @@ window.UI = (() => {
       canvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         if (UI.selectedUnit && !_isAIProcessing) {
-          const world = Renderer.screenToWorld(e.clientX, e.clientY);
-          const hex = HexMap.pixelToHex(world.x, world.y);
+          const sc = _canvasCoords(e.clientX, e.clientY);
+          const world = Renderer.screenToWorld(sc.x, sc.y);
+          const hex = HexMap.pixelToHex(world.x, world.y, Renderer.camera.hexSize);
           if (hex) UI.commandUnit(UI.selectedUnit, hex.col, hex.row);
         }
       });
@@ -618,14 +630,16 @@ window.UI = (() => {
           if (timeSinceLast < 300 && timeSinceLast > 50) {
             // 더블탭 — 이동/공격 명령
             if (UI.selectedUnit && !_isAIProcessing) {
-              const world = Renderer.screenToWorld(t.clientX, t.clientY);
-              const hex = HexMap.pixelToHex(world.x, world.y);
+              const sc = _canvasCoords(t.clientX, t.clientY);
+              const world = Renderer.screenToWorld(sc.x, sc.y);
+              const hex = HexMap.pixelToHex(world.x, world.y, Renderer.camera.hexSize);
               if (hex) UI.commandUnit(UI.selectedUnit, hex.col, hex.row);
             }
           } else {
             // 싱글탭 — 선택
-            const world = Renderer.screenToWorld(t.clientX, t.clientY);
-            const hex = HexMap.pixelToHex(world.x, world.y);
+            const sc = _canvasCoords(t.clientX, t.clientY);
+            const world = Renderer.screenToWorld(sc.x, sc.y);
+            const hex = HexMap.pixelToHex(world.x, world.y, Renderer.camera.hexSize);
             if (hex) UI.selectTile(hex.col, hex.row);
           }
           _lastTap = now;

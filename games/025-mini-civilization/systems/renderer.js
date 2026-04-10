@@ -628,6 +628,27 @@
     const state = Game.state;
     const playerCivId = 0; // player is always civ 0
 
+    // UI 선택 상태를 gameState에 반영 (draw()가 읽는 필드)
+    if (window.UI) {
+      if (UI.selectedUnit) {
+        state.selectedUnit = {
+          x: UI.selectedUnit.x,
+          y: UI.selectedUnit.y,
+          movementRange: window.Renderer.moveRange || [],
+          pathPreview: null,
+        };
+      } else if (window.Renderer.selectedHex) {
+        state.selectedUnit = {
+          x: window.Renderer.selectedHex.col,
+          y: window.Renderer.selectedHex.row,
+          movementRange: window.Renderer.moveRange || [],
+          pathPreview: null,
+        };
+      } else {
+        state.selectedUnit = null;
+      }
+    }
+
     updateAnimations();
     draw(state, playerCivId);
     drawMinimap(state, playerCivId);
