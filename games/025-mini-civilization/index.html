@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>미니 문명 시뮬레이터</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  color: #e8e8e8;
+  background: #1a1a2e;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* ===== Layout ===== */
+#game-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== HUD Bar (Top) ===== */
+#hud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #16213e;
+  border-bottom: 2px solid #0f3460;
+  min-height: 40px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+#hud-bar .hud-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#hud-bar .hud-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #f0a500;
+  margin-right: 12px;
+}
+
+#hud-bar .hud-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.hud-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-stat .stat-label {
+  color: #aaa;
+}
+
+.hud-stat .stat-value {
+  color: #f0a500;
+  font-weight: bold;
+}
+
+#hud-turn-info {
+  color: #e8e8e8;
+}
+
+/* ===== Canvas Area ===== */
+#canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+#map-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#map-canvas:active {
+  cursor: grabbing;
+}
+
+/* ===== Minimap ===== */
+#minimap-container {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  width: 160px;
+  height: 120px;
+  border: 2px solid #0f3460;
+  background: #16213e;
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 20;
+}
+
+#minimap-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== Bottom Info Panel ===== */
+#bottom-panel {
+  display: flex;
+  align-items: stretch;
+  background: #16213e;
+  border-top: 2px solid #0f3460;
+  min-height: 90px;
+  max-height: 120px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+#info-panel {
+  flex: 1;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+#info-panel .info-title {
+  font-size: 15px;
+  font-weight: bold;
+  color: #f0a500;
+}
+
+#info-panel .info-stats {
+  font-size: 12px;
+  color: #ccc;
+  line-height: 1.5;
+}
+
+#info-panel .info-empty {
+  color: #666;
+  font-style: italic;
+}
+
+/* ===== Action Buttons (in info panel) ===== */
+#action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+
+#action-buttons button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  background: #1a1a2e;
+  color: #e8e8e8;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+#action-buttons button:hover {
+  background: #0f3460;
+  border-color: #f0a500;
+}
+
+#action-buttons button:active {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+#action-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#action-buttons button.hidden {
+  display: none;
+}
+
+/* ===== Bottom Toolbar ===== */
+#toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #0f3460;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+#toolbar button {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+#toolbar button:active {
+  transform: scale(0.95);
+}
+
+#btn-end-turn {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+#btn-end-turn:hover {
+  background: #d4940a;
+}
+
+#btn-tech-tree {
+  background: #2a4a7f;
+  color: #e8e8e8;
+}
+
+#btn-tech-tree:hover {
+  background: #345a9f;
+}
+
+#btn-diplomacy {
+  background: #2a4a7f;
+  color: #e8e8e8;
+}
+
+#btn-diplomacy:hover {
+  background: #345a9f;
+}
+
+#btn-save {
+  background: #1a3a5f;
+  color: #e8e8e8;
+}
+
+#btn-save:hover {
+  background: #2a4a7f;
+}
+
+#btn-menu {
+  background: #1a3a5f;
+  color: #e8e8e8;
+}
+
+#btn-menu:hover {
+  background: #2a4a7f;
+}
+
+/* ===== Modal Overlay ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-content {
+  background: #16213e;
+  border: 2px solid #0f3460;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content h2 {
+  color: #f0a500;
+  font-size: 18px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.modal-close-btn {
+  display: block;
+  margin: 16px auto 0;
+  padding: 8px 24px;
+  background: #0f3460;
+  color: #e8e8e8;
+  border: 1px solid #f0a500;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.modal-close-btn:hover {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+/* ===== Tech Tree Modal ===== */
+#tech-modal .tech-era {
+  margin-bottom: 16px;
+}
+
+#tech-modal .tech-era-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #f0a500;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #0f3460;
+}
+
+#tech-modal .tech-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+#tech-modal .tech-node {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid #555;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+#tech-modal .tech-node.researched {
+  background: #2a9d8f;
+  border-color: #2a9d8f;
+  color: #fff;
+}
+
+#tech-modal .tech-node.current {
+  background: #f0a500;
+  border-color: #f0a500;
+  color: #1a1a2e;
+  animation: pulse 1.5s infinite;
+}
+
+#tech-modal .tech-node.available {
+  background: #1a1a2e;
+  border-color: #4361ee;
+  color: #e8e8e8;
+}
+
+#tech-modal .tech-node.locked {
+  background: #222;
+  border-color: #444;
+  color: #666;
+  cursor: not-allowed;
+}
+
+#tech-modal .tech-arrow {
+  color: #555;
+  font-size: 14px;
+}
+
+#tech-modal .tech-info {
+  margin-top: 12px;
+  padding: 10px;
+  background: #1a1a2e;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ===== City Modal ===== */
+#city-modal .city-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+#city-modal .city-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #f0a500;
+}
+
+#city-modal .city-hp {
+  font-size: 13px;
+  color: #ccc;
+}
+
+#city-modal .city-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+#city-modal .city-stat {
+  padding: 6px 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+}
+
+#city-modal .city-stat .label {
+  color: #aaa;
+}
+
+#city-modal .city-stat .value {
+  color: #f0a500;
+  font-weight: bold;
+}
+
+#city-modal .city-buildings {
+  margin-bottom: 12px;
+}
+
+#city-modal .city-buildings h3 {
+  font-size: 14px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+#city-modal .building-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+#city-modal .building-tag {
+  padding: 3px 8px;
+  background: #2a9d8f;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #fff;
+}
+
+#city-modal .city-production {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+}
+
+#city-modal .city-production h3 {
+  font-size: 14px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+#city-modal .production-queue-item {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+#city-modal .buildable-list {
+  margin-top: 8px;
+}
+
+#city-modal .buildable-list h3 {
+  font-size: 14px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+#city-modal .build-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#city-modal .build-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: #1a1a2e;
+  border: 1px solid #4361ee;
+  border-radius: 4px;
+  color: #e8e8e8;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#city-modal .build-btn:hover {
+  background: #4361ee;
+  color: #fff;
+}
+
+#city-modal .build-btn:disabled {
+  border-color: #444;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* ===== Diplomacy Modal ===== */
+#diplomacy-modal .diplo-civ {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #1a1a2e;
+  border-radius: 6px;
+  border-left: 4px solid #555;
+}
+
+#diplomacy-modal .diplo-civ.civ-1 {
+  border-left-color: #e63946;
+}
+
+#diplomacy-modal .diplo-civ.civ-2 {
+  border-left-color: #2a9d8f;
+}
+
+#diplomacy-modal .diplo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+#diplomacy-modal .diplo-name {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+#diplomacy-modal .diplo-status {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+#diplomacy-modal .diplo-status.neutral {
+  background: #555;
+  color: #ddd;
+}
+
+#diplomacy-modal .diplo-status.friendly {
+  background: #2a9d8f;
+  color: #fff;
+}
+
+#diplomacy-modal .diplo-status.allied {
+  background: #4361ee;
+  color: #fff;
+}
+
+#diplomacy-modal .diplo-status.hostile {
+  background: #e63946;
+  color: #fff;
+}
+
+#diplomacy-modal .diplo-status.war {
+  background: #9b0000;
+  color: #fff;
+}
+
+#diplomacy-modal .diplo-info {
+  font-size: 12px;
+  color: #ccc;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+#diplomacy-modal .diplo-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#diplomacy-modal .diplo-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #16213e;
+  color: #e8e8e8;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#diplomacy-modal .diplo-btn:hover {
+  background: #0f3460;
+  border-color: #f0a500;
+}
+
+#diplomacy-modal .diplo-btn.war-btn {
+  border-color: #e63946;
+  color: #e63946;
+}
+
+#diplomacy-modal .diplo-btn.war-btn:hover {
+  background: #e63946;
+  color: #fff;
+}
+
+/* ===== Main Menu Modal ===== */
+#main-menu-modal .modal-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+#main-menu-modal .menu-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #f0a500;
+  margin-bottom: 8px;
+}
+
+#main-menu-modal .menu-subtitle {
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 24px;
+}
+
+#main-menu-modal .menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+#main-menu-modal .menu-btn {
+  width: 200px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  border: 2px solid #f0a500;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #f0a500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#main-menu-modal .menu-btn:hover {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+#main-menu-modal .menu-btn:disabled {
+  border-color: #444;
+  color: #444;
+  cursor: not-allowed;
+}
+
+#main-menu-modal .menu-btn:disabled:hover {
+  background: #1a1a2e;
+  color: #444;
+}
+
+/* ===== Game Over Modal ===== */
+#gameover-modal .modal-content {
+  text-align: center;
+  max-width: 450px;
+}
+
+#gameover-modal .gameover-result {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+#gameover-modal .gameover-result.victory {
+  color: #f0a500;
+}
+
+#gameover-modal .gameover-result.defeat {
+  color: #e63946;
+}
+
+#gameover-modal .gameover-condition {
+  font-size: 14px;
+  color: #ccc;
+  margin-bottom: 16px;
+}
+
+#gameover-modal .gameover-scores {
+  text-align: left;
+  padding: 12px;
+  background: #1a1a2e;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+#gameover-modal .gameover-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#gameover-modal .gameover-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  border: 2px solid #f0a500;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #f0a500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#gameover-modal .gameover-btn:hover {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+/* ===== Notification Area ===== */
+#notification-area {
+  position: fixed;
+  top: 50px;
+  right: 12px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  max-width: 320px;
+}
+
+.notification {
+  padding: 10px 14px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-left: 4px solid #f0a500;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #e8e8e8;
+  animation: slideIn 0.3s ease;
+  pointer-events: auto;
+}
+
+.notification.type-warning {
+  border-left-color: #e63946;
+}
+
+.notification.type-success {
+  border-left-color: #2a9d8f;
+}
+
+.notification.type-info {
+  border-left-color: #4361ee;
+}
+
+.notification.type-combat {
+  border-left-color: #ff6b6b;
+}
+
+.notification.fade-out {
+  animation: fadeOut 0.3s ease forwards;
+}
+
+/* ===== Tooltip ===== */
+#tooltip {
+  display: none;
+  position: fixed;
+  padding: 8px 12px;
+  background: #0d1117;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e8e8e8;
+  z-index: 300;
+  pointer-events: none;
+  max-width: 220px;
+  line-height: 1.5;
+}
+
+#tooltip.visible {
+  display: block;
+}
+
+/* ===== Mobile Touch Controls ===== */
+#mobile-controls {
+  display: none;
+}
+
+/* ===== Scrollbar Styling ===== */
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #0f3460;
+  border-radius: 3px;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.anim-fadeIn { animation: fadeIn 0.3s ease; }
+.anim-slideUp { animation: slideUp 0.3s ease; }
+.anim-shake { animation: shake 0.3s ease; }
+
+/* ===== Loading Overlay ===== */
+#loading-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #1a1a2e;
+  z-index: 500;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#loading-overlay.active {
+  display: flex;
+}
+
+#loading-overlay .loading-text {
+  color: #f0a500;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+#loading-overlay .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #0f3460;
+  border-top-color: #f0a500;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Confirm Dialog ===== */
+#confirm-dialog {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  z-index: 400;
+  justify-content: center;
+  align-items: center;
+}
+
+#confirm-dialog.active {
+  display: flex;
+}
+
+#confirm-dialog .confirm-box {
+  background: #16213e;
+  border: 2px solid #f0a500;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  max-width: 360px;
+  width: 90%;
+}
+
+#confirm-dialog .confirm-message {
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+#confirm-dialog .confirm-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#confirm-dialog .confirm-btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  border: 1px solid #f0a500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#confirm-dialog .confirm-yes {
+  background: #f0a500;
+  color: #1a1a2e;
+}
+
+#confirm-dialog .confirm-no {
+  background: #1a1a2e;
+  color: #e8e8e8;
+}
+
+/* ===== Responsive (Mobile) ===== */
+@media (max-width: 768px) {
+  #hud-bar {
+    padding: 4px 8px;
+    flex-wrap: wrap;
+    min-height: 36px;
+  }
+
+  #hud-bar .hud-title {
+    font-size: 14px;
+    margin-right: 6px;
+  }
+
+  #hud-bar .hud-right {
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  #bottom-panel {
+    flex-direction: column;
+    min-height: 70px;
+    max-height: 100px;
+  }
+
+  #info-panel {
+    padding: 4px 8px;
+  }
+
+  #action-buttons {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  #action-buttons button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  #toolbar {
+    gap: 4px;
+    padding: 4px 8px;
+  }
+
+  #toolbar button {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  #minimap-container {
+    width: 100px;
+    height: 75px;
+    bottom: 4px;
+    left: 4px;
+  }
+
+  .modal-content {
+    padding: 14px;
+    max-height: 85vh;
+    width: 95%;
+  }
+
+  #mobile-controls {
+    display: flex;
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    gap: 4px;
+    z-index: 20;
+  }
+
+  .mobile-btn {
+    width: 36px;
+    height: 36px;
+    background: rgba(22, 33, 62, 0.8);
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    color: #e8e8e8;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .mobile-btn:active {
+    background: #f0a500;
+    color: #1a1a2e;
+  }
+
+  #notification-area {
+    top: 42px;
+    right: 6px;
+    max-width: 220px;
+  }
+
+  .notification {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  #hud-bar .hud-title {
+    font-size: 12px;
+  }
+
+  #hud-bar .hud-right {
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  #toolbar button {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  #main-menu-modal .menu-title {
+    font-size: 22px;
+  }
+
+  #main-menu-modal .menu-btn {
+    width: 160px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Game Container ===== -->
+<div id="game-container">
+
+  <!-- HUD Bar -->
+  <div id="hud-bar">
+    <div class="hud-left">
+      <span class="hud-title">⚔ 미니 문명</span>
+      <span id="hud-turn-info">턴: <span id="hud-turn">1</span>/100</span>
+    </div>
+    <div class="hud-right">
+      <div class="hud-stat">
+        <span class="stat-label">💰 금:</span>
+        <span class="stat-value" id="hud-gold">50</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">🔬 연구:</span>
+        <span class="stat-value" id="hud-research">없음</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">😊 행복:</span>
+        <span class="stat-value" id="hud-happiness">5</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">⚔ 군사:</span>
+        <span class="stat-value" id="hud-military">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas Area -->
+  <div id="canvas-area">
+    <canvas id="map-canvas"></canvas>
+
+    <!-- Minimap -->
+    <div id="minimap-container">
+      <canvas id="minimap-canvas"></canvas>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobile-controls">
+      <button class="mobile-btn" id="mobile-zoom-in" title="확대">+</button>
+      <button class="mobile-btn" id="mobile-zoom-out" title="축소">−</button>
+    </div>
+  </div>
+
+  <!-- Bottom Info Panel -->
+  <div id="bottom-panel">
+    <div id="info-panel">
+      <div class="info-title" id="info-title"></div>
+      <div class="info-stats" id="info-stats">
+        <span class="info-empty">타일이나 유닛을 선택하세요</span>
+      </div>
+    </div>
+    <div id="action-buttons">
+      <!-- Unit actions -->
+      <button id="btn-move" class="hidden" title="이동">🚶 이동</button>
+      <button id="btn-attack" class="hidden" title="공격">⚔ 공격</button>
+      <button id="btn-fortify" class="hidden" title="방어">🛡 방어</button>
+      <button id="btn-disband" class="hidden" title="해산">❌ 해산</button>
+      <button id="btn-found-city" class="hidden" title="도시 건설">🏗 도시 건설</button>
+      <!-- City actions -->
+      <button id="btn-manage-city" class="hidden" title="도시 관리">🏙 도시 관리</button>
+    </div>
+  </div>
+
+  <!-- Bottom Toolbar -->
+  <div id="toolbar">
+    <button id="btn-end-turn" title="턴 종료 (Enter)">턴 종료</button>
+    <button id="btn-tech-tree" title="기술 트리 (T)">🔬 기술</button>
+    <button id="btn-diplomacy" title="외교 (D)">🤝 외교</button>
+    <button id="btn-save" title="저장">💾 저장</button>
+    <button id="btn-menu" title="메뉴">☰ 메뉴</button>
+  </div>
+</div>
+
+<!-- ===== Tech Tree Modal ===== -->
+<div id="tech-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2>🔬 기술 연구 트리</h2>
+
+    <!-- Ancient Era -->
+    <div class="tech-era" id="tech-era-ancient">
+      <div class="tech-era-title">고대 시대</div>
+      <div class="tech-row" id="tech-row-1"></div>
+      <div class="tech-row" id="tech-row-2"></div>
+      <div class="tech-row" id="tech-row-3"></div>
+    </div>
+
+    <!-- Medieval Era -->
+    <div class="tech-era" id="tech-era-medieval">
+      <div class="tech-era-title">중세 시대 (고대 기술 3개 이상 필요)</div>
+      <div class="tech-row" id="tech-row-4"></div>
+      <div class="tech-row" id="tech-row-5"></div>
+      <div class="tech-row" id="tech-row-6"></div>
+    </div>
+
+    <!-- Modern Era -->
+    <div class="tech-era" id="tech-era-modern">
+      <div class="tech-era-title">근대 시대 (중세 기술 3개 이상 필요)</div>
+      <div class="tech-row" id="tech-row-7"></div>
+      <div class="tech-row" id="tech-row-8"></div>
+    </div>
+
+    <div class="tech-info" id="tech-info">
+      <div>연구력: <span id="tech-research-per-turn">0</span>/턴</div>
+      <div>현재 연구: <span id="tech-current">없음</span></div>
+    </div>
+
+    <button class="modal-close-btn" id="tech-close-btn">닫기</button>
+  </div>
+</div>
+
+<!-- ===== City Management Modal ===== -->
+<div id="city-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="city-header">
+      <span class="city-name" id="city-modal-name">도시</span>
+      <span class="city-hp" id="city-modal-hp">HP: 100/100</span>
+    </div>
+
+    <div class="city-stats" id="city-modal-stats">
+      <div class="city-stat">
+        <span class="label">🌾 식량:</span>
+        <span class="value" id="city-food-per-turn">0</span>/턴
+        <span id="city-growth-info"></span>
+      </div>
+      <div class="city-stat">
+        <span class="label">⚒ 생산:</span>
+        <span class="value" id="city-prod-per-turn">0</span>/턴
+      </div>
+      <div class="city-stat">
+        <span class="label">💰 금:</span>
+        <span class="value" id="city-gold-per-turn">0</span>/턴
+      </div>
+      <div class="city-stat">
+        <span class="label">🔬 연구:</span>
+        <span class="value" id="city-research-per-turn">0</span>/턴
+      </div>
+      <div class="city-stat">
+        <span class="label">👥 인구:</span>
+        <span class="value" id="city-population">1</span>
+      </div>
+      <div class="city-stat">
+        <span class="label">😊 행복:</span>
+        <span class="value" id="city-happiness">5</span>
+      </div>
+    </div>
+
+    <div class="city-buildings">
+      <h3>건물</h3>
+      <div class="building-list" id="city-building-list">
+        <span style="color:#666;">없음</span>
+      </div>
+    </div>
+
+    <div class="city-production">
+      <h3>현재 생산</h3>
+      <div id="city-production-queue">
+        <span style="color:#666;">없음</span>
+      </div>
+    </div>
+
+    <div class="buildable-list">
+      <h3>건설 가능</h3>
+      <div class="build-options" id="city-build-options"></div>
+    </div>
+
+    <button class="modal-close-btn" id="city-close-btn">닫기</button>
+  </div>
+</div>
+
+<!-- ===== Diplomacy Modal ===== -->
+<div id="diplomacy-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2>🤝 외교</h2>
+    <div id="diplomacy-civ-list"></div>
+    <button class="modal-close-btn" id="diplo-close-btn">닫기</button>
+  </div>
+</div>
+
+<!-- ===== Main Menu Modal ===== -->
+<div id="main-menu-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="menu-title">⚔ 미니 문명</div>
+    <div class="menu-subtitle">턴제 전략 시뮬레이터</div>
+    <div class="menu-buttons">
+      <button class="menu-btn" id="btn-new-game">새 게임</button>
+      <button class="menu-btn" id="btn-continue-game" disabled>이어하기</button>
+      <button class="menu-btn" id="btn-how-to-play">조작법</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Game Over Modal ===== -->
+<div id="gameover-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2>게임 종료</h2>
+    <div class="gameover-result" id="gameover-result">승리!</div>
+    <div class="gameover-condition" id="gameover-condition"></div>
+    <div class="gameover-scores" id="gameover-scores"></div>
+    <div class="gameover-buttons">
+      <button class="gameover-btn" id="gameover-new-game">새 게임</button>
+      <button class="gameover-btn" id="gameover-menu">메뉴</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== How To Play Modal ===== -->
+<div id="howto-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2>조작법</h2>
+    <div style="font-size:13px; line-height:1.8;">
+      <p><strong>PC 조작:</strong></p>
+      <ul style="padding-left:20px; margin-bottom:12px;">
+        <li>마우스 클릭: 타일/유닛/도시 선택</li>
+        <li>우클릭: 선택된 유닛 이동/공격</li>
+        <li>마우스 드래그: 맵 이동</li>
+        <li>마우스 휠: 줌 인/아웃</li>
+        <li>Enter: 턴 종료</li>
+        <li>1-5: 유닛 빠른 선택</li>
+        <li>B: 도시 건설 (개척자)</li>
+        <li>T: 기술 트리</li>
+        <li>D: 외교 화면</li>
+      </ul>
+      <p><strong>모바일 조작:</strong></p>
+      <ul style="padding-left:20px; margin-bottom:12px;">
+        <li>탭: 선택</li>
+        <li>더블탭: 유닛 이동/공격</li>
+        <li>드래그: 맵 이동</li>
+        <li>핀치: 줌</li>
+      </ul>
+      <p><strong>승리 조건:</strong></p>
+      <ul style="padding-left:20px;">
+        <li>군사 승리: 모든 적 수도 점령</li>
+        <li>기술 승리: 근대 기술 4개 + 우주 프로그램</li>
+        <li>점수 승리: 100턴 종료 시 점수 판정</li>
+      </ul>
+    </div>
+    <button class="modal-close-btn" id="howto-close-btn">닫기</button>
+  </div>
+</div>
+
+<!-- ===== Notification Area ===== -->
+<div id="notification-area"></div>
+
+<!-- ===== Tooltip ===== -->
+<div id="tooltip"></div>
+
+<!-- ===== Loading Overlay ===== -->
+<div id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">맵 생성 중...</div>
+</div>
+
+<!-- ===== Confirm Dialog ===== -->
+<div id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-message" id="confirm-message"></div>
+    <div class="confirm-buttons">
+      <button class="confirm-btn confirm-yes" id="confirm-yes">확인</button>
+      <button class="confirm-btn confirm-no" id="confirm-no">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Scripts (loaded in order) ===== -->
+<script src="systems/core.js"></script>
+<script src="systems/map.js"></script>
+<script src="systems/renderer.js"></script>
+<script src="systems/ai.js"></script>
+<script src="systems/ui.js"></script>
+<script src="systems/main.js"></script>
+
+</body>
+</html>
