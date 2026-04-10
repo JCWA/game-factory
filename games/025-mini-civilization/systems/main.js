@@ -41,6 +41,11 @@ window.Main = {
     window.addEventListener('resize', () => this.resizeCanvases());
 
     // 시스템 초기화 (존재하는 경우에만)
+    if (window.Assets && typeof Assets.init === 'function') {
+      Assets.init();
+      console.log('[Main] Assets 시스템 초기화 완료');
+    }
+
     if (window.Game && typeof Game.init === 'function') {
       Game.init();
       console.log('[Main] Game(core) 시스템 초기화 완료');

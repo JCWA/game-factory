@@ -187,21 +187,38 @@
           ctx.fillStyle = COLORS.fogBlack;
           ctx.fill();
         } else {
-          // Terrain fill
-          ctx.fillStyle = _getTerrainColor(tile.terrain);
-          ctx.fill();
+          // Terrain fill (sprite or flat color fallback)
+          ctx.save();
+          _drawHexPath(ctx, px.x, px.y, size);
+          ctx.clip();
+          const terrainSprite = window.Assets && window.Assets.getTerrainSprite(tile.terrain);
+          if (terrainSprite) {
+            const drawSize = size * 2.2;
+            ctx.drawImage(terrainSprite, px.x - drawSize / 2, px.y - drawSize / 2, drawSize, drawSize);
+          } else {
+            ctx.fillStyle = _getTerrainColor(tile.terrain);
+            ctx.fillRect(px.x - size, px.y - size, size * 2, size * 2);
+          }
+          ctx.restore();
 
           // Grid lines
+          _drawHexPath(ctx, px.x, px.y, size);
           ctx.strokeStyle = COLORS.gridLine;
           ctx.lineWidth = 0.5;
           ctx.stroke();
 
           // Resource icon (small, bottom-right)
-          if (tile.resource && RESOURCE_ICONS[tile.resource]) {
-            ctx.font = `${size * 0.4}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(RESOURCE_ICONS[tile.resource], px.x + size * 0.3, px.y + size * 0.35);
+          if (tile.resource) {
+            const resSprite = window.Assets && window.Assets.getResourceSprite(tile.resource);
+            if (resSprite) {
+              const resSize = size * 0.45;
+              ctx.drawImage(resSprite, px.x + size * 0.15, px.y + size * 0.15, resSize, resSize);
+            } else if (RESOURCE_ICONS[tile.resource]) {
+              ctx.font = `${size * 0.4}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(RESOURCE_ICONS[tile.resource], px.x + size * 0.3, px.y + size * 0.35);
+            }
           }
 
           // Fog overlay if explored but not currently visible
@@ -266,23 +283,29 @@
           if (!tile || !tile.explored || !tile.explored[playerCivId !== undefined ? playerCivId : 0]) continue;
         }
 
-        // City circle
-        ctx.beginPath();
-        ctx.arc(px.x, px.y, size * 0.55, 0, Math.PI * 2);
-        ctx.fillStyle = civColor;
-        ctx.globalAlpha = 0.85;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        // City sprite or circle fallback
+        const citySprite = window.Assets && window.Assets.getCitySprite(civ.id, city.population);
+        if (citySprite) {
+          const cityDrawSize = size * 1.3;
+          ctx.drawImage(citySprite, px.x - cityDrawSize / 2, px.y - cityDrawSize / 2, cityDrawSize, cityDrawSize);
+        } else {
+          // Fallback: colored circle + population number
+          ctx.beginPath();
+          ctx.arc(px.x, px.y, size * 0.55, 0, Math.PI * 2);
+          ctx.fillStyle = civColor;
+          ctx.globalAlpha = 0.85;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
-        // Population number
-        ctx.fillStyle = '#fff';
-        ctx.font = `bold ${size * 0.55}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(city.population || 1), px.x, px.y);
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${size * 0.55}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(city.population || 1), px.x, px.y);
+        }
 
         // City name above
         ctx.fillStyle = COLORS.text;
@@ -334,22 +357,28 @@
           drawY += combatAnim.shakeY;
         }
 
-        // Unit circle background
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, size * 0.38, 0, Math.PI * 2);
-        ctx.fillStyle = civColor;
-        ctx.fill();
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        // Unit sprite or circle+emoji fallback
+        const unitSprite = window.Assets && window.Assets.getUnitSprite(unit.type, civ.id);
+        if (unitSprite) {
+          const unitDrawSize = size * 0.9;
+          ctx.drawImage(unitSprite, drawX - unitDrawSize / 2, drawY - unitDrawSize / 2, unitDrawSize, unitDrawSize);
+        } else {
+          // Fallback: colored circle + emoji icon
+          ctx.beginPath();
+          ctx.arc(drawX, drawY, size * 0.38, 0, Math.PI * 2);
+          ctx.fillStyle = civColor;
+          ctx.fill();
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 1;
+          ctx.stroke();
 
-        // Unit icon
-        const icon = UNIT_ICONS[unit.type] || '\u2694';
-        ctx.fillStyle = '#fff';
-        ctx.font = `${size * 0.42}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icon, drawX, drawY);
+          const icon = UNIT_ICONS[unit.type] || '\u2694';
+          ctx.fillStyle = '#fff';
+          ctx.font = `${size * 0.42}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(icon, drawX, drawY);
+        }
 
         // HP bar under unit
         if (unit.hp !== undefined && unit.hp < (unit.maxHp || 20)) {
