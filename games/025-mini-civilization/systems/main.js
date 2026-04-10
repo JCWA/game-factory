@@ -71,7 +71,7 @@ window.Main = {
     }
 
     if (window.UI && typeof UI.init === 'function') {
-      UI.init();
+      UI.init(mapCanvas);
       console.log('[Main] UI 시스템 초기화 완료');
     }
 

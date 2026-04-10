@@ -529,8 +529,9 @@ window.UI = (() => {
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
           _drag.moved = true;
           if (typeof Renderer !== 'undefined' && Renderer.camera) {
-            Renderer.camera.x += dx;
-            Renderer.camera.y += dy;
+            const dpr = window.devicePixelRatio || 1;
+            Renderer.camera.x += dx * dpr;
+            Renderer.camera.y += dy * dpr;
             if (typeof Renderer.render === 'function') Renderer.render();
           }
           _drag.startX = e.clientX;
@@ -563,7 +564,8 @@ window.UI = (() => {
         e.preventDefault();
         if (typeof Renderer !== 'undefined' && Renderer.camera) {
           const delta = e.deltaY > 0 ? -0.1 : 0.1;
-          Renderer.camera.zoom = Math.max(0.3, Math.min(3, Renderer.camera.zoom + delta));
+          const sc = _canvasCoords(e.clientX, e.clientY);
+          Renderer.camera.zoomAt(delta, sc.x, sc.y);
           if (typeof Renderer.render === 'function') Renderer.render();
         }
       }, { passive: false });
@@ -607,8 +609,9 @@ window.UI = (() => {
           if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
             _drag.moved = true;
             if (typeof Renderer !== 'undefined' && Renderer.camera) {
-              Renderer.camera.x -= dx;
-              Renderer.camera.y -= dy;
+              const dpr = window.devicePixelRatio || 1;
+              Renderer.camera.x += dx * dpr;
+              Renderer.camera.y += dy * dpr;
               if (typeof Renderer.render === 'function') Renderer.render();
             }
             _drag.startX = touches[0].clientX;
