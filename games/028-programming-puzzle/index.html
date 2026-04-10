@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>프로그래밍 퍼즐 - 로봇 코딩</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+--bg:#f0f4f8;--grid-floor:#ffffff;--grid-wall:#4a5568;--grid-hole:#1a202c;
+--block-move:#4299e1;--block-action:#48bb78;--block-control:#ed8936;
+--block-cond:#9f7aea;--block-func:#ed64a6;
+--robot:#2b6cb0;--goal:#ecc94b;--item:#38b2ac;
+--panel:#ffffff;--text:#2d3748;--text-light:#718096;
+--border:#e2e8f0;--highlight:#fefcbf;
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text)}
+button{cursor:pointer;border:none;outline:none;font-family:inherit;font-size:14px}
+/* SCREENS */
+.screen{display:none;width:100%;height:100%;position:absolute;top:0;left:0}
+.screen.active{display:flex}
+/* TITLE SCREEN */
+#titleScreen{flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+#titleScreen h1{font-size:48px;color:#fff;margin-bottom:8px;text-shadow:2px 2px 4px rgba(0,0,0,0.3)}
+#titleScreen .subtitle{color:rgba(255,255,255,0.8);font-size:18px;margin-bottom:40px}
+#titleScreen .robot-icon{font-size:80px;margin-bottom:20px;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
+.title-btn{padding:16px 48px;font-size:20px;border-radius:12px;margin:8px;color:#fff;font-weight:bold;transition:transform 0.2s}
+.title-btn:hover{transform:scale(1.05)}
+.title-btn.play{background:#48bb78}.title-btn.continue{background:#4299e1}
+/* LEVEL SELECT */
+#levelScreen{flex-direction:column;background:var(--bg)}
+#levelScreen .header{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:#fff}
+#levelScreen .header h2{flex:1;font-size:20px}
+.back-btn{padding:8px 16px;border-radius:8px;background:#e2e8f0;color:var(--text);font-weight:600}
+.level-grid{flex:1;overflow-y:auto;padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px;align-content:start}
+.level-card{aspect-ratio:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:bold;font-size:24px;transition:transform 0.2s;position:relative}
+.level-card.unlocked{background:#fff;border:2px solid var(--border);cursor:pointer}
+.level-card.unlocked:hover{transform:scale(1.05);border-color:var(--block-move)}
+.level-card.locked{background:#e2e8f0;color:#a0aec0;cursor:not-allowed}
+.level-card .level-name{font-size:10px;font-weight:normal;color:var(--text-light);margin-top:4px;text-align:center;padding:0 4px}
+.level-card .stars-display{font-size:14px;margin-top:4px}
+.level-card.current{border-color:var(--block-move);box-shadow:0 0 0 3px rgba(66,153,225,0.3)}
+/* GAME SCREEN */
+#gameScreen{flex-direction:column;background:var(--bg)}
+.game-header{padding:8px 12px;display:flex;align-items:center;gap:8px;background:#fff;border-bottom:1px solid var(--border);min-height:44px;flex-shrink:0}
+.game-header .level-info{flex:1;font-weight:600;font-size:14px}
+.game-header .level-desc{font-size:11px;color:var(--text-light)}
+.header-btn{padding:6px 12px;border-radius:6px;background:#e2e8f0;font-size:13px}
+.game-body{flex:1;display:flex;overflow:hidden;position:relative}
+/* PANELS */
+.palette-panel{width:120px;background:#fff;border-right:1px solid var(--border);overflow-y:auto;padding:8px;flex-shrink:0}
+.grid-panel{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;position:relative;overflow:hidden}
+.program-panel{width:220px;background:#fff;border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.program-header{padding:8px 12px;font-weight:600;font-size:13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.program-area{flex:1;overflow-y:auto;padding:8px;min-height:0;position:relative}
+.program-drop-zone{min-height:60px;border:2px dashed var(--border);border-radius:8px;display:flex;flex-direction:column;gap:4px;padding:4px;transition:border-color 0.2s}
+.program-drop-zone.drag-over{border-color:var(--block-move);background:rgba(66,153,225,0.05)}
+.program-drop-zone.empty::after{content:'블록을 여기에 드래그하세요';display:flex;align-items:center;justify-content:center;height:50px;color:#a0aec0;font-size:12px}
+/* BLOCKS */
+.block-item{padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;color:#fff;cursor:grab;user-select:none;margin-bottom:4px;position:relative;transition:transform 0.15s,box-shadow 0.15s}
+.block-item:active{cursor:grabbing}
+.block-item.cat-move{background:var(--block-move)}
+.block-item.cat-action{background:var(--block-action)}
+.block-item.cat-control{background:var(--block-control)}
+.block-item.cat-condition{background:var(--block-cond)}
+.block-item.cat-func{background:var(--block-func)}
+.block-item .block-count{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.2);border-radius:10px;padding:1px 6px;font-size:10px}
+.block-item.disabled{opacity:0.4;cursor:not-allowed}
+/* PROGRAM BLOCKS */
+.prog-block{padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;color:#fff;margin-bottom:3px;position:relative;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s}
+.prog-block.highlight{box-shadow:0 0 0 3px #ecc94b;transform:scale(1.03);z-index:5}
+.prog-block .param{background:rgba(0,0,0,0.2);border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;display:inline-block;margin-left:4px}
+.prog-block .children-area{margin:4px 0 4px 12px;padding:4px;border-left:3px solid rgba(255,255,255,0.4);min-height:28px;border-radius:0 0 0 4px}
+.prog-block .children-drop{min-height:24px;border:1px dashed rgba(255,255,255,0.4);border-radius:4px}
+.prog-block .children-drop.drag-over{border-color:#fff;background:rgba(255,255,255,0.15)}
+.prog-block .else-label{font-size:10px;color:rgba(255,255,255,0.7);margin:2px 0}
+.prog-block .delete-btn{position:absolute;right:4px;top:4px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,0.3);color:#fff;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer}
+.prog-block:hover .delete-btn{display:flex}
+/* FUNC TABS */
+.func-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 8px}
+.func-tab{padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-light)}
+.func-tab.active{color:var(--block-func);border-bottom-color:var(--block-func)}
+.func-section{display:none}.func-section.active{display:block}
+/* GRID CANVAS */
+#gridCanvas{image-rendering:pixelated}
+/* CONTROLS */
+.game-controls{padding:8px 12px;background:#fff;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0}
+.ctrl-btn{padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px;transition:transform 0.1s}
+.ctrl-btn:active{transform:scale(0.95)}
+.ctrl-btn.play{background:#48bb78;color:#fff}
+.ctrl-btn.fast{background:#ed8936;color:#fff}
+.ctrl-btn.step{background:#4299e1;color:#fff}
+.ctrl-btn.stop{background:#fc8181;color:#fff}
+.ctrl-btn.reset{background:#e2e8f0;color:var(--text)}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+.status-bar{flex:1;text-align:right;font-size:12px;color:var(--text-light)}
+.status-bar .star{color:var(--goal)}
+/* MODAL */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;text-align:center;animation:modalIn 0.3s ease-out}
+@keyframes modalIn{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
+.modal h2{font-size:24px;margin-bottom:8px}
+.modal .stars-big{font-size:48px;margin:16px 0}
+.modal .detail{font-size:14px;color:var(--text-light);margin-bottom:20px}
+.modal-btn{padding:12px 28px;border-radius:10px;font-size:16px;font-weight:600;margin:4px}
+.modal-btn.primary{background:#48bb78;color:#fff}
+.modal-btn.secondary{background:#e2e8f0;color:var(--text)}
+/* HINT */
+.hint-bar{padding:8px 12px;background:#fffbeb;border-top:1px solid #fef3c7;font-size:12px;color:#92400e;display:none;flex-shrink:0}
+.hint-bar.active{display:block}
+/* MOBILE */
+@media(max-width:768px){
+.palette-panel{width:90px;padding:4px}
+.program-panel{width:180px}
+.block-item{font-size:11px;padding:5px 8px}
+.prog-block{font-size:11px;padding:5px 8px}
+.game-header .level-info{font-size:12px}
+.ctrl-btn{padding:6px 10px;font-size:12px}
+}
+@media(max-width:480px){
+.game-body{flex-direction:column}
+.palette-panel{width:100%;height:auto;max-height:80px;overflow-x:auto;overflow-y:hidden;display:flex;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--border)}
+.palette-panel .block-item{white-space:nowrap;margin-right:4px}
+.grid-panel{flex:1;min-height:160px}
+.program-panel{width:100%;max-height:200px;border-left:none;border-top:1px solid var(--border)}
+}
+/* PARTICLES */
+.particle{position:absolute;pointer-events:none;font-size:24px;z-index:50;animation:particleUp 1s ease-out forwards}
+@keyframes particleUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-60px) scale(0.5)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+</style>
+</head>
+<body>
+<!-- TITLE SCREEN -->
+<div id="titleScreen" class="screen active">
+<div class="robot-icon">🤖</div>
+<h1>프로그래밍 퍼즐</h1>
+<p class="subtitle">블록으로 로봇을 움직여 퍼즐을 풀어보세요!</p>
+<button class="title-btn play" onclick="startGame()">게임 시작</button>
+<button class="title-btn continue" id="continueBtn" style="display:none" onclick="continueGame()">이어하기</button>
+</div>
+<!-- LEVEL SELECT -->
+<div id="levelScreen" class="screen">
+<div class="header">
+<button class="back-btn" onclick="showScreen('titleScreen')">← 메뉴</button>
+<h2>레벨 선택</h2>
+</div>
+<div class="level-grid" id="levelGrid"></div>
+</div>
+<!-- GAME SCREEN -->
+<div id="gameScreen" class="screen">
+<div class="game-header">
+<button class="header-btn" onclick="showLevelSelect()">← 레벨</button>
+<div>
+<div class="level-info" id="levelTitle">레벨 1: 첫 걸음</div>
+<div class="level-desc" id="levelDesc">2칸 전진하여 목표에 도달하세요</div>
+</div>
+<button class="header-btn" onclick="showHowTo()">?</button>
+</div>
+<div class="game-body">
+<div class="palette-panel" id="palette"></div>
+<div class="grid-panel">
+<canvas id="gridCanvas"></canvas>
+</div>
+<div class="program-panel">
+<div class="program-header">
+<span>프로그램</span>
+<span id="blockCount">0</span>
+</div>
+<div id="funcTabs" class="func-tabs" style="display:none">
+<div class="func-tab active" data-tab="main" onclick="switchTab('main')">메인</div>
+<div class="func-tab" data-tab="F1" onclick="switchTab('F1')">F1</div>
+<div class="func-tab" data-tab="F2" onclick="switchTab('F2')">F2</div>
+<div class="func-tab" data-tab="F3" onclick="switchTab('F3')">F3</div>
+<div class="func-tab" data-tab="F4" onclick="switchTab('F4')">F4</div>
+</div>
+<div class="program-area" id="programArea">
+<div class="program-drop-zone empty" id="mainProgram" data-target="main"></div>
+</div>
+</div>
+</div>
+<div class="hint-bar" id="hintBar"></div>
+<div class="game-controls">
+<button class="ctrl-btn play" id="btnPlay" onclick="runProgram('normal')">▶ 실행</button>
+<button class="ctrl-btn fast" id="btnFast" onclick="runProgram('fast')">⏩</button>
+<button class="ctrl-btn step" id="btnStep" onclick="stepProgram()">⏭</button>
+<button class="ctrl-btn stop" id="btnStop" onclick="stopProgram()" disabled>⏹</button>
+<button class="ctrl-btn reset" onclick="resetLevel()">↺</button>
+<div class="status-bar">
+<span id="stepDisplay">스텝: 0/200</span>
+<span id="starsTarget"></span>
+</div>
+</div>
+</div>
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+<div class="modal">
+<h2 id="modalTitle">레벨 클리어!</h2>
+<div class="stars-big" id="modalStars">⭐⭐⭐</div>
+<div class="detail" id="modalDetail"></div>
+<div>
+<button class="modal-btn secondary" onclick="closeModal();resetLevel()">다시하기</button>
+<button class="modal-btn primary" id="modalNext" onclick="nextLevel()">다음 레벨 →</button>
+</div>
+</div>
+</div>
+<!-- DRAG GHOST -->
+<div id="dragGhost" style="position:fixed;pointer-events:none;z-index:200;display:none;opacity:0.8"></div>
+
+<script>
+// ============== GAME DATA ==============
+const LEVELS = [
+{id:1,name:'첫 걸음',w:3,h:1,desc:'2칸 전진하여 목표에 도달하세요',
+ grid:[[0,0,0]],robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:2,y:0}]},goals:[{x:2,y:0,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight'],limit:3,optB:2,optS:2},
+
+{id:2,name:'방향 전환',w:3,h:3,desc:'L자 경로를 따라 이동하세요',
+ grid:[[0,1,1],[0,1,1],[0,0,0]],robot:{x:0,y:0,dir:2},
+ goal:{type:'reach',targets:[{x:2,y:2}]},goals:[{x:2,y:2,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight'],limit:5,optB:4,optS:4},
+
+{id:3,name:'보석 수집',w:4,h:4,desc:'보석 3개를 모두 수집하세요',
+ grid:[[0,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,0,0]],
+ robot:{x:0,y:0,dir:1},items:[{x:1,y:0},{x:3,y:0},{x:3,y:2}],
+ goal:{type:'collect_all'},
+ blocks:['forward','turnLeft','turnRight','pickup'],limit:8,optB:6,optS:8},
+
+{id:4,name:'반복의 힘',w:5,h:1,desc:'반복 블록으로 4칸 전진하세요',
+ grid:[[0,0,0,0,0]],robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:4,y:0}]},goals:[{x:4,y:0,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat'],limit:3,optB:2,optS:4},
+
+{id:5,name:'놓아봐',w:4,h:4,desc:'보석을 주워서 구멍에 놓아 메운 뒤 목표에 도달하세요',
+ grid:[[0,0,0,0],[0,1,0,0],[0,0,2,0],[0,0,0,0]],
+ robot:{x:0,y:0,dir:1},items:[{x:2,y:0}],
+ goal:{type:'reach',targets:[{x:3,y:3}]},goals:[{x:3,y:3,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','pickup','drop','repeat'],limit:8,optB:6,optS:8},
+
+{id:6,name:'정사각형',w:5,h:5,desc:'로봇이 정사각형 경로를 따라 돌아오세요',
+ grid:[[0,0,0,0,0],[0,1,1,1,0],[0,1,1,1,0],[0,1,1,1,0],[0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:0,y:0}]},goals:[{x:0,y:0,type:'goal'}],
+ visitGoal:true,
+ blocks:['forward','turnLeft','turnRight','repeat'],limit:4,optB:3,optS:16},
+
+{id:7,name:'벽을 피해',w:5,h:5,desc:'벽을 감지하고 피해서 목표에 도달하세요',
+ grid:[[0,0,1,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,1,0,0],[0,0,1,0,0]],
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:4,y:4}]},goals:[{x:4,y:4,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if'],
+ conditions:['front_empty','front_wall'],limit:10,optB:6,optS:12},
+
+{id:8,name:'색칠 놀이',w:4,h:4,desc:'표시된 칸들을 빨간색으로 칠하세요',
+ grid:[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ paintTargets:[{x:0,y:0,c:'red'},{x:1,y:0,c:'red'},{x:2,y:0,c:'red'},{x:3,y:0,c:'red'}],
+ goal:{type:'paint_all'},
+ blocks:['forward','turnLeft','turnRight','repeat','paint'],limit:8,optB:3,optS:7},
+
+{id:9,name:'선택적 수집',w:5,h:5,desc:'아이템이 있는 칸에서만 주우세요',
+ grid:[[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ items:[{x:1,y:0},{x:3,y:0},{x:4,y:0}],
+ goal:{type:'collect_all'},
+ blocks:['forward','turnLeft','turnRight','pickup','repeat','if'],
+ conditions:['front_empty','front_wall','has_item','bag_empty'],limit:12,optB:5,optS:8},
+
+{id:10,name:'미로 러너',w:7,h:7,desc:'벽을 따라가며 미로를 탈출하세요',
+ grid:[
+  [0,0,0,1,0,0,0],[1,1,0,1,0,1,0],[0,0,0,0,0,1,0],
+  [0,1,1,1,0,0,0],[0,0,0,1,0,1,1],[1,1,0,0,0,0,0],[0,0,0,1,1,1,0]
+ ],
+ robot:{x:0,y:0,dir:2},
+ goal:{type:'reach',targets:[{x:6,y:6}]},goals:[{x:6,y:6,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','loop'],
+ conditions:['front_empty','front_wall'],limit:8,optB:5,optS:30},
+
+{id:11,name:'색 분류',w:5,h:5,desc:'빨간 칸만 파란색으로 칠하세요',
+ grid:[[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ paintTargets:[{x:0,y:0,c:'blue'},{x:2,y:0,c:'blue'},{x:4,y:0,c:'blue'}],
+ prePaint:[{x:0,y:0,c:'red'},{x:1,y:0,c:'green'},{x:2,y:0,c:'red'},{x:3,y:0,c:'green'},{x:4,y:0,c:'red'}],
+ goal:{type:'paint_all'},
+ blocks:['forward','turnLeft','turnRight','repeat','if','paint'],
+ conditions:['front_empty','front_wall','tile_color'],limit:15,optB:6,optS:9},
+
+{id:12,name:'갈림길',w:6,h:6,desc:'조건에 따라 올바른 경로를 선택하세요',
+ grid:[[0,0,0,0,0,0],[0,1,0,1,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ items:[{x:2,y:0}],
+ goal:{type:'collect_and_reach',targets:[{x:5,y:5}]},goals:[{x:5,y:5,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','ifelse','pickup'],
+ conditions:['front_empty','front_wall','has_item','bag_empty'],limit:12,optB:8,optS:14},
+
+{id:13,name:'구멍 넘기',w:6,h:6,desc:'구멍을 감지해서 피해가세요',
+ grid:[[0,0,2,0,0,0],[0,0,0,0,2,0],[0,2,0,0,0,0],[0,0,0,2,0,0],[0,0,0,0,0,2],[0,0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:5,y:5}]},goals:[{x:5,y:5,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','ifelse','loop'],
+ conditions:['front_empty','front_wall','front_hole'],limit:10,optB:6,optS:16},
+
+{id:14,name:'지그재그',w:8,h:8,desc:'지그재그 패턴으로 끝까지 이동하세요',
+ grid:(()=>{let g=[];for(let y=0;y<8;y++){g[y]=[];for(let x=0;x<8;x++)g[y][x]=0}return g})(),
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:7,y:7}]},goals:[{x:7,y:7,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat'],limit:6,optB:5,optS:28},
+
+{id:15,name:'함수의 탄생',w:6,h:6,desc:'반복 패턴을 함수로 만들어 사용하세요',
+ grid:[[0,0,0,0,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0],[0,0,1,0,1,0],[0,0,0,0,0,0],[0,0,0,0,0,0]],
+ robot:{x:0,y:0,dir:2},
+ goal:{type:'reach',targets:[{x:5,y:5}]},goals:[{x:5,y:5,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:8,optB:6,optS:14},
+
+{id:16,name:'나선형',w:7,h:7,desc:'나선형으로 중심까지 이동하세요',
+ grid:(()=>{let g=[];for(let y=0;y<7;y++){g[y]=[];for(let x=0;x<7;x++)g[y][x]=0}
+  g[1][1]=1;g[1][2]=1;g[1][3]=1;g[1][4]=1;g[1][5]=1;
+  g[2][5]=1;g[3][5]=1;g[3][3]=1;g[3][2]=1;g[3][1]=1;g[4][1]=1;g[5][1]=1;
+  g[5][2]=1;g[5][3]=1;g[5][4]=1;g[5][5]=1;g[4][5]=1;g[4][3]=1;return g})(),
+ robot:{x:0,y:0,dir:2},
+ goal:{type:'reach',targets:[{x:3,y:3}]},goals:[{x:3,y:3,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:10,optB:6,optS:24},
+
+{id:17,name:'텔레포터',w:6,h:6,desc:'텔레포터를 활용해 목표에 도달하세요',
+ grid:[[0,0,1,1,1,0],[0,0,0,0,1,0],[1,1,0,0,0,0],[0,0,0,1,1,0],[0,1,0,0,0,0],[0,0,0,1,0,0]],
+ robot:{x:0,y:0,dir:1},
+ teleporters:[{x:1,y:0,px:4,py:3},{x:4,y:3,px:1,py:0}],
+ goal:{type:'reach',targets:[{x:5,y:5}]},goals:[{x:5,y:5,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:10,optB:6,optS:12},
+
+{id:18,name:'얼음 위에서',w:7,h:7,desc:'미끄러운 얼음을 활용하세요',
+ grid:(()=>{let g=[];for(let y=0;y<7;y++){g[y]=[];for(let x=0;x<7;x++)g[y][x]=0}
+  g[0][2]=1;g[0][4]=1;g[2][0]=1;g[2][6]=1;g[4][2]=1;g[6][4]=1;return g})(),
+ robot:{x:0,y:0,dir:1},
+ ice:[{x:1,y:0},{x:3,y:0},{x:5,y:0},{x:0,y:1},{x:6,y:1},{x:1,y:2},{x:3,y:2},{x:5,y:2}],
+ goal:{type:'reach',targets:[{x:6,y:6}]},goals:[{x:6,y:6,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','loop'],
+ conditions:['front_empty','front_wall'],limit:8,optB:5,optS:12},
+
+{id:19,name:'복합 수집',w:8,h:8,desc:'모든 보석을 수집하고 목표에 도달하세요',
+ grid:(()=>{let g=[];for(let y=0;y<8;y++){g[y]=[];for(let x=0;x<8;x++)g[y][x]=0}
+  g[1][1]=1;g[1][3]=1;g[1][5]=1;g[3][1]=1;g[3][3]=1;g[5][3]=1;g[5][5]=1;g[6][1]=1;return g})(),
+ robot:{x:0,y:0,dir:1},
+ items:[{x:2,y:0},{x:4,y:0},{x:6,y:0},{x:7,y:3},{x:0,y:7}],
+ goal:{type:'collect_and_reach',targets:[{x:7,y:7}]},goals:[{x:7,y:7,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','pickup','repeat','if','ifelse','loop','funcDef','funcCall'],
+ conditions:['front_empty','front_wall','has_item','bag_empty'],limit:15,optB:10,optS:30},
+
+{id:20,name:'재귀적 사고',w:7,h:7,desc:'함수 안에서 자기 자신을 호출하세요',
+ grid:(()=>{let g=[];for(let y=0;y<7;y++){g[y]=[];for(let x=0;x<7;x++)g[y][x]=0}
+  g[0][2]=1;g[0][4]=1;g[2][0]=1;g[2][2]=1;g[2][4]=1;g[2][6]=1;g[4][0]=1;g[4][2]=1;g[4][4]=1;g[4][6]=1;g[6][2]=1;g[6][4]=1;return g})(),
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:6,y:6}]},goals:[{x:6,y:6,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:6,optB:5,optS:18},
+
+{id:21,name:'페인터',w:6,h:6,desc:'모든 바닥 칸을 칠하세요',
+ grid:(()=>{let g=[];for(let y=0;y<6;y++){g[y]=[];for(let x=0;x<6;x++)g[y][x]=0}
+  g[1][1]=1;g[1][4]=1;g[4][1]=1;g[4][4]=1;return g})(),
+ robot:{x:0,y:0,dir:1},
+ paintTargets:'all_floor',
+ goal:{type:'paint_all'},
+ blocks:['forward','turnLeft','turnRight','repeat','if','loop','paint','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:12,optB:8,optS:40},
+
+{id:22,name:'배달부',w:6,h:6,desc:'보석을 모두 수집하고 목표에 도달하세요',
+ grid:[[0,0,0,0,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0],[0,1,0,1,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]],
+ robot:{x:0,y:0,dir:1},
+ items:[{x:2,y:0},{x:4,y:0},{x:2,y:2},{x:4,y:2},{x:2,y:4},{x:4,y:4}],
+ goal:{type:'collect_and_reach',targets:[{x:5,y:5}]},goals:[{x:5,y:5,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','pickup','repeat','if','ifelse','loop','funcDef','funcCall'],
+ conditions:['front_empty','front_wall','has_item','bag_empty'],limit:20,optB:12,optS:30},
+
+{id:23,name:'최적화 도전',w:8,h:8,desc:'극도로 적은 블록으로 해결하세요',
+ grid:(()=>{let g=[];for(let y=0;y<8;y++){g[y]=[];for(let x=0;x<8;x++)g[y][x]=0}return g})(),
+ robot:{x:0,y:0,dir:1},
+ goal:{type:'reach',targets:[{x:7,y:7}]},goals:[{x:7,y:7,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','repeat','if','loop','funcDef','funcCall'],
+ conditions:['front_empty','front_wall'],limit:5,optB:4,optS:14},
+
+{id:24,name:'종합 시험',w:8,h:8,desc:'모든 개념을 활용하여 클리어하세요',
+ grid:(()=>{let g=[];for(let y=0;y<8;y++){g[y]=[];for(let x=0;x<8;x++)g[y][x]=0}
+  g[0][3]=1;g[1][1]=1;g[1][5]=1;g[2][3]=1;g[3][1]=1;g[3][6]=1;
+  g[4][3]=2;g[5][1]=1;g[5][5]=1;g[6][3]=1;g[7][1]=1;return g})(),
+ robot:{x:0,y:0,dir:1},
+ items:[{x:2,y:0},{x:5,y:0},{x:7,y:3},{x:0,y:7}],
+ goal:{type:'collect_and_reach',targets:[{x:7,y:7}]},goals:[{x:7,y:7,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','pickup','drop','repeat','if','ifelse','loop','paint','funcDef','funcCall'],
+ conditions:['front_empty','front_wall','has_item','bag_empty','front_hole'],limit:20,optB:14,optS:40},
+
+{id:25,name:'마스터 미로',w:10,h:10,desc:'벽 따라가기와 수집을 조합하여 탈출하세요',
+ grid:(()=>{let g=[];for(let y=0;y<10;y++){g[y]=[];for(let x=0;x<10;x++)g[y][x]=0}
+  // maze walls
+  g[0][2]=1;g[0][4]=1;g[0][7]=1;g[1][2]=1;g[1][4]=1;g[1][7]=1;g[1][9]=1;
+  g[2][0]=1;g[2][4]=1;g[2][6]=1;g[3][2]=1;g[3][4]=1;g[3][6]=1;g[3][8]=1;
+  g[4][0]=1;g[4][2]=1;g[4][6]=1;g[5][4]=1;g[5][6]=1;g[5][8]=1;
+  g[6][0]=1;g[6][2]=1;g[6][4]=1;g[7][2]=1;g[7][6]=1;g[7][8]=1;
+  g[8][0]=1;g[8][4]=1;g[8][6]=1;g[9][2]=1;g[9][4]=1;g[9][7]=1;
+  return g})(),
+ robot:{x:0,y:0,dir:2},
+ items:[{x:3,y:0},{x:8,y:1},{x:5,y:5},{x:1,y:8},{x:9,y:7}],
+ goal:{type:'collect_and_reach',targets:[{x:9,y:9}]},goals:[{x:9,y:9,type:'goal'}],
+ blocks:['forward','turnLeft','turnRight','pickup','repeat','if','ifelse','loop','funcDef','funcCall'],
+ conditions:['front_empty','front_wall','has_item','bag_empty'],limit:8,optB:6,optS:60}
+];
+
+const BLOCK_DEFS = {
+  forward:{name:'전진',cat:'move',icon:'↑'},
+  turnLeft:{name:'좌회전',cat:'move',icon:'↰'},
+  turnRight:{name:'우회전',cat:'move',icon:'↱'},
+  pickup:{name:'줍기',cat:'action',icon:'◆'},
+  drop:{name:'놓기',cat:'action',icon:'◇'},
+  paint:{name:'칠하기',cat:'action',icon:'🎨',hasColor:true},
+  repeat:{name:'반복',cat:'control',icon:'🔄',hasCount:true,hasChildren:true},
+  loop:{name:'무한반복',cat:'control',icon:'♾️',hasChildren:true},
+  if:{name:'만약',cat:'condition',icon:'❓',hasCond:true,hasChildren:true},
+  ifelse:{name:'만약-아니면',cat:'condition',icon:'❓',hasCond:true,hasChildren:true,hasElse:true},
+  funcDef:{name:'함수 정의',cat:'func',icon:'📦',hasFunc:true,hasChildren:true},
+  funcCall:{name:'함수 호출',cat:'func',icon:'📞',hasFunc:true}
+};
+
+const CONDITION_NAMES = {
+  front_empty:'앞이 빈칸',front_wall:'앞이 벽',has_item:'칸에 아이템',
+  tile_color:'칸 색상(빨강)',bag_empty:'가방 비어있음',front_hole:'앞이 구멍'
+};
+
+const CAT_CLASS = {move:'cat-move',action:'cat-action',control:'cat-control',condition:'cat-cond',func:'cat-func'};
+
+// ============== STATE ==============
+let save = {version:1,unlockedLevel:1,stars:{},solutions:{},currentWork:null};
+let currentLevel = null;
+let grid = [];
+let robot = {};
+let robotInitial = {};
+let items = [];
+let itemsInitial = [];
+let painted = {};
+let paintedInitial = {};
+let program = {main:[],F1:[],F2:[],F3:[],F4:[]};
+let execution = {running:false,speed:'normal',gen:null,stepCount:0,maxSteps:200,currentBlockId:null,result:null};
+let currentTab = 'main';
+let failCount = 0;
+let hintLevel = 0;
+let blockIdCounter = 0;
+let functions = {};
+let teleporterMap = {};
+let iceSet = new Set();
+
+// ============== SAVE/LOAD ==============
+function loadSave(){
+  try{const d=localStorage.getItem('progPuzzle_save');if(d)save=JSON.parse(d)}catch(e){}
+}
+function saveSave(){
+  try{localStorage.setItem('progPuzzle_save',JSON.stringify(save))}catch(e){}
+}
+
+// ============== SCREEN NAV ==============
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function startGame(){showLevelSelect()}
+function continueGame(){
+  if(save.currentWork){
+    loadLevel(save.currentWork.levelId);
+    if(save.currentWork.program)program=JSON.parse(JSON.stringify(save.currentWork.program));
+    renderProgram();
+    showScreen('gameScreen');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>renderGrid()));
+  } else showLevelSelect();
+}
+
+// ============== LEVEL SELECT ==============
+function showLevelSelect(){
+  const g=document.getElementById('levelGrid');g.innerHTML='';
+  LEVELS.forEach(lv=>{
+    const card=document.createElement('div');
+    card.className='level-card '+(lv.id<=save.unlockedLevel?'unlocked':'locked');
+    if(lv.id===save.unlockedLevel)card.classList.add('current');
+    const stars=save.stars[lv.id]||[false,false,false];
+    const starStr=stars.map(s=>s?'⭐':'☆').join('');
+    card.innerHTML=`<span>${lv.id}</span><span class="level-name">${lv.name}</span>
+      <span class="stars-display">${lv.id<=save.unlockedLevel?starStr:'🔒'}</span>`;
+    if(lv.id<=save.unlockedLevel)card.onclick=()=>{loadLevel(lv.id);showScreen('gameScreen');requestAnimationFrame(()=>requestAnimationFrame(()=>renderGrid()))};
+    g.appendChild(card);
+  });
+  showScreen('levelScreen');
+}
+
+// ============== LEVEL LOADING ==============
+function loadLevel(id){
+  const lv=LEVELS.find(l=>l.id===id);if(!lv)return;
+  currentLevel=JSON.parse(JSON.stringify(lv));
+  failCount=0;hintLevel=0;
+  document.getElementById('hintBar').classList.remove('active');
+  setupGrid();
+  program={main:[],F1:[],F2:[],F3:[],F4:[]};
+  currentTab='main';
+  document.getElementById('levelTitle').textContent=`레벨 ${lv.id}: ${lv.name}`;
+  document.getElementById('levelDesc').textContent=lv.desc;
+  const hasFuncs=lv.blocks.includes('funcDef');
+  document.getElementById('funcTabs').style.display=hasFuncs?'flex':'none';
+  buildPalette();
+  renderProgram();
+  updateStarsTarget();
+  stopExecution();
+  // Delay grid render to ensure panel dimensions are available
+  requestAnimationFrame(()=>requestAnimationFrame(()=>renderGrid()));
+}
+
+function setupGrid(){
+  const lv=currentLevel;
+  grid=[];
+  for(let y=0;y<lv.h;y++){
+    grid[y]=[];
+    for(let x=0;x<lv.w;x++){
+      const v=(lv.grid&&lv.grid[y])?lv.grid[y][x]:0;
+      grid[y][x]={type:v===1?'wall':v===2?'hole':'floor',item:null,paint:null,paintTarget:null,teleporter:null,ice:false,isGoal:false};
+    }
+  }
+  // goals
+  if(lv.goals)lv.goals.forEach(g=>{if(grid[g.y]&&grid[g.y][g.x])grid[g.y][g.x].isGoal=true});
+  if(lv.goal&&lv.goal.targets)lv.goal.targets.forEach(g=>{if(grid[g.y]&&grid[g.y][g.x])grid[g.y][g.x].isGoal=true});
+  // items
+  items=[];
+  if(lv.items)lv.items.forEach(it=>{
+    if(grid[it.y]&&grid[it.y][it.x]){grid[it.y][it.x].item='gem';items.push({x:it.x,y:it.y})}
+  });
+  // paint
+  painted={};
+  if(lv.prePaint)lv.prePaint.forEach(p=>{
+    if(grid[p.y]&&grid[p.y][p.x])grid[p.y][p.x].paint=p.c;
+  });
+  if(lv.paintTargets==='all_floor'){
+    for(let y=0;y<lv.h;y++)for(let x=0;x<lv.w;x++){
+      if(grid[y][x].type==='floor')grid[y][x].paintTarget='red';
+    }
+  } else if(lv.paintTargets){
+    lv.paintTargets.forEach(p=>{if(grid[p.y]&&grid[p.y][p.x])grid[p.y][p.x].paintTarget=p.c});
+  }
+  // teleporters
+  teleporterMap={};
+  if(lv.teleporters)lv.teleporters.forEach(t=>{
+    if(grid[t.y]&&grid[t.y][t.x]){grid[t.y][t.x].teleporter={x:t.px,y:t.py};teleporterMap[`${t.x},${t.y}`]={x:t.px,y:t.py}}
+  });
+  // ice
+  iceSet=new Set();
+  if(lv.ice)lv.ice.forEach(i=>{
+    if(grid[i.y]&&grid[i.y][i.x]){grid[i.y][i.x].ice=true;iceSet.add(`${i.x},${i.y}`)}
+  });
+  // robot
+  robot={x:lv.robot.x,y:lv.robot.y,dir:lv.robot.dir,bag:[],bagCap:3,visited:new Set()};
+  robot.visited.add(`${robot.x},${robot.y}`);
+  robotInitial=JSON.parse(JSON.stringify({x:robot.x,y:robot.y,dir:robot.dir}));
+  itemsInitial=JSON.parse(JSON.stringify(lv.items||[]));
+}
+
+function resetGrid(){
+  setupGrid();
+  renderGrid();
+  updateStarsTarget();
+}
+
+// ============== PALETTE ==============
+function buildPalette(){
+  const pal=document.getElementById('palette');pal.innerHTML='';
+  const avail=currentLevel.blocks;
+  avail.forEach(btype=>{
+    const def=BLOCK_DEFS[btype];if(!def)return;
+    const el=document.createElement('div');
+    el.className=`block-item ${CAT_CLASS[def.cat]}`;
+    el.textContent=`${def.icon} ${def.name}`;
+    el.dataset.blockType=btype;
+    el.draggable=false;
+    // pointer events for drag
+    el.addEventListener('pointerdown',e=>startDragFromPalette(e,btype));
+    pal.appendChild(el);
+  });
+}
+
+// ============== BLOCK MODEL ==============
+function newBlockId(){return 'b'+(++blockIdCounter)}
+function createBlock(type){
+  const def=BLOCK_DEFS[type];
+  const b={id:newBlockId(),type};
+  if(def.hasCount)b.count=2;
+  if(def.hasCond)b.condition=getDefaultCondition();
+  if(def.hasColor)b.color='red';
+  if(def.hasFunc)b.funcId='F1';
+  if(def.hasChildren)b.children=[];
+  if(def.hasElse)b.elseChildren=[];
+  return b;
+}
+
+function getDefaultCondition(){
+  const conds=currentLevel.conditions||['front_empty'];
+  return conds[0];
+}
+
+function countBlocks(blocks){
+  let c=0;
+  if(!blocks)return 0;
+  blocks.forEach(b=>{
+    c++;
+    if(b.children)c+=countBlocks(b.children);
+    if(b.elseChildren)c+=countBlocks(b.elseChildren);
+  });
+  return c;
+}
+
+function getTotalBlockCount(){
+  let c=countBlocks(program.main);
+  ['F1','F2','F3','F4'].forEach(f=>c+=countBlocks(program[f]));
+  return c;
+}
+
+function removeBlock(targetId,blocks){
+  for(let i=0;i<blocks.length;i++){
+    if(blocks[i].id===targetId){blocks.splice(i,1);return true}
+    if(blocks[i].children&&removeBlock(targetId,blocks[i].children))return true;
+    if(blocks[i].elseChildren&&removeBlock(targetId,blocks[i].elseChildren))return true;
+  }
+  return false;
+}
+
+function removeBlockFromProgram(targetId){
+  removeBlock(targetId,program.main);
+  ['F1','F2','F3','F4'].forEach(f=>removeBlock(targetId,program[f]));
+}
+
+function insertBlock(block,target,index){
+  const arr=target==='main'?program.main:program[target];
+  if(!arr)return;
+  arr.splice(index,0,block);
+}
+
+// ============== DRAG & DROP ==============
+let dragState=null;
+const ghost=document.getElementById('dragGhost');
+
+function startDragFromPalette(e,btype){
+  if(execution.running)return;
+  e.preventDefault();
+  const limit=currentLevel.limit;
+  if(limit&&getTotalBlockCount()>=limit)return;
+  const block=createBlock(btype);
+  const def=BLOCK_DEFS[btype];
+  ghost.innerHTML=`<div class="block-item ${CAT_CLASS[def.cat]}" style="pointer-events:none">${def.icon} ${def.name}</div>`;
+  ghost.style.display='block';
+  positionGhost(e);
+  dragState={block,source:'palette'};
+  document.addEventListener('pointermove',onDragMove);
+  document.addEventListener('pointerup',onDragEnd);
+}
+
+function startDragFromProgram(e,blockId){
+  if(execution.running)return;
+  e.preventDefault();e.stopPropagation();
+  // find and remove block
+  const block=findBlock(blockId);
+  if(!block)return;
+  const clone=JSON.parse(JSON.stringify(block));
+  removeBlockFromProgram(blockId);
+  renderProgram();
+  const def=BLOCK_DEFS[clone.type];
+  ghost.innerHTML=`<div class="block-item ${CAT_CLASS[def.cat]}" style="pointer-events:none">${def.icon} ${def.name}</div>`;
+  ghost.style.display='block';
+  positionGhost(e);
+  dragState={block:clone,source:'program'};
+  document.addEventListener('pointermove',onDragMove);
+  document.addEventListener('pointerup',onDragEnd);
+}
+
+function positionGhost(e){
+  const cx=e.clientX||e.pageX;const cy=e.clientY||e.pageY;
+  ghost.style.left=(cx-40)+'px';ghost.style.top=(cy-15)+'px';
+}
+
+function onDragMove(e){
+  e.preventDefault();
+  positionGhost(e);
+  // highlight drop zones
+  const cx=e.clientX||e.pageX;const cy=e.clientY||e.pageY;
+  document.querySelectorAll('.program-drop-zone,.children-drop').forEach(dz=>{
+    const r=dz.getBoundingClientRect();
+    dz.classList.toggle('drag-over',cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom);
+  });
+}
+
+function onDragEnd(e){
+  document.removeEventListener('pointermove',onDragMove);
+  document.removeEventListener('pointerup',onDragEnd);
+  ghost.style.display='none';
+  if(!dragState)return;
+  const cx=e.clientX||e.pageX;const cy=e.clientY||e.pageY;
+  // find drop target
+  let dropped=false;
+  document.querySelectorAll('.program-drop-zone,.children-drop').forEach(dz=>{
+    dz.classList.remove('drag-over');
+    if(dropped)return;
+    const r=dz.getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){
+      const target=dz.dataset.target;
+      const parentId=dz.dataset.parentId;
+      const childType=dz.dataset.childType||'children';
+      if(target){
+        // find insertion index
+        const idx=findDropIndex(dz,cy);
+        insertBlock(dragState.block,target,idx);
+        dropped=true;
+      } else if(parentId){
+        const parent=findBlock(parentId);
+        if(parent){
+          const arr=parent[childType]||(parent[childType]=[]);
+          const idx=findDropIndexInArr(dz,cy,arr);
+          arr.splice(idx,0,dragState.block);
+          dropped=true;
+        }
+      }
+    }
+  });
+  // If not dropped on valid zone and came from program -> block is deleted
+  dragState=null;
+  renderProgram();
+  autoSaveWork();
+}
+
+function findDropIndex(dz,cy){
+  const children=dz.querySelectorAll(':scope > .prog-block');
+  for(let i=0;i<children.length;i++){
+    const r=children[i].getBoundingClientRect();
+    if(cy<r.top+r.height/2)return i;
+  }
+  return children.length;
+}
+
+function findDropIndexInArr(dz,cy,arr){
+  const children=dz.querySelectorAll(':scope > .prog-block');
+  for(let i=0;i<children.length;i++){
+    const r=children[i].getBoundingClientRect();
+    if(cy<r.top+r.height/2)return i;
+  }
+  return arr?arr.length:0;
+}
+
+function findBlock(id,blocks){
+  if(!blocks){
+    let r=findBlock(id,program.main);if(r)return r;
+    for(const f of['F1','F2','F3','F4']){r=findBlock(id,program[f]);if(r)return r}
+    return null;
+  }
+  for(const b of blocks){
+    if(b.id===id)return b;
+    if(b.children){const r=findBlock(id,b.children);if(r)return r}
+    if(b.elseChildren){const r=findBlock(id,b.elseChildren);if(r)return r}
+  }
+  return null;
+}
+
+// ============== RENDER PROGRAM ==============
+function renderProgram(){
+  const area=document.getElementById('programArea');
+  area.innerHTML='';
+  // Func tabs
+  const tabs=['main','F1','F2','F3','F4'];
+  const hasFuncs=currentLevel.blocks.includes('funcDef');
+  tabs.forEach(tab=>{
+    if(tab!=='main'&&!hasFuncs)return;
+    const section=document.createElement('div');
+    section.className='func-section'+(tab===currentTab?' active':'');
+    section.dataset.tab=tab;
+    const dz=document.createElement('div');
+    dz.className='program-drop-zone'+(program[tab].length===0?' empty':'');
+    dz.dataset.target=tab;
+    program[tab].forEach(b=>dz.appendChild(renderBlock(b)));
+    section.appendChild(dz);
+    area.appendChild(section);
+  });
+  updateBlockCount();
+  // update func tab highlight
+  document.querySelectorAll('.func-tab').forEach(t=>{
+    t.classList.toggle('active',t.dataset.tab===currentTab);
+  });
+}
+
+function renderBlock(block){
+  const def=BLOCK_DEFS[block.type];
+  const el=document.createElement('div');
+  el.className=`prog-block ${CAT_CLASS[def.cat]}`;
+  el.dataset.blockId=block.id;
+  if(execution.currentBlockId===block.id)el.classList.add('highlight');
+  let label=`${def.icon} ${def.name}`;
+  if(block.count!==undefined)label+=` <span class="param" data-param="count">${block.count}회</span>`;
+  if(block.condition)label+=` <span class="param" data-param="condition">${CONDITION_NAMES[block.condition]||block.condition}</span>`;
+  if(block.color)label+=` <span class="param" data-param="color" style="background:${block.color}">&nbsp;&nbsp;&nbsp;</span>`;
+  if(block.funcId)label+=` <span class="param" data-param="func">${block.funcId}</span>`;
+  el.innerHTML=label+`<span class="delete-btn" data-del="${block.id}">✕</span>`;
+  // children
+  if(def.hasChildren){
+    const ca=document.createElement('div');ca.className='children-area';
+    const cd=document.createElement('div');cd.className='children-drop';
+    cd.dataset.parentId=block.id;cd.dataset.childType='children';
+    if(block.children)block.children.forEach(c=>cd.appendChild(renderBlock(c)));
+    ca.appendChild(cd);el.appendChild(ca);
+    if(def.hasElse){
+      const elseLabel=document.createElement('div');elseLabel.className='else-label';elseLabel.textContent='아니면:';
+      el.appendChild(elseLabel);
+      const ea=document.createElement('div');ea.className='children-area';
+      const ed=document.createElement('div');ed.className='children-drop';
+      ed.dataset.parentId=block.id;ed.dataset.childType='elseChildren';
+      if(block.elseChildren)block.elseChildren.forEach(c=>ed.appendChild(renderBlock(c)));
+      ea.appendChild(ed);el.appendChild(ea);
+    }
+  }
+  // events
+  el.addEventListener('pointerdown',e=>{
+    if(e.target.dataset.del){e.preventDefault();e.stopPropagation();deleteBlock(e.target.dataset.del);return}
+    if(e.target.dataset.param){e.preventDefault();e.stopPropagation();editParam(block,e.target.dataset.param);return}
+    startDragFromProgram(e,block.id);
+  });
+  return el;
+}
+
+function deleteBlock(id){
+  removeBlockFromProgram(id);
+  renderProgram();
+  autoSaveWork();
+}
+
+function editParam(block,param){
+  if(execution.running)return;
+  if(param==='count'){
+    const v=prompt('반복 횟수 (2~9):',block.count);
+    const n=parseInt(v);if(n>=2&&n<=9)block.count=n;
+  } else if(param==='condition'){
+    const conds=currentLevel.conditions||['front_empty'];
+    const idx=(conds.indexOf(block.condition)+1)%conds.length;
+    block.condition=conds[idx];
+  } else if(param==='color'){
+    const colors=['red','blue','green','yellow'];
+    const idx=(colors.indexOf(block.color)+1)%colors.length;
+    block.color=colors[idx];
+  } else if(param==='func'){
+    const funcs=['F1','F2','F3','F4'];
+    const idx=(funcs.indexOf(block.funcId)+1)%funcs.length;
+    block.funcId=funcs[idx];
+  }
+  renderProgram();
+  autoSaveWork();
+}
+
+function switchTab(tab){
+  currentTab=tab;
+  renderProgram();
+}
+
+function updateBlockCount(){
+  const total=getTotalBlockCount();
+  const limit=currentLevel.limit;
+  document.getElementById('blockCount').textContent=limit?`${total}/${limit}`:`${total}`;
+}
+
+function updateStarsTarget(){
+  const lv=currentLevel;
+  document.getElementById('starsTarget').innerHTML=
+    `<span class="star">☆☆☆</span> (${lv.optB}블록↓ ${lv.optS}스텝↓)`;
+}
+
+// ============== GRID RENDERING ==============
+const canvas=document.getElementById('gridCanvas');
+const ctx=canvas.getContext('2d');
+let cellSize=40;
+
+function renderGrid(){
+  const lv=currentLevel;
+  const panel=document.querySelector('.grid-panel');
+  const pw=panel.clientWidth-16;const ph=panel.clientHeight-16;
+  cellSize=Math.min(Math.floor(pw/lv.w),Math.floor(ph/lv.h),60);
+  cellSize=Math.max(cellSize,24);
+  canvas.width=lv.w*cellSize;canvas.height=lv.h*cellSize;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // draw tiles
+  for(let y=0;y<lv.h;y++)for(let x=0;x<lv.w;x++){
+    const tile=grid[y][x];
+    const px=x*cellSize,py=y*cellSize;
+    // bg
+    if(tile.type==='wall'){ctx.fillStyle='#4a5568'}
+    else if(tile.type==='hole'){ctx.fillStyle='#1a202c'}
+    else{ctx.fillStyle='#ffffff'}
+    ctx.fillRect(px,py,cellSize,cellSize);
+    ctx.strokeStyle='#e2e8f0';ctx.strokeRect(px,py,cellSize,cellSize);
+    // paint
+    if(tile.paint){
+      ctx.fillStyle=tile.paint;ctx.globalAlpha=0.3;
+      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+    }
+    // paint target indicator
+    if(tile.paintTarget&&tile.paint!==tile.paintTarget){
+      ctx.strokeStyle=tile.paintTarget;ctx.lineWidth=2;ctx.setLineDash([3,3]);
+      ctx.strokeRect(px+3,py+3,cellSize-6,cellSize-6);
+      ctx.setLineDash([]);ctx.lineWidth=1;
+    }
+    // ice
+    if(tile.ice){
+      ctx.fillStyle='#bee3f8';ctx.globalAlpha=0.4;
+      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+    }
+    // teleporter
+    if(tile.teleporter){
+      ctx.fillStyle='#9f7aea';ctx.globalAlpha=0.4;
+      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+      drawEmoji(ctx,'🌀',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+    }
+    // goal
+    if(tile.isGoal){
+      drawEmoji(ctx,'⭐',px+cellSize/2,py+cellSize/2,cellSize*0.6);
+    }
+    // item
+    if(tile.item){
+      drawEmoji(ctx,'💎',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+    }
+  }
+  // robot
+  drawRobot(robot.x,robot.y,robot.dir);
+}
+
+function drawEmoji(ctx,emoji,cx,cy,size){
+  ctx.font=`${size}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(emoji,cx,cy);
+}
+
+function drawRobot(x,y,dir){
+  const cx=x*cellSize+cellSize/2;const cy=y*cellSize+cellSize/2;
+  const s=cellSize*0.35;
+  ctx.save();ctx.translate(cx,cy);
+  ctx.rotate([0,Math.PI/2,Math.PI,Math.PI*1.5][dir]);
+  ctx.fillStyle='#2b6cb0';
+  ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s,s);ctx.lineTo(-s,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#bee3f8';
+  ctx.beginPath();ctx.arc(0,-s*0.2,s*0.25,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+// ============== EXECUTION ENGINE ==============
+function runProgram(speed){
+  if(execution.running)return;
+  resetGrid();
+  execution.running=true;execution.speed=speed;execution.stepCount=0;execution.result=null;execution.currentBlockId=null;
+  // build functions
+  functions={};
+  ['F1','F2','F3','F4'].forEach(f=>{
+    program[f].forEach(b=>{if(b.type==='funcDef')functions[b.funcId]=b.children||[]});
+  });
+  // also check main for funcDef
+  program.main.forEach(b=>{if(b.type==='funcDef')functions[b.funcId]=b.children||[]});
+  updateControlButtons(true);
+  execution.gen=executeBlocks(program.main);
+  if(speed==='step'){
+    advanceStep();
+  } else {
+    runLoop();
+  }
+}
+
+function stepProgram(){
+  if(!execution.running){
+    runProgram('step');return;
+  }
+  advanceStep();
+}
+
+async function runLoop(){
+  while(execution.running){
+    const done=advanceStep();
+    if(done)break;
+    const delay=execution.speed==='fast'?50:300;
+    await new Promise(r=>setTimeout(r,delay));
+  }
+}
+
+function advanceStep(){
+  if(!execution.gen)return true;
+  const result=execution.gen.next();
+  renderProgram();renderGrid();
+  if(result.done){
+    checkGoal();
+    return true;
+  }
+  if(execution.result){
+    finishExecution();return true;
+  }
+  document.getElementById('stepDisplay').textContent=`스텝: ${execution.stepCount}/${execution.maxSteps}`;
+  return false;
+}
+
+function*executeBlocks(blocks){
+  const stack=[{blocks,idx:0,repeatCounters:{}}];
+  while(stack.length>0){
+    const frame=stack[stack.length-1];
+    if(frame.idx>=frame.blocks.length){stack.pop();continue}
+    const block=frame.blocks[frame.idx];
+    frame.idx++;
+    execution.currentBlockId=block.id;
+    execution.stepCount++;
+    if(execution.stepCount>execution.maxSteps){
+      execution.result='fail_loop';yield;return;
+    }
+    switch(block.type){
+      case 'forward':{
+        const r=moveForward();
+        if(r==='wall'){execution.result='fail_wall';yield;return}
+        if(r==='hole'){execution.result='fail_hole';yield;return}
+        yield;break;
+      }
+      case 'turnLeft':robot.dir=(robot.dir+3)%4;yield;break;
+      case 'turnRight':robot.dir=(robot.dir+1)%4;yield;break;
+      case 'pickup':{
+        const tile=grid[robot.y]&&grid[robot.y][robot.x];
+        if(tile&&tile.item&&robot.bag.length<robot.bagCap){
+          robot.bag.push(tile.item);tile.item=null;
+        }
+        yield;break;
+      }
+      case 'drop':{
+        if(robot.bag.length>0){
+          const tile=grid[robot.y]&&grid[robot.y][robot.x];
+          if(tile){
+            if(tile.type==='hole'){tile.type='floor';robot.bag.pop()}
+            else{tile.item=robot.bag.pop()}
+          }
+        }
+        yield;break;
+      }
+      case 'paint':{
+        const tile=grid[robot.y]&&grid[robot.y][robot.x];
+        if(tile)tile.paint=block.color;
+        yield;break;
+      }
+      case 'repeat':{
+        for(let i=0;i<block.count;i++){
+          if(block.children&&block.children.length>0){
+            const sub=executeBlocks(block.children);
+            let sr=sub.next();
+            while(!sr.done){
+              yield;
+              if(execution.result)return;
+              sr=sub.next();
+            }
+          }
+        }
+        break;
+      }
+      case 'loop':{
+        for(let i=0;i<100;i++){
+          if(checkGoalSilent()){execution.currentBlockId=null;return}
+          if(block.children&&block.children.length>0){
+            const sub=executeBlocks(block.children);
+            let sr=sub.next();
+            while(!sr.done){
+              yield;
+              if(execution.result)return;
+              if(checkGoalSilent())return;
+              sr=sub.next();
+            }
+          }
+        }
+        break;
+      }
+      case 'if':{
+        if(evalCondition(block.condition)){
+          if(block.children&&block.children.length>0){
+            const sub=executeBlocks(block.children);
+            let sr=sub.next();
+            while(!sr.done){yield;if(execution.result)return;sr=sub.next()}
+          }
+        }
+        yield;break;
+      }
+      case 'ifelse':{
+        const arr=evalCondition(block.condition)?block.children:block.elseChildren;
+        if(arr&&arr.length>0){
+          const sub=executeBlocks(arr);
+          let sr=sub.next();
+          while(!sr.done){yield;if(execution.result)return;sr=sub.next()}
+        }
+        yield;break;
+      }
+      case 'funcDef':yield;break;
+      case 'funcCall':{
+        const fb=functions[block.funcId];
+        if(fb&&fb.length>0){
+          const sub=executeBlocks(JSON.parse(JSON.stringify(fb)));
+          let sr=sub.next();
+          while(!sr.done){yield;if(execution.result)return;sr=sub.next()}
+        }
+        yield;break;
+      }
+    }
+    if(execution.result)return;
+  }
+}
+
+function moveForward(){
+  const dx=[0,1,0,-1],dy=[-1,0,1,0];
+  const nx=robot.x+dx[robot.dir],ny=robot.y+dy[robot.dir];
+  if(nx<0||nx>=currentLevel.w||ny<0||ny>=currentLevel.h)return 'wall';
+  const tile=grid[ny][nx];
+  if(tile.type==='wall')return 'wall';
+  if(tile.type==='hole')return 'hole';
+  robot.x=nx;robot.y=ny;
+  robot.visited.add(`${robot.x},${robot.y}`);
+  // teleporter
+  if(tile.teleporter){
+    robot.x=tile.teleporter.x;robot.y=tile.teleporter.y;
+    robot.visited.add(`${robot.x},${robot.y}`);
+  }
+  // ice slide
+  if(tile.ice){
+    const dx2=[0,1,0,-1],dy2=[-1,0,1,0];
+    for(let i=0;i<20;i++){
+      const sx=robot.x+dx2[robot.dir],sy=robot.y+dy2[robot.dir];
+      if(sx<0||sx>=currentLevel.w||sy<0||sy>=currentLevel.h)break;
+      const st=grid[sy][sx];
+      if(st.type==='wall')break;
+      if(st.type==='hole')break;
+      robot.x=sx;robot.y=sy;
+      robot.visited.add(`${robot.x},${robot.y}`);
+      if(!st.ice)break;
+    }
+  }
+  return 'ok';
+}
+
+function evalCondition(cond){
+  const dx=[0,1,0,-1],dy=[-1,0,1,0];
+  const fx=robot.x+dx[robot.dir],fy=robot.y+dy[robot.dir];
+  switch(cond){
+    case 'front_empty':{
+      if(fx<0||fx>=currentLevel.w||fy<0||fy>=currentLevel.h)return false;
+      const t=grid[fy][fx];return t.type!=='wall'&&t.type!=='hole';
+    }
+    case 'front_wall':{
+      if(fx<0||fx>=currentLevel.w||fy<0||fy>=currentLevel.h)return true;
+      return grid[fy][fx].type==='wall';
+    }
+    case 'front_hole':{
+      if(fx<0||fx>=currentLevel.w||fy<0||fy>=currentLevel.h)return false;
+      return grid[fy][fx].type==='hole';
+    }
+    case 'has_item':{
+      const t=grid[robot.y]&&grid[robot.y][robot.x];
+      return t&&t.item!==null;
+    }
+    case 'bag_empty':return robot.bag.length===0;
+    case 'tile_color':{
+      const t=grid[robot.y]&&grid[robot.y][robot.x];
+      return t&&t.paint==='red';
+    }
+    default:return false;
+  }
+}
+
+function checkGoalSilent(){
+  const g=currentLevel.goal;
+  switch(g.type){
+    case 'reach':return g.targets.some(t=>robot.x===t.x&&robot.y===t.y);
+    case 'collect_all':{
+      for(let y=0;y<currentLevel.h;y++)for(let x=0;x<currentLevel.w;x++){
+        if(grid[y][x].item)return false;
+      }
+      return true;
+    }
+    case 'paint_all':{
+      for(let y=0;y<currentLevel.h;y++)for(let x=0;x<currentLevel.w;x++){
+        const t=grid[y][x];
+        if(t.paintTarget&&t.paint!==t.paintTarget)return false;
+      }
+      return true;
+    }
+    case 'collect_and_reach':{
+      for(let y=0;y<currentLevel.h;y++)for(let x=0;x<currentLevel.w;x++){
+        if(grid[y][x].item)return false;
+      }
+      return g.targets.some(t=>robot.x===t.x&&robot.y===t.y);
+    }
+  }
+  return false;
+}
+
+function checkGoal(){
+  if(execution.result){finishExecution();return}
+  // for level 6 (visitGoal), check if robot visited the goal and is back
+  if(currentLevel.visitGoal){
+    const targets=currentLevel.goal.targets;
+    const visited=targets.every(t=>robot.visited.has(`${t.x},${t.y}`));
+    // robot must return to start
+    if(visited&&robot.x===robotInitial.x&&robot.y===robotInitial.y){
+      execution.result='success';
+    } else if(!execution.result){
+      execution.result='fail_goal';
+    }
+  } else if(checkGoalSilent()){
+    execution.result='success';
+  } else if(!execution.result){
+    execution.result='fail_goal';
+  }
+  finishExecution();
+}
+
+function finishExecution(){
+  execution.running=false;execution.gen=null;
+  execution.currentBlockId=null;
+  updateControlButtons(false);
+  renderProgram();renderGrid();
+  if(execution.result==='success'){
+    showSuccess();
+  } else {
+    showFailure();
+  }
+}
+
+function showSuccess(){
+  const lv=currentLevel;
+  const blocks=getTotalBlockCount();
+  const steps=execution.stepCount;
+  const s1=true;
+  const s2=blocks<=Math.ceil(lv.optB*1.5);
+  const s3=steps<=Math.ceil(lv.optS*1.3);
+  const stars=[s1,s2,s3];
+  // update save
+  const prev=save.stars[lv.id]||[false,false,false];
+  save.stars[lv.id]=[prev[0]||s1,prev[1]||s2,prev[2]||s3];
+  if(lv.id>=save.unlockedLevel&&lv.id<LEVELS.length)save.unlockedLevel=lv.id+1;
+  save.solutions[lv.id]={blockCount:blocks,stepCount:steps};
+  saveSave();
+  // particles
+  spawnParticles();
+  // modal
+  const starStr=stars.map(s=>s?'⭐':'☆').join('');
+  document.getElementById('modalTitle').textContent='레벨 클리어!';
+  document.getElementById('modalStars').textContent=starStr;
+  document.getElementById('modalDetail').textContent=`블록 ${blocks}개 | 스텝 ${steps} (목표: ${lv.optB}블록, ${lv.optS}스텝)`;
+  document.getElementById('modalNext').style.display=lv.id<LEVELS.length?'inline-block':'none';
+  document.getElementById('modal').classList.add('active');
+}
+
+function showFailure(){
+  failCount++;
+  const msgs={fail_wall:'벽에 충돌했습니다!',fail_hole:'구멍에 빠졌습니다!',
+    fail_loop:'무한 루프! (200스텝 초과)',fail_goal:'목표를 달성하지 못했습니다'};
+  // shake canvas
+  canvas.style.animation='shake 0.3s';
+  setTimeout(()=>canvas.style.animation='',300);
+  document.getElementById('modalTitle').textContent='실패!';
+  document.getElementById('modalStars').textContent='❌';
+  document.getElementById('modalDetail').textContent=msgs[execution.result]||'다시 시도하세요';
+  document.getElementById('modalNext').style.display='none';
+  document.getElementById('modal').classList.add('active');
+  // hints
+  showHint();
+}
+
+function showHint(){
+  if(failCount<5)return;
+  const bar=document.getElementById('hintBar');
+  bar.classList.add('active');
+  if(failCount>=12){
+    bar.textContent='💡 힌트 3: 처음 몇 개의 블록을 잘 배치해 보세요. 기본 이동 블록부터 시작!';
+  } else if(failCount>=8){
+    bar.textContent='💡 힌트 2: 로봇의 이동 경로를 먼저 머릿속으로 그려보세요.';
+  } else {
+    const concepts=currentLevel.blocks;
+    let key='이동';
+    if(concepts.includes('loop'))key='무한반복';
+    else if(concepts.includes('if'))key='조건문';
+    else if(concepts.includes('repeat'))key='반복';
+    else if(concepts.includes('funcDef'))key='함수';
+    bar.textContent=`💡 힌트 1: 이 레벨의 핵심은 "${key}" 개념입니다.`;
+  }
+}
+
+function spawnParticles(){
+  const panel=document.querySelector('.grid-panel');
+  for(let i=0;i<8;i++){
+    const p=document.createElement('div');p.className='particle';
+    p.textContent=['⭐','✨','🎉','💫'][Math.floor(Math.random()*4)];
+    p.style.left=Math.random()*80+10+'%';
+    p.style.top=Math.random()*60+20+'%';
+    p.style.animationDelay=(Math.random()*0.5)+'s';
+    panel.appendChild(p);
+    setTimeout(()=>p.remove(),1500);
+  }
+}
+
+function stopProgram(){stopExecution();resetGrid();renderGrid();renderProgram()}
+function stopExecution(){
+  execution.running=false;execution.gen=null;execution.currentBlockId=null;execution.result=null;
+  updateControlButtons(false);
+}
+
+function resetLevel(){
+  stopExecution();
+  program={main:[],F1:[],F2:[],F3:[],F4:[]};
+  resetGrid();renderGrid();renderProgram();
+  failCount=0;hintLevel=0;
+  document.getElementById('hintBar').classList.remove('active');
+  autoSaveWork();
+}
+
+function updateControlButtons(running){
+  document.getElementById('btnPlay').disabled=running;
+  document.getElementById('btnFast').disabled=running;
+  document.getElementById('btnStop').disabled=!running;
+}
+
+function nextLevel(){
+  closeModal();
+  const next=currentLevel.id+1;
+  if(next<=LEVELS.length){loadLevel(next);showScreen('gameScreen')}
+  else{showLevelSelect()}
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('active')}
+
+function autoSaveWork(){
+  save.currentWork={levelId:currentLevel.id,program:JSON.parse(JSON.stringify(program))};
+  saveSave();
+}
+
+function showHowTo(){
+  alert('조작법:\n\n[PC]\n- 마우스 드래그: 블록 배치/이동\n- 클릭: 파라미터 수정 (반복횟수, 조건 등)\n- Space: 실행/정지\n- R: 리셋\n\n[모바일]\n- 터치 드래그: 블록 배치\n- 탭: 파라미터 수정\n- ✕ 버튼: 블록 삭제\n\n블록을 팔레트에서 프로그램 영역으로\n드래그하여 프로그램을 만드세요!\n블록을 프로그램 밖으로 드래그하면 삭제됩니다.');
+}
+
+// ============== KEYBOARD ==============
+document.addEventListener('keydown',e=>{
+  if(document.querySelector('#gameScreen.active')){
+    if(e.code==='Space'){e.preventDefault();
+      if(execution.running)stopProgram();else runProgram('normal');
+    }
+    if(e.code==='ArrowRight'&&!e.ctrlKey){e.preventDefault();stepProgram()}
+    if(e.code==='KeyR'&&!e.ctrlKey){e.preventDefault();resetLevel()}
+    if(e.code==='Delete'||e.code==='Backspace'){
+      // delete selected block if any
+    }
+    if(e.ctrlKey&&e.code==='KeyZ'){e.preventDefault();resetLevel()}
+  }
+});
+
+// ============== RESIZE ==============
+function onResize(){
+  if(currentLevel)renderGrid();
+}
+window.addEventListener('resize',onResize);
+
+// ============== INIT ==============
+function init(){
+  loadSave();
+  if(save.unlockedLevel>1){
+    document.getElementById('continueBtn').style.display='inline-block';
+  }
+}
+init();
+</script>
+</body>
+</html>
