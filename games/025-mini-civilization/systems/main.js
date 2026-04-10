@@ -42,8 +42,12 @@ window.Main = {
 
     // 시스템 초기화 (존재하는 경우에만)
     if (window.Assets && typeof Assets.init === 'function') {
-      Assets.init();
-      console.log('[Main] Assets 시스템 초기화 완료');
+      try {
+        Assets.init();
+        console.log('[Main] Assets 시스템 초기화 완료');
+      } catch (e) {
+        console.error('[Main] Assets 초기화 실패:', e);
+      }
     }
 
     if (window.Game && typeof Game.init === 'function') {

@@ -617,10 +617,41 @@
     return _animations.length > 0;
   }
 
+  // ─── Render (main loop entry point) ────────────────────────────
+
+  /**
+   * Called every frame by Main.startGameLoop().
+   * Reads Game.state and draws everything.
+   */
+  function render(delta) {
+    if (!window.Game || !Game.state) return;
+    const state = Game.state;
+    const playerCivId = 0; // player is always civ 0
+
+    updateAnimations();
+    draw(state, playerCivId);
+    drawMinimap(state, playerCivId);
+  }
+
+  function reset() {
+    // Clear animations on game reset
+    _animations.length = 0;
+  }
+
+  function onResize() {
+    // Re-render after resize
+    if (window.Game && Game.state) {
+      render(0);
+    }
+  }
+
   // ─── Public API ───────────────────────────────────────────────
 
   window.Renderer = {
     init,
+    render,
+    reset,
+    onResize,
     draw,
     drawMinimap,
     camera,
