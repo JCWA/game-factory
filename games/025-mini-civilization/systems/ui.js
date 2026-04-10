@@ -1151,10 +1151,14 @@ window.UI = (() => {
         `;
       }
 
-      // 건설 가능 건물
+      // 건설 가능 건물 (이미 건설됐거나 생산 대기열에 있는 건물 제외)
       let buildableHtml = '';
       const allBuildings = Object.entries(BUILDINGS);
-      const available = allBuildings.filter(([id]) => !city.buildings.includes(id));
+      const queuedBuildingIds = (city.productionQueue || [])
+        .filter(q => q.type === 'building')
+        .map(q => q.id);
+      const available = allBuildings.filter(([id]) =>
+        !city.buildings.includes(id) && !queuedBuildingIds.includes(id));
       if (available.length > 0) {
         buildableHtml = '<h3>건설 가능</h3><div class="buildable-grid">';
         for (const [id, b] of available) {
@@ -1217,21 +1221,27 @@ window.UI = (() => {
 
       // 건설 항목 클릭
       document.querySelectorAll('#modal-city .buildable-item').forEach(el => {
-        el.addEventListener('click', () => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
           const type = el.dataset.buildType;
           const id = el.dataset.buildId;
+          let success = false;
           if (typeof Game.addToProductionQueue === 'function') {
-            Game.addToProductionQueue(city, type, id);
+            success = Game.addToProductionQueue(city, type, id);
           } else if (typeof Game.setProduction === 'function') {
-            Game.setProduction(city.id, type, id);
+            success = Game.setProduction(city.id, type, id);
           } else {
             // fallback: 직접 큐에 추가
             const cost = type === 'unit'
               ? (UNITS[id] ? UNITS[id].cost : 30)
               : (BUILDINGS[id] ? BUILDINGS[id].cost : 30);
             city.productionQueue = [{ type, id, remaining: cost, totalCost: cost }];
+            success = true;
           }
-          UI.showNotification(`${type === 'unit' ? (UNITS[id]?.name || id) : (BUILDINGS[id]?.name || id)} 생산 시작`);
+          if (success) {
+            const itemName = type === 'unit' ? (UNITS[id]?.name || id) : (BUILDINGS[id]?.name || id);
+            UI.showNotification(`${itemName} 생산 시작`);
+          }
           UI.showCityPanel(city); // 새로고침
         });
       });
@@ -1831,23 +1841,27 @@ window.UI = (() => {
 
     const action = actions[index];
 
-    if (action.type === 'move' && typeof Renderer !== 'undefined' && typeof Renderer.animateMove === 'function') {
-      Renderer.animateMove(action.unit, [{col: action.unit.x, row: action.unit.y}, {col: action.toX, row: action.toY}], () => {
+    if (action.type === 'move' && action.unit && typeof Renderer !== 'undefined' && typeof Renderer.animateMove === 'function') {
+      const fromX = action.from ? action.from.x : action.unit.x;
+      const fromY = action.from ? action.from.y : action.unit.y;
+      const toX = action.toX !== undefined ? action.toX : (action.to ? action.to.x : fromX);
+      const toY = action.toY !== undefined ? action.toY : (action.to ? action.to.y : fromY);
+      Renderer.animateMove(action.unit, [{col: fromX, row: fromY}, {col: toX, row: toY}], () => {
         _animateAIActions(actions, index + 1, callback);
       });
-    } else if (action.type === 'combat') {
+    } else if (action.type === 'combat' || action.type === 'attack' || action.type === 'defend_attack') {
       UI.showNotification(action.message || '전투 발생!');
       if (typeof Renderer !== 'undefined' && typeof Renderer.render === 'function') Renderer.render();
       setTimeout(() => {
         _animateAIActions(actions, index + 1, callback);
       }, 400);
-    } else if (action.type === 'build_city') {
+    } else if (action.type === 'build_city' || action.type === 'city_founded') {
       UI.showNotification(`${action.civName || 'AI'}: ${action.cityName || '도시'} 건설`);
       if (typeof Renderer !== 'undefined' && typeof Renderer.render === 'function') Renderer.render();
       setTimeout(() => {
         _animateAIActions(actions, index + 1, callback);
       }, 300);
-    } else if (action.type === 'diplomacy') {
+    } else if (action.type === 'diplomacy' || action.type === 'declare_war' || action.type === 'propose_trade') {
       UI.showNotification(action.message || '외교 변동');
       setTimeout(() => {
         _animateAIActions(actions, index + 1, callback);

@@ -763,7 +763,12 @@ window.AI = (() => {
 
     // Patrol: move to a random neighbor within 2 tiles of city
     const neighbors = HexMap.getNeighbors(unit.x, unit.y);
-    const validNeighbors = neighbors.filter(n => {
+    // HexMap.getNeighbors returns {col, row} — normalize to {x, y}
+    const normalizedNeighbors = neighbors.map(n => ({
+      x: n.col !== undefined ? n.col : n.x,
+      y: n.row !== undefined ? n.row : n.y,
+    }));
+    const validNeighbors = normalizedNeighbors.filter(n => {
       const t = getTile(n.x, n.y);
       if (!t || t.terrain === 'water') return false;
       return HexMap.distance(n.x, n.y, nearestCity.x, nearestCity.y) <= 2;
@@ -820,7 +825,11 @@ window.AI = (() => {
 
     // Everything explored — wander randomly
     const neighbors = HexMap.getNeighbors(unit.x, unit.y);
-    const walkable = neighbors.filter(n => {
+    // HexMap.getNeighbors returns {col, row} — normalize to {x, y}
+    const walkable = neighbors.map(n => ({
+      x: n.col !== undefined ? n.col : n.x,
+      y: n.row !== undefined ? n.row : n.y,
+    })).filter(n => {
       const t = getTile(n.x, n.y);
       return t && t.terrain !== 'water';
     });
@@ -841,14 +850,21 @@ window.AI = (() => {
     try {
       const path = HexMap.findPath(unit.x, unit.y, tx, ty, Game.state.tiles, Game.state.mapWidth, Game.state.mapHeight);
       if (path && path.length > 1) {
-        // path[0] is current pos, path[1] is next step
+        // path[0] is current pos, path[1] is next step (findPath returns {col, row})
         const next = path[1];
-        Game.moveUnit(unit, next.x, next.y);
+        const nx = next.col !== undefined ? next.col : next.x;
+        const ny = next.row !== undefined ? next.row : next.y;
+        const oldX = unit.x, oldY = unit.y;
+        const result = Game.moveUnit(unit, nx, ny);
+        if (!result || !result.success) return null;
         return {
           type: 'move',
           unitId: unit.id,
-          from: { x: unit.x, y: unit.y },
-          to: { x: next.x, y: next.y },
+          unit: unit,
+          from: { x: oldX, y: oldY },
+          to: { x: nx, y: ny },
+          toX: nx,
+          toY: ny,
         };
       }
     } catch (e) {
@@ -857,23 +873,32 @@ window.AI = (() => {
       let bestNeighbor = null;
       let bestDist = Infinity;
       for (const n of neighbors) {
-        const t = getTile(n.x, n.y);
+        // HexMap.getNeighbors returns {col, row}
+        const nx = n.col !== undefined ? n.col : n.x;
+        const ny = n.row !== undefined ? n.row : n.y;
+        const t = getTile(nx, ny);
         if (!t || t.terrain === 'water') continue;
-        const d = HexMap.distance(n.x, n.y, tx, ty);
+        const d = HexMap.distance(nx, ny, tx, ty);
         if (d < bestDist) {
           bestDist = d;
-          bestNeighbor = n;
+          bestNeighbor = { x: nx, y: ny };
         }
       }
       if (bestNeighbor) {
         try {
-          Game.moveUnit(unit, bestNeighbor.x, bestNeighbor.y);
-          return {
-            type: 'move',
-            unitId: unit.id,
-            from: { x: unit.x, y: unit.y },
-            to: { x: bestNeighbor.x, y: bestNeighbor.y },
-          };
+          const oldX = unit.x, oldY = unit.y;
+          const result = Game.moveUnit(unit, bestNeighbor.x, bestNeighbor.y);
+          if (result && result.success) {
+            return {
+              type: 'move',
+              unitId: unit.id,
+              unit: unit,
+              from: { x: oldX, y: oldY },
+              to: { x: bestNeighbor.x, y: bestNeighbor.y },
+              toX: bestNeighbor.x,
+              toY: bestNeighbor.y,
+            };
+          }
         } catch (_) { /* ignore */ }
       }
     }
