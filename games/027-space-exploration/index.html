@@ -269,7 +269,7 @@ function createInitialState() {
       modules: [],
       orbitingPlanet: null
     },
-    bodies: PLANETS.map(p => ({ ...p, angle: p.angle })),
+    bodies: PLANETS.map(p => ({ ...p, angle: p.angle, x: p.orbitRadius * Math.cos(p.angle), y: p.orbitRadius * Math.sin(p.angle) })),
     asteroids: [],
     base: { built: false, facilities: [], inventory: {} },
     exploration: {
@@ -866,7 +866,9 @@ function renderSolar() {
 
     if (i === 0) {
       // Sun with glow
-      const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, r * 2.5);
+      const sr = r * 2.5;
+      if (!isFinite(sp.x) || !isFinite(sp.y) || !isFinite(sr) || sr <= 0) continue;
+      const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, sr);
       grad.addColorStop(0, '#FFF8DC');
       grad.addColorStop(0.3, '#FFD700');
       grad.addColorStop(0.7, '#FF8C00');
@@ -992,11 +994,15 @@ function renderSolar() {
   if (gs.events.solarWind) {
     ctx.fillStyle = 'rgba(255,215,0,0.15)';
     const sunP = worldToScreen(0, 0);
-    const grad2 = ctx.createRadialGradient(sunP.x, sunP.y, 30 * cam.zoom, sunP.x, sunP.y, 600 * cam.zoom);
-    grad2.addColorStop(0, 'rgba(255,215,0,0.2)');
-    grad2.addColorStop(1, 'rgba(255,215,0,0)');
-    ctx.fillStyle = grad2;
-    ctx.fillRect(0, 0, w, h);
+    const swInner = 30 * cam.zoom;
+    const swOuter = 600 * cam.zoom;
+    if (isFinite(sunP.x) && isFinite(sunP.y) && isFinite(swInner) && isFinite(swOuter) && swOuter > 0) {
+      const grad2 = ctx.createRadialGradient(sunP.x, sunP.y, swInner, sunP.x, sunP.y, swOuter);
+      grad2.addColorStop(0, 'rgba(255,215,0,0.2)');
+      grad2.addColorStop(1, 'rgba(255,215,0,0)');
+      ctx.fillStyle = grad2;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   // Landing speed gauge when near planet
