@@ -114,7 +114,7 @@ const LEVELS = [
     }),
     switches: [], doors: [],
     spawn: { x: 2, y: 8 }, exit: { x: 17, y: 9 }, maxGhosts: 0,
-    hint: '화살표/WASD로 이동, ↑/W로 점프\n흰색 출구 문으로 이동하세요!'
+    hint: '화살표/WASD로 이동, ↑/W로 점프\n흰색 출구 문으로 이동하세요!\n(다음 스테이지부터 R=녹화, T=되감기를 사용합니다)'
   },
   // ── Stage 2: Switch Basics ──
   {
@@ -127,7 +127,7 @@ const LEVELS = [
     switches: [{ x: 4, y: 9, color: 0, doorId: 0 }],
     doors: [{ x: 10, y: 9, color: 0, id: 0 }],
     spawn: { x: 2, y: 8 }, exit: { x: 17, y: 9 }, maxGhosts: 1,
-    hint: 'R: 녹화 시작 → 스위치(SW)를 밟고 서있기\nT: 되감기 → 잔상이 스위치를 유지하는 동안 문 통과!'
+    hint: '🔴 R키로 녹화 시작 → 빨간 스위치(SW) 위로 걸어가 밟고 서있기\n⏪ T키로 되감기 → 내 분신(잔상)이 나타나 방금 행동을 반복!\n잔상이 스위치를 누르고 있으면 문이 열림 → 그 사이 문 통과!'
   },
   // ── Stage 3: Timing ──
   {
@@ -721,7 +721,7 @@ const game = {
   checkSwitches() {
     const lv = this.lv;
     this.swState = lv.switches.map(() => false);
-    const chars = [this.player, ...this.ghosts.filter(g => !g.done)];
+    const chars = [this.player, ...this.ghosts];
     for (let si = 0; si < lv.switches.length; si++) {
       const sw = lv.switches[si];
       const sr = { x: sw.x * TILE, y: sw.y * TILE, w: TILE, h: TILE };
@@ -826,7 +826,13 @@ const game = {
     // Ghost physics
     for (const g of this.ghosts) {
       if (g.done) continue;
-      if (g.fi >= g.rec.frames.length) { g.done = true; continue; }
+      if (g.fi >= g.rec.frames.length) {
+        // 녹화 끝나면 제자리에 서있기 (스위치 유지 가능)
+        g.done = true;
+        g.vx = 0;
+        g.vy = 0;
+        continue;
+      }
       this.updatePhys(g, g.rec.frames[g.fi]);
       g.fi++;
     }
@@ -1075,14 +1081,14 @@ const game = {
   drawGhosts() {
     for (let i = 0; i < this.ghosts.length; i++) {
       const g = this.ghosts[i];
-      ctx.globalAlpha = g.done ? 0.12 : 0.5;
+      ctx.globalAlpha = g.done ? 0.35 : 0.5;
       ctx.save();
-      ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 3 : 10;
+      ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 6 : 10;
       ctx.fillStyle = g.color;
       ctx.fillRect(g.x, g.y, g.w, g.h);
       ctx.shadowBlur = 0;
       // Number label
-      ctx.globalAlpha = g.done ? 0.2 : 0.7;
+      ctx.globalAlpha = g.done ? 0.5 : 0.7;
       ctx.fillStyle = '#000';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
@@ -1126,7 +1132,11 @@ const game = {
     const lines = this.msgTxt.split('\n');
     const lh = 20, pad = 14;
     const bh = lines.length * lh + pad * 2;
-    const bw = 380;
+    ctx.save();
+    ctx.font = '12px sans-serif';
+    const maxTextW = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const bw = Math.min(this.cw - 20, Math.max(380, maxTextW + pad * 2 + 20));
+    ctx.restore();
     const bx = (this.cw - bw) / 2, by = this.ch - bh - 16;
     ctx.save();
     ctx.globalAlpha = alpha;
