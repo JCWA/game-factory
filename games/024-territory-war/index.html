@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>영토 전쟁</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #16213e;
+  border-bottom: 2px solid #0f3460;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+#header .title { font-size: 18px; font-weight: bold; color: #e94560; }
+#header .info { font-size: 14px; display: flex; gap: 16px; }
+#header .info span { white-space: nowrap; }
+.gold-text { color: #ffd700; font-weight: bold; }
+.turn-text { color: #8ecae6; }
+
+#canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+canvas { display: block; }
+
+#bottom-panel {
+  background: #16213e;
+  border-top: 2px solid #0f3460;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+#unit-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+#unit-bar button {
+  padding: 6px 12px;
+  border: 2px solid #0f3460;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+#unit-bar button:hover { background: #0f3460; }
+#unit-bar button:disabled { opacity: 0.4; cursor: default; }
+#unit-bar button.end-turn {
+  background: #e94560;
+  color: white;
+  border-color: #e94560;
+  font-weight: bold;
+}
+#unit-bar button.end-turn:hover { background: #c73850; }
+
+#info-bar {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #999;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#info-bar .sel-info { color: #ccc; }
+
+/* overlays */
+.overlay {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.overlay.hidden { display: none; }
+.overlay-box {
+  background: #16213e;
+  border: 2px solid #0f3460;
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+}
+.overlay-box h2 { color: #e94560; margin-bottom: 16px; font-size: 24px; }
+.overlay-box p { margin-bottom: 20px; font-size: 15px; line-height: 1.6; }
+.overlay-box button {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  background: #e94560;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin: 4px;
+}
+.overlay-box button:hover { background: #c73850; }
+
+#turn-banner {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  font-weight: bold;
+  padding: 16px 40px;
+  border-radius: 12px;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#turn-banner.show { opacity: 1; }
+#turn-banner.enemy { background: rgba(217,74,74,0.85); color: white; }
+#turn-banner.player { background: rgba(74,144,217,0.85); color: white; }
+
+/* tooltip */
+#tooltip {
+  position: fixed;
+  background: #0f3460;
+  color: #e0e0e0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 60;
+  display: none;
+  line-height: 1.5;
+  max-width: 200px;
+}
+
+/* combat popup */
+.combat-popup {
+  position: absolute;
+  font-size: 18px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 40;
+  animation: floatUp 0.8s ease-out forwards;
+}
+@keyframes floatUp {
+  0% { opacity:1; transform: translateY(0); }
+  100% { opacity:0; transform: translateY(-30px); }
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span class="title">⚔️ 영토 전쟁</span>
+  <div class="info">
+    <span class="turn-text">턴: <span id="turn-num">1</span>/30</span>
+    <span>골드: <span class="gold-text" id="gold-num">0</span></span>
+    <span>수입: <span class="gold-text" id="income-num">0</span>/턴</span>
+  </div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="game"></canvas>
+</div>
+
+<div id="bottom-panel">
+  <div id="unit-bar">
+    <button onclick="buyUnit('militia')" id="btn-militia">🗡 민병 1G</button>
+    <button onclick="buyUnit('warrior')" id="btn-warrior">⚔️ 전사 3G</button>
+    <button onclick="buyUnit('archer')" id="btn-archer">🏹 궁수 4G</button>
+    <button onclick="buyUnit('knight')" id="btn-knight">🐴 기사 6G</button>
+    <button onclick="endTurn()" class="end-turn" id="btn-end">턴 종료</button>
+  </div>
+  <div id="info-bar">
+    <span class="sel-info" id="sel-info">타일을 선택하세요</span>
+    <span id="territory-info">영토: 0 | 적: 0</span>
+  </div>
+</div>
+
+<div class="overlay hidden" id="start-overlay">
+  <div class="overlay-box">
+    <h2>⚔️ 영토 전쟁</h2>
+    <p>헥스 맵에서 영토를 확장하고<br>적 본진을 점령하세요!</p>
+    <p style="font-size:13px;color:#999;">
+      유닛 클릭 → 이동할 타일 클릭<br>
+      우클릭 / 길게 누르기: 타일 정보<br>
+      스페이스: 턴 종료
+    </p>
+    <button onclick="startGame()">새 게임</button>
+    <button onclick="loadGame()" id="btn-load" style="display:none;">이어하기</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="end-overlay">
+  <div class="overlay-box">
+    <h2 id="end-title">승리!</h2>
+    <p id="end-msg"></p>
+    <button onclick="startGame()">다시 하기</button>
+  </div>
+</div>
+
+<div id="turn-banner"></div>
+<div id="tooltip"></div>
+
+<script>
+// ==================== CONSTANTS ====================
+const TILE = { PLAIN: 'plain', FOREST: 'forest', MOUNTAIN: 'mountain', VILLAGE: 'village', BASE: 'base' };
+const TEAM = { NONE: 0, PLAYER: 1, AI: 2 };
+const UNIT_TYPES = {
+  militia: { name: '민병', cost: 1, power: 1, icon: '🗡', range: false },
+  warrior: { name: '전사', cost: 3, power: 3, icon: '⚔️', range: false },
+  archer:  { name: '궁수', cost: 4, power: 3, icon: '🏹', range: true },
+  knight:  { name: '기사', cost: 6, power: 5, icon: '🐴', range: false },
+};
+const TILE_INCOME = { plain: 1, forest: 1, mountain: 0, village: 3, base: 5 };
+const TILE_COLORS = {
+  plain:    { [TEAM.NONE]: '#c8c8c8', [TEAM.PLAYER]: '#4a90d9', [TEAM.AI]: '#d94a4a' },
+  forest:   { [TEAM.NONE]: '#2d6a2d', [TEAM.PLAYER]: '#3a7abf', [TEAM.AI]: '#bf3a3a' },
+  mountain: { [TEAM.NONE]: '#6a6a6a', [TEAM.PLAYER]: '#6a6a6a', [TEAM.AI]: '#6a6a6a' },
+  village:  { [TEAM.NONE]: '#c8b060', [TEAM.PLAYER]: '#5a9ad9', [TEAM.AI]: '#d95a5a' },
+  base:     { [TEAM.NONE]: '#c8c8c8', [TEAM.PLAYER]: '#2a6abf', [TEAM.AI]: '#bf2a2a' },
+};
+const MAX_POWER = 8;
+const MAX_TURNS = 30;
+
+// ==================== GAME STATE ====================
+let G = {}; // game state
+let canvas, ctx;
+let hexSize = 30;
+let offsetX = 0, offsetY = 0;
+let selectedHex = null;
+let movableHexes = [];
+let isPlayerTurn = true;
+let animQueue = [];
+let longPressTimer = null;
+let longPressTriggered = false;
+
+// ==================== HEX MATH ====================
+function getNeighbors(q, r) {
+  const even = r % 2 === 0;
+  const dirs = even
+    ? [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,0]]
+    : [[-1,-1],[0,-1],[1,0],[0,1],[-1,1],[-1,0]];
+  return dirs.map(([dq, dr]) => ({ q: q+dq, r: r+dr }))
+    .filter(({q,r}) => q>=0 && r>=0 && q<G.width && r<G.height);
+}
+
+function hexToPixel(q, r) {
+  const w = hexSize * 2;
+  const h = Math.sqrt(3) * hexSize;
+  const x = q * w * 0.75 + offsetX;
+  const y = r * h + (q % 2 === 1 ? h/2 : 0) + offsetY;
+  return { x, y };
+}
+
+function pixelToHex(px, py) {
+  let bestQ = -1, bestR = -1, bestDist = Infinity;
+  for (let q = 0; q < G.width; q++) {
+    for (let r = 0; r < G.height; r++) {
+      if (G.map[r][q].type === TILE.MOUNTAIN && false) continue;
+      const { x, y } = hexToPixel(q, r);
+      const d = (px-x)*(px-x) + (py-y)*(py-y);
+      if (d < bestDist) { bestDist = d; bestQ = q; bestR = r; }
+    }
+  }
+  if (bestDist < hexSize * hexSize * 1.2) return { q: bestQ, r: bestR };
+  return null;
+}
+
+function hexDist(q1, r1, q2, r2) {
+  // convert offset to cube then distance
+  function toCube(q, r) {
+    const x = q;
+    const z = r - (q - (q & 1)) / 2;
+    const y = -x - z;
+    return { x, y, z };
+  }
+  const a = toCube(q1, r1), b = toCube(q2, r2);
+  return Math.max(Math.abs(a.x-b.x), Math.abs(a.y-b.y), Math.abs(a.z-b.z));
+}
+
+// ==================== MAP GENERATION ====================
+function generateMap() {
+  const w = window.innerWidth < 600 ? 10 : 12;
+  const h = window.innerWidth < 600 ? 10 : 10;
+  G.width = w;
+  G.height = h;
+  G.map = [];
+
+  for (let r = 0; r < h; r++) {
+    G.map[r] = [];
+    for (let q = 0; q < w; q++) {
+      G.map[r][q] = { type: TILE.PLAIN, team: TEAM.NONE, unit: null };
+    }
+  }
+
+  // Mountains: ~15% using random clusters
+  const mountainCount = Math.floor(w * h * 0.15);
+  let placed = 0;
+  let attempts = 0;
+  while (placed < mountainCount && attempts < 500) {
+    const q = Math.floor(Math.random() * w);
+    const r = Math.floor(Math.random() * h);
+    if (G.map[r][q].type === TILE.PLAIN) {
+      // Don't place in corners (base areas)
+      if ((q < 2 && r < 2) || (q >= w-2 && r >= h-2)) { attempts++; continue; }
+      G.map[r][q].type = TILE.MOUNTAIN;
+      placed++;
+    }
+    attempts++;
+  }
+
+  // Forest: ~20%
+  const forestCount = Math.floor(w * h * 0.20);
+  placed = 0; attempts = 0;
+  while (placed < forestCount && attempts < 500) {
+    const q = Math.floor(Math.random() * w);
+    const r = Math.floor(Math.random() * h);
+    if (G.map[r][q].type === TILE.PLAIN) {
+      G.map[r][q].type = TILE.FOREST;
+      placed++;
+    }
+    attempts++;
+  }
+
+  // Villages: 3-5, at least 3 tiles apart
+  const villageCount = 3 + Math.floor(Math.random() * 3);
+  const villages = [];
+  attempts = 0;
+  while (villages.length < villageCount && attempts < 300) {
+    const q = Math.floor(Math.random() * w);
+    const r = Math.floor(Math.random() * h);
+    if (G.map[r][q].type === TILE.PLAIN) {
+      const tooClose = villages.some(v => hexDist(q, r, v.q, v.r) < 3);
+      if (!tooClose) {
+        G.map[r][q].type = TILE.VILLAGE;
+        villages.push({ q, r });
+      }
+    }
+    attempts++;
+  }
+
+  // Bases: opposite corners
+  const pBase = { q: 0, r: 0 };
+  const aBase = { q: w-1, r: h-1 };
+  G.map[pBase.r][pBase.q] = { type: TILE.BASE, team: TEAM.PLAYER, unit: null };
+  G.map[aBase.r][aBase.q] = { type: TILE.BASE, team: TEAM.AI, unit: null };
+  G.playerBase = pBase;
+  G.aiBase = aBase;
+
+  // Clear area around bases
+  for (const base of [pBase, aBase]) {
+    const neighbors = getNeighbors(base.q, base.r);
+    for (const n of neighbors) {
+      if (G.map[n.r][n.q].type === TILE.MOUNTAIN) {
+        G.map[n.r][n.q].type = TILE.PLAIN;
+      }
+    }
+  }
+
+  // BFS connectivity check
+  if (!bfsCheck(pBase.q, pBase.r, aBase.q, aBase.r)) {
+    return generateMap(); // retry
+  }
+
+  // Set initial territories
+  G.map[pBase.r][pBase.q].team = TEAM.PLAYER;
+  G.map[aBase.r][aBase.q].team = TEAM.AI;
+  // Give starting neighbors
+  for (const n of getNeighbors(pBase.q, pBase.r)) {
+    if (G.map[n.r][n.q].type !== TILE.MOUNTAIN) G.map[n.r][n.q].team = TEAM.PLAYER;
+  }
+  for (const n of getNeighbors(aBase.q, aBase.r)) {
+    if (G.map[n.r][n.q].type !== TILE.MOUNTAIN) G.map[n.r][n.q].team = TEAM.AI;
+  }
+
+  // Starting units
+  G.map[pBase.r][pBase.q].unit = { type: 'warrior', power: 3, team: TEAM.PLAYER, moved: false };
+  G.map[aBase.r][aBase.q].unit = { type: 'warrior', power: 3, team: TEAM.AI, moved: false };
+}
+
+function bfsCheck(q1, r1, q2, r2) {
+  const visited = new Set();
+  const queue = [{ q: q1, r: r1 }];
+  visited.add(`${q1},${r1}`);
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur.q === q2 && cur.r === r2) return true;
+    for (const n of getNeighbors(cur.q, cur.r)) {
+      const key = `${n.q},${n.r}`;
+      if (!visited.has(key) && G.map[n.r][n.q].type !== TILE.MOUNTAIN) {
+        visited.add(key);
+        queue.push(n);
+      }
+    }
+  }
+  return false;
+}
+
+// ==================== GAME INIT ====================
+function initGame() {
+  G.turn = 1;
+  G.gold = 5;
+  G.aiGold = 5;
+  G.gameOver = false;
+  selectedHex = null;
+  movableHexes = [];
+  isPlayerTurn = true;
+  generateMap();
+  updateUI();
+  render();
+}
+
+function startGame() {
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('end-overlay').classList.add('hidden');
+  initGame();
+  saveGame();
+}
+
+// ==================== INCOME ====================
+function calcIncome(team) {
+  let income = 0;
+  for (let r = 0; r < G.height; r++)
+    for (let q = 0; q < G.width; q++)
+      if (G.map[r][q].team === team)
+        income += TILE_INCOME[G.map[r][q].type] || 0;
+  return income;
+}
+
+function countTerritory(team) {
+  let count = 0;
+  for (let r = 0; r < G.height; r++)
+    for (let q = 0; q < G.width; q++)
+      if (G.map[r][q].team === team) count++;
+  return count;
+}
+
+// ==================== UNIT ACTIONS ====================
+function buyUnit(type) {
+  if (!isPlayerTurn || G.gameOver) return;
+  const info = UNIT_TYPES[type];
+  if (G.gold < info.cost) return;
+
+  // Find a tile to place: selected tile first, then any owned tile without unit
+  let target = null;
+  if (selectedHex) {
+    const tile = G.map[selectedHex.r][selectedHex.q];
+    if (tile.team === TEAM.PLAYER && !tile.unit) target = selectedHex;
+  }
+  if (!target) {
+    // Try base first
+    const bt = G.map[G.playerBase.r][G.playerBase.q];
+    if (bt.team === TEAM.PLAYER && !bt.unit) target = { ...G.playerBase };
+    else {
+      for (let r = 0; r < G.height && !target; r++)
+        for (let q = 0; q < G.width && !target; q++)
+          if (G.map[r][q].team === TEAM.PLAYER && !G.map[r][q].unit && G.map[r][q].type !== TILE.MOUNTAIN)
+            target = { q, r };
+    }
+  }
+  if (!target) return;
+
+  G.gold -= info.cost;
+  G.map[target.r][target.q].unit = { type, power: info.power, team: TEAM.PLAYER, moved: true };
+  selectedHex = target;
+  updateUI();
+  render();
+  saveGame();
+}
+
+function selectHex(q, r) {
+  if (!isPlayerTurn || G.gameOver) return;
+  const tile = G.map[r][q];
+
+  // If we have a selected unit and this is a movable hex
+  if (selectedHex && movableHexes.some(h => h.q === q && h.r === r)) {
+    moveUnit(selectedHex.q, selectedHex.r, q, r, TEAM.PLAYER);
+    selectedHex = null;
+    movableHexes = [];
+    updateUI();
+    render();
+    saveGame();
+    checkWin();
+    return;
+  }
+
+  // Select a player unit
+  if (tile.unit && tile.unit.team === TEAM.PLAYER && !tile.unit.moved) {
+    selectedHex = { q, r };
+    movableHexes = getMovable(q, r, TEAM.PLAYER);
+    render();
+    updateSelInfo(q, r);
+    return;
+  }
+
+  // Click on own tile without movable unit - show info
+  selectedHex = { q, r };
+  movableHexes = [];
+  render();
+  updateSelInfo(q, r);
+}
+
+function getMovable(q, r, team) {
+  const unit = G.map[r][q].unit;
+  if (!unit) return [];
+  const neighbors = getNeighbors(q, r);
+  return neighbors.filter(n => {
+    const t = G.map[n.r][n.q];
+    if (t.type === TILE.MOUNTAIN) return false;
+    if (t.unit && t.unit.team === team) {
+      // Can merge if total power <= MAX_POWER
+      return t.unit.power + unit.power <= MAX_POWER;
+    }
+    return true;
+  });
+}
+
+function moveUnit(fromQ, fromR, toQ, toR, team) {
+  const fromTile = G.map[fromR][fromQ];
+  const toTile = G.map[toR][toQ];
+  const unit = { ...fromTile.unit };
+
+  if (toTile.unit) {
+    if (toTile.unit.team === team) {
+      // Merge
+      toTile.unit.power = Math.min(MAX_POWER, toTile.unit.power + unit.power);
+      toTile.unit.moved = true;
+      fromTile.unit = null;
+      showCombatPopup(toQ, toR, `합류! ${toTile.unit.power}`, '#4ae9a5');
+    } else {
+      // Combat
+      const atkPower = unit.power;
+      let defPower = toTile.unit.power;
+      if (toTile.type === TILE.FOREST) defPower += 1; // forest defense bonus
+
+      showCombatPopup(toQ, toR, `⚔️ ${atkPower} vs ${defPower}`, '#ffd700');
+      flashTile(toQ, toR);
+
+      if (atkPower > defPower) {
+        // Attacker wins
+        const remaining = Math.max(1, atkPower - toTile.unit.power);
+        fromTile.unit = null;
+        toTile.unit = { ...unit, power: remaining, moved: true };
+        toTile.team = team;
+      } else {
+        // Defender wins (or tie)
+        const remaining = Math.max(1, defPower - atkPower);
+        fromTile.unit = null;
+        toTile.unit.power = remaining;
+      }
+    }
+  } else {
+    // Move to empty tile
+    fromTile.unit = null;
+    toTile.unit = { ...unit, moved: true };
+    toTile.team = team;
+  }
+}
+
+// ==================== TURN MANAGEMENT ====================
+function endTurn() {
+  if (!isPlayerTurn || G.gameOver) return;
+  isPlayerTurn = false;
+  selectedHex = null;
+  movableHexes = [];
+
+  // Reset player unit moved flags at end (they already moved)
+  // ... will reset at start of next turn
+
+  render();
+  showBanner('적 턴', 'enemy');
+
+  setTimeout(() => {
+    aiTurn();
+  }, 800);
+}
+
+function startPlayerTurn() {
+  G.turn++;
+  if (G.turn > MAX_TURNS) {
+    endGame();
+    return;
+  }
+  isPlayerTurn = true;
+
+  // Income
+  G.gold += calcIncome(TEAM.PLAYER);
+
+  // Reset moved flags
+  for (let r = 0; r < G.height; r++)
+    for (let q = 0; q < G.width; q++)
+      if (G.map[r][q].unit && G.map[r][q].unit.team === TEAM.PLAYER)
+        G.map[r][q].unit.moved = false;
+
+  showBanner('내 턴', 'player');
+  updateUI();
+  render();
+  saveGame();
+  checkWin();
+}
+
+// ==================== AI ====================
+function aiTurn() {
+  // Income
+  G.aiGold += calcIncome(TEAM.AI);
+
+  // Reset AI moved flags
+  for (let r = 0; r < G.height; r++)
+    for (let q = 0; q < G.width; q++)
+      if (G.map[r][q].unit && G.map[r][q].unit.team === TEAM.AI)
+        G.map[r][q].unit.moved = false;
+
+  // Buy units
+  aiBuyUnits();
+
+  // Gather AI units
+  const aiUnits = [];
+  for (let r = 0; r < G.height; r++)
+    for (let q = 0; q < G.width; q++)
+      if (G.map[r][q].unit && G.map[r][q].unit.team === TEAM.AI && !G.map[r][q].unit.moved)
+        aiUnits.push({ q, r });
+
+  // Move units one by one with delay
+  let idx = 0;
+  function moveNext() {
+    if (idx >= aiUnits.length || G.gameOver) {
+      // AI turn done
+      setTimeout(() => {
+        if (!G.gameOver) startPlayerTurn();
+      }, 300);
+      return;
+    }
+    const u = aiUnits[idx];
+    // Check unit still exists
+    if (G.map[u.r][u.q].unit && G.map[u.r][u.q].unit.team === TEAM.AI && !G.map[u.r][u.q].unit.moved) {
+      aiMoveUnit(u.q, u.r);
+    }
+    idx++;
+    render();
+    updateUI();
+    checkWin();
+    if (!G.gameOver) setTimeout(moveNext, 350);
+  }
+  render();
+  updateUI();
+  setTimeout(moveNext, 400);
+}
+
+function aiBuyUnits() {
+  // Find spawn locations (AI territory without units)
+  while (G.aiGold >= 1) {
+    const spawns = [];
+    for (let r = 0; r < G.height; r++)
+      for (let q = 0; q < G.width; q++)
+        if (G.map[r][q].team === TEAM.AI && !G.map[r][q].unit && G.map[r][q].type !== TILE.MOUNTAIN)
+          spawns.push({ q, r, priority: G.map[r][q].type === TILE.BASE ? 10 : G.map[r][q].type === TILE.VILLAGE ? 5 : 1 });
+
+    if (spawns.length === 0) break;
+
+    // Prefer base/village for spawning
+    spawns.sort((a, b) => b.priority - a.priority);
+    // Also prefer tiles closer to enemy
+    const spawn = spawns[0];
+
+    let unitType;
+    if (G.aiGold >= 6 && Math.random() < 0.25) {
+      unitType = 'knight';
+    } else if (G.aiGold >= 4 && Math.random() < 0.3) {
+      unitType = 'archer';
+    } else if (G.aiGold >= 3) {
+      unitType = 'warrior';
+    } else if (G.aiGold >= 1) {
+      unitType = 'militia';
+    } else break;
+
+    const cost = UNIT_TYPES[unitType].cost;
+    if (G.aiGold < cost) {
+      if (G.aiGold >= 1) { unitType = 'militia'; } else break;
+    }
+
+    G.aiGold -= UNIT_TYPES[unitType].cost;
+    G.map[spawn.r][spawn.q].unit = {
+      type: unitType,
+      power: UNIT_TYPES[unitType].power,
+      team: TEAM.AI,
+      moved: true // newly bought units can't move this turn
+    };
+  }
+}
+
+function aiMoveUnit(q, r) {
+  const unit = G.map[r][q].unit;
+  if (!unit || unit.moved) return;
+
+  const targets = getMovable(q, r, TEAM.AI);
+  if (targets.length === 0) { unit.moved = true; return; }
+
+  const scored = targets.map(t => {
+    let score = 0;
+    const tile = G.map[t.r][t.q];
+
+    if (tile.unit && tile.unit.team !== TEAM.AI) {
+      const defPower = tile.unit.power + (tile.type === TILE.FOREST ? 1 : 0);
+      if (unit.power > defPower) {
+        score += 10 + (TILE_INCOME[tile.type] || 0) * 2;
+      } else {
+        score -= 10;
+      }
+    } else if (tile.unit && tile.unit.team === TEAM.AI) {
+      // Merge - only if beneficial
+      if (tile.unit.power + unit.power <= MAX_POWER) score += 2;
+      else score -= 5;
+    } else if (tile.team !== TEAM.AI) {
+      score += (TILE_INCOME[tile.type] || 0) * 3 + 1;
+    } else {
+      score -= 1; // already own this tile
+    }
+
+    // Prefer moving toward player base
+    const distNow = hexDist(q, r, G.playerBase.q, G.playerBase.r);
+    const distNew = hexDist(t.q, t.r, G.playerBase.q, G.playerBase.r);
+    score += (distNow - distNew) * 1.5;
+
+    return { ...t, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  if (scored.length > 0 && scored[0].score > -5) {
+    moveUnit(q, r, scored[0].q, scored[0].r, TEAM.AI);
+  } else {
+    unit.moved = true;
+  }
+}
+
+// ==================== WIN/LOSE CHECK ====================
+function checkWin() {
+  if (G.gameOver) return;
+
+  // Check if player base captured by AI
+  if (G.map[G.playerBase.r][G.playerBase.q].team === TEAM.AI) {
+    G.gameOver = true;
+    showEndScreen(false, '적이 본진을 점령했습니다!');
+    return;
+  }
+  // Check if AI base captured by player
+  if (G.map[G.aiBase.r][G.aiBase.q].team === TEAM.PLAYER) {
+    G.gameOver = true;
+    showEndScreen(true, '적 본진을 점령했습니다!');
+    return;
+  }
+}
+
+function endGame() {
+  G.gameOver = true;
+  const pTerr = countTerritory(TEAM.PLAYER);
+  const aTerr = countTerritory(TEAM.AI);
+  if (pTerr > aTerr) {
+    showEndScreen(true, `30턴 종료! 영토: ${pTerr} vs ${aTerr}`);
+  } else if (aTerr > pTerr) {
+    showEndScreen(false, `30턴 종료! 영토: ${pTerr} vs ${aTerr}`);
+  } else {
+    showEndScreen(false, `30턴 종료! 무승부 (${pTerr} vs ${aTerr})`);
+  }
+}
+
+function showEndScreen(win, msg) {
+  const el = document.getElementById('end-overlay');
+  el.classList.remove('hidden');
+  document.getElementById('end-title').textContent = win ? '🎉 승리!' : '💀 패배...';
+  document.getElementById('end-msg').textContent = msg;
+  localStorage.removeItem('territory-war-save');
+}
+
+// ==================== RENDERING ====================
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (!G.map) return;
+
+  // Calculate hex size to fit
+  const maxW = canvas.width - 40;
+  const maxH = canvas.height - 40;
+  const hByW = maxW / (G.width * 1.5 + 0.5);
+  const hByH = maxH / (G.height * Math.sqrt(3) + Math.sqrt(3) / 2);
+  hexSize = Math.min(hByW, hByH, 40);
+  hexSize = Math.max(hexSize, 18);
+
+  // Center
+  const totalW = G.width * hexSize * 1.5 + hexSize * 0.5;
+  const totalH = G.height * Math.sqrt(3) * hexSize + Math.sqrt(3) * hexSize / 2;
+  offsetX = (canvas.width - totalW) / 2 + hexSize;
+  offsetY = (canvas.height - totalH) / 2 + hexSize * Math.sqrt(3) / 2;
+
+  render();
+}
+
+function render() {
+  if (!ctx || !G.map) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw hex tiles
+  for (let r = 0; r < G.height; r++) {
+    for (let q = 0; q < G.width; q++) {
+      drawHex(q, r);
+    }
+  }
+
+  // Draw highlights
+  if (selectedHex) {
+    const { x, y } = hexToPixel(selectedHex.q, selectedHex.r);
+    drawHexOutline(x, y, '#ffdd44', 3);
+  }
+  for (const h of movableHexes) {
+    const { x, y } = hexToPixel(h.q, h.r);
+    const tile = G.map[h.r][h.q];
+    if (tile.unit && tile.unit.team !== TEAM.PLAYER) {
+      drawHexHighlight(x, y, 'rgba(255,80,80,0.3)');
+    } else {
+      drawHexHighlight(x, y, 'rgba(255,255,100,0.25)');
+    }
+  }
+}
+
+function drawHex(q, r) {
+  const tile = G.map[r][q];
+  const { x, y } = hexToPixel(q, r);
+  const s = hexSize;
+
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (60 * i - 30);
+    const hx = x + s * Math.cos(angle);
+    const hy = y + s * Math.sin(angle);
+    if (i === 0) ctx.moveTo(hx, hy);
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+
+  // Fill color
+  const baseColor = TILE_COLORS[tile.type]?.[tile.team] || TILE_COLORS.plain[TEAM.NONE];
+  ctx.fillStyle = baseColor;
+  ctx.fill();
+
+  // Border
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Tile icons
+  const fontSize = Math.max(10, hexSize * 0.5);
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (tile.type === TILE.FOREST) {
+    ctx.fillStyle = '#1a4a1a';
+    ctx.font = `${hexSize * 0.6}px sans-serif`;
+    ctx.fillText('🌲', x, y - hexSize * 0.15);
+  } else if (tile.type === TILE.MOUNTAIN) {
+    ctx.fillStyle = '#444';
+    ctx.font = `${hexSize * 0.6}px sans-serif`;
+    ctx.fillText('⛰️', x, y - hexSize * 0.1);
+  } else if (tile.type === TILE.VILLAGE) {
+    ctx.font = `${hexSize * 0.45}px sans-serif`;
+    ctx.fillText('🏘️', x, y - hexSize * 0.3);
+  } else if (tile.type === TILE.BASE) {
+    ctx.font = `${hexSize * 0.5}px sans-serif`;
+    ctx.fillText('🏰', x, y - hexSize * 0.3);
+  }
+
+  // Unit
+  if (tile.unit) {
+    const uInfo = UNIT_TYPES[tile.unit.type];
+    // Unit icon
+    ctx.font = `${hexSize * 0.55}px sans-serif`;
+    ctx.fillText(uInfo.icon, x, y + (tile.type !== TILE.PLAIN ? hexSize * 0.15 : -hexSize * 0.1));
+
+    // Power number
+    const py = y + hexSize * 0.35;
+    ctx.font = `bold ${Math.max(10, hexSize * 0.4)}px sans-serif`;
+    ctx.fillStyle = tile.unit.team === TEAM.PLAYER ? '#1a3a6a' : '#6a1a1a';
+    ctx.fillText(tile.unit.power, x, py);
+
+    // Team indicator ring
+    ctx.beginPath();
+    ctx.arc(x, y, hexSize * 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = tile.unit.team === TEAM.PLAYER ? 'rgba(70,140,255,0.6)' : 'rgba(255,70,70,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Moved indicator
+    if (tile.unit.moved && tile.unit.team === TEAM.PLAYER && isPlayerTurn) {
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.PI / 180 * (60 * i - 30);
+        const hx = x + hexSize * Math.cos(angle);
+        const hy = y + hexSize * Math.sin(angle);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#000';
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawHexOutline(x, y, color, width) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (60 * i - 30);
+    const hx = x + hexSize * Math.cos(angle);
+    const hy = y + hexSize * Math.sin(angle);
+    if (i === 0) ctx.moveTo(hx, hy);
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+function drawHexHighlight(x, y, color) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (60 * i - 30);
+    const hx = x + hexSize * Math.cos(angle);
+    const hy = y + hexSize * Math.sin(angle);
+    if (i === 0) ctx.moveTo(hx, hy);
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,100,0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+// ==================== VFX ====================
+function flashTile(q, r) {
+  const { x, y } = hexToPixel(q, r);
+  let flash = 3;
+  const interval = setInterval(() => {
+    if (flash <= 0) { clearInterval(interval); render(); return; }
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 180 * (60 * i - 30);
+      const hx = x + hexSize * Math.cos(angle);
+      const hy = y + hexSize * Math.sin(angle);
+      if (i === 0) ctx.moveTo(hx, hy);
+      else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = flash % 2 === 0 ? 'rgba(255,255,0,0.5)' : 'rgba(255,0,0,0.5)';
+    ctx.fill();
+    flash--;
+  }, 100);
+}
+
+function showCombatPopup(q, r, text, color) {
+  const { x, y } = hexToPixel(q, r);
+  const rect = canvas.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.className = 'combat-popup';
+  popup.textContent = text;
+  popup.style.color = color;
+  popup.style.left = (rect.left + x) + 'px';
+  popup.style.top = (rect.top + y - 20) + 'px';
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 900);
+}
+
+function showBanner(text, type) {
+  const banner = document.getElementById('turn-banner');
+  banner.textContent = text;
+  banner.className = `show ${type}`;
+  setTimeout(() => banner.className = '', 800);
+}
+
+// ==================== UI UPDATES ====================
+function updateUI() {
+  document.getElementById('turn-num').textContent = G.turn;
+  document.getElementById('gold-num').textContent = G.gold;
+  document.getElementById('income-num').textContent = calcIncome(TEAM.PLAYER);
+
+  const pT = countTerritory(TEAM.PLAYER);
+  const aT = countTerritory(TEAM.AI);
+  document.getElementById('territory-info').textContent = `영토: ${pT} | 적: ${aT}`;
+
+  // Button states
+  document.getElementById('btn-militia').disabled = G.gold < 1 || !isPlayerTurn;
+  document.getElementById('btn-warrior').disabled = G.gold < 3 || !isPlayerTurn;
+  document.getElementById('btn-archer').disabled = G.gold < 4 || !isPlayerTurn;
+  document.getElementById('btn-knight').disabled = G.gold < 6 || !isPlayerTurn;
+  document.getElementById('btn-end').disabled = !isPlayerTurn;
+}
+
+function updateSelInfo(q, r) {
+  const tile = G.map[r][q];
+  const tileNames = { plain: '평원', forest: '숲', mountain: '산', village: '마을', base: '본진' };
+  let info = `${tileNames[tile.type]} (수입: ${TILE_INCOME[tile.type]})`;
+  if (tile.unit) {
+    const uInfo = UNIT_TYPES[tile.unit.type];
+    info += ` | ${uInfo.name} (전투력: ${tile.unit.power})`;
+    if (tile.type === TILE.FOREST) info += ' [방어+1]';
+  }
+  const teamStr = tile.team === TEAM.PLAYER ? ' [아군]' : tile.team === TEAM.AI ? ' [적]' : ' [중립]';
+  document.getElementById('sel-info').textContent = info + teamStr;
+}
+
+function showTooltip(q, r, clientX, clientY) {
+  const tile = G.map[r][q];
+  const tileNames = { plain: '평원', forest: '숲(방어+1)', mountain: '산(이동불가)', village: '마을', base: '본진' };
+  let text = `${tileNames[tile.type]}\n수입: ${TILE_INCOME[tile.type]}G`;
+  if (tile.unit) {
+    const uInfo = UNIT_TYPES[tile.unit.type];
+    text += `\n${uInfo.name} (전투력 ${tile.unit.power})`;
+    text += tile.unit.team === TEAM.PLAYER ? '\n아군 유닛' : '\n적 유닛';
+  }
+  const tooltip = document.getElementById('tooltip');
+  tooltip.textContent = text;
+  tooltip.style.whiteSpace = 'pre';
+  tooltip.style.display = 'block';
+  tooltip.style.left = Math.min(clientX + 10, window.innerWidth - 210) + 'px';
+  tooltip.style.top = Math.min(clientY + 10, window.innerHeight - 100) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ==================== SAVE/LOAD ====================
+function saveGame() {
+  try {
+    const save = { map: G.map, turn: G.turn, gold: G.gold, aiGold: G.aiGold,
+      width: G.width, height: G.height, playerBase: G.playerBase, aiBase: G.aiBase, gameOver: G.gameOver };
+    localStorage.setItem('territory-war-save', JSON.stringify(save));
+  } catch(e) {}
+}
+
+function loadGame() {
+  try {
+    const data = JSON.parse(localStorage.getItem('territory-war-save'));
+    if (!data || !data.map) return false;
+    G.map = data.map;
+    G.turn = data.turn;
+    G.gold = data.gold;
+    G.aiGold = data.aiGold;
+    G.width = data.width;
+    G.height = data.height;
+    G.playerBase = data.playerBase;
+    G.aiBase = data.aiBase;
+    G.gameOver = data.gameOver || false;
+    isPlayerTurn = true;
+    selectedHex = null;
+    movableHexes = [];
+
+    document.getElementById('start-overlay').classList.add('hidden');
+    document.getElementById('end-overlay').classList.add('hidden');
+    resizeCanvas();
+    updateUI();
+    render();
+    return true;
+  } catch(e) { return false; }
+}
+
+// ==================== INPUT HANDLING ====================
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (e.touches) {
+    return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top,
+             cx: e.touches[0].clientX, cy: e.touches[0].clientY };
+  }
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top, cx: e.clientX, cy: e.clientY };
+}
+
+canvas = document.getElementById('game');
+ctx = canvas.getContext('2d');
+
+// Mouse click
+canvas.addEventListener('click', (e) => {
+  if (longPressTriggered) { longPressTriggered = false; return; }
+  const { x, y } = getCanvasCoords(e);
+  const hex = pixelToHex(x, y);
+  if (hex) selectHex(hex.q, hex.r);
+  hideTooltip();
+});
+
+// Right click for info
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const { x, y, cx, cy } = getCanvasCoords(e);
+  const hex = pixelToHex(x, y);
+  if (hex) showTooltip(hex.q, hex.r, cx, cy);
+});
+
+// Touch - long press for info
+canvas.addEventListener('touchstart', (e) => {
+  longPressTriggered = false;
+  const { x, y, cx, cy } = getCanvasCoords(e);
+  const hex = pixelToHex(x, y);
+  if (hex) {
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      showTooltip(hex.q, hex.r, cx, cy);
+    }, 400);
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchend', (e) => {
+  clearTimeout(longPressTimer);
+  if (longPressTriggered) {
+    setTimeout(() => { longPressTriggered = false; hideTooltip(); }, 1500);
+    return;
+  }
+  // Click handled by click event
+}, { passive: true });
+
+canvas.addEventListener('touchmove', () => {
+  clearTimeout(longPressTimer);
+}, { passive: true });
+
+// Keyboard
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    endTurn();
+  } else if (e.code === 'Escape') {
+    selectedHex = null;
+    movableHexes = [];
+    render();
+    hideTooltip();
+  }
+});
+
+// Mouse move to hide tooltip
+canvas.addEventListener('mousemove', () => hideTooltip());
+
+// Resize
+window.addEventListener('resize', resizeCanvas);
+
+// ==================== INIT ====================
+function init() {
+  resizeCanvas();
+
+  // Check for save
+  if (localStorage.getItem('territory-war-save')) {
+    document.getElementById('btn-load').style.display = 'inline-block';
+  }
+  document.getElementById('start-overlay').classList.remove('hidden');
+}
+
+init();
+</script>
+</body>
+</html>
