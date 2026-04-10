@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>로봇 팩토리</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#1a1a1a;--grid-bg:#2d2d2d;--grid-line:#444;--accent:#00ff88;--accent-dim:#00cc66;
+--panel:#252525;--text:#eee;--text-dim:#999;--danger:#ff4444;--warn:#ffaa00;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;width:100vw;user-select:none;-webkit-user-select:none}
+button{cursor:pointer;border:none;font-family:inherit;font-size:inherit}
+/* SCREENS */
+.screen{display:none;width:100%;height:100%}
+.screen.active{display:flex}
+/* TITLE SCREEN */
+#titleScreen{flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#16213e)}
+#titleScreen h1{font-size:3em;color:var(--accent);margin-bottom:10px;text-shadow:0 0 30px rgba(0,255,136,.3)}
+#titleScreen .subtitle{color:var(--text-dim);margin-bottom:40px;font-size:1.1em}
+.title-btn{background:var(--panel);color:var(--accent);border:2px solid var(--accent);padding:15px 40px;font-size:1.2em;border-radius:8px;margin:8px;transition:all .2s}
+.title-btn:hover{background:var(--accent);color:#000}
+/* LEVEL SELECT */
+#levelScreen{flex-direction:column;align-items:center;background:var(--bg);overflow-y:auto;padding:20px}
+#levelScreen h2{color:var(--accent);margin:20px 0 10px;font-size:1.8em}
+.level-section{width:100%;max-width:600px;margin:10px 0}
+.level-section h3{color:var(--accent-dim);margin:15px 0 8px;font-size:1em;text-transform:uppercase;letter-spacing:2px}
+.level-grid{display:flex;flex-wrap:wrap;gap:10px}
+.level-card{background:var(--panel);border:2px solid #333;border-radius:10px;padding:12px 16px;min-width:140px;flex:1;transition:all .2s;cursor:pointer}
+.level-card:hover:not(.locked){border-color:var(--accent);transform:translateY(-2px)}
+.level-card.locked{opacity:.4;cursor:default}
+.level-card .lnum{font-size:.8em;color:var(--text-dim)}
+.level-card .lname{font-size:1em;margin:4px 0}
+.level-card .lstars{color:var(--warn);font-size:1.1em;letter-spacing:2px}
+.back-btn{position:fixed;top:15px;left:15px;background:var(--panel);color:var(--text);padding:8px 16px;border-radius:6px;font-size:.9em;border:1px solid #444;z-index:100}
+.back-btn:hover{border-color:var(--accent)}
+/* GAME SCREEN */
+#gameScreen{flex-direction:row;height:100%}
+/* Left panel - machine list */
+#machinePanel{width:140px;min-width:140px;background:var(--panel);border-right:1px solid #333;display:flex;flex-direction:column;overflow-y:auto;padding:5px}
+#machinePanel h3{text-align:center;padding:8px 0;color:var(--accent);font-size:.85em;border-bottom:1px solid #333;margin-bottom:5px}
+.machine-btn{display:flex;flex-direction:column;align-items:center;padding:8px 4px;margin:2px;background:#333;border-radius:6px;color:var(--text);font-size:.72em;transition:all .15s;border:2px solid transparent}
+.machine-btn:hover{border-color:var(--accent)}
+.machine-btn.selected{border-color:var(--accent);background:#2a3a2e}
+.machine-btn .micon{font-size:1.6em;margin-bottom:2px}
+.machine-btn .mcost{color:var(--warn);font-size:.85em}
+.machine-btn.locked-m{opacity:.3;pointer-events:none}
+/* Center area */
+#centerArea{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* Top bar */
+#topBar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--panel);border-bottom:1px solid #333;min-height:40px;flex-wrap:wrap;gap:4px}
+#topBar .goal-info{font-size:.85em}
+#topBar .goal-info span{color:var(--accent)}
+#topBar .budget-info{font-size:.85em}
+#topBar .budget-info span{color:var(--warn)}
+/* Canvas area */
+#canvasWrap{flex:1;position:relative;overflow:hidden;background:var(--grid-bg)}
+#gameCanvas{position:absolute;top:0;left:0}
+/* Tooltip */
+#tooltip{position:absolute;background:rgba(0,0,0,.9);color:var(--text);padding:8px 12px;border-radius:6px;font-size:.8em;pointer-events:none;display:none;z-index:50;border:1px solid var(--accent);max-width:220px}
+/* Bottom bar */
+#bottomBar{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;background:var(--panel);border-top:1px solid #333;flex-wrap:wrap}
+.ctrl-btn{background:#444;color:var(--text);padding:6px 14px;border-radius:5px;font-size:.85em;transition:all .15s}
+.ctrl-btn:hover{background:#555}
+.ctrl-btn.active{background:var(--accent);color:#000}
+.ctrl-btn.danger{border:1px solid var(--danger)}
+#statsBar{display:flex;gap:15px;font-size:.8em;color:var(--text-dim);padding:0 10px}
+#statsBar span{white-space:nowrap}
+/* Tutorial popup */
+#tutorial{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.95);border:2px solid var(--accent);border-radius:12px;padding:25px 30px;max-width:400px;z-index:200;text-align:center;display:none}
+#tutorial h3{color:var(--accent);margin-bottom:10px}
+#tutorial p{font-size:.9em;line-height:1.6;margin-bottom:15px}
+#tutorial button{background:var(--accent);color:#000;padding:8px 25px;border-radius:6px;font-size:1em;font-weight:bold}
+/* Level complete */
+#levelComplete{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.95);border:2px solid var(--accent);border-radius:12px;padding:30px 40px;z-index:200;text-align:center;display:none}
+#levelComplete h2{color:var(--accent);margin-bottom:10px;font-size:1.5em}
+#levelComplete .stars-display{font-size:2.5em;color:var(--warn);margin:15px 0;letter-spacing:8px}
+#levelComplete .stats-display{font-size:.9em;color:var(--text-dim);margin:10px 0;line-height:1.8}
+#levelComplete .lc-btns{display:flex;gap:10px;justify-content:center;margin-top:20px}
+#levelComplete .lc-btns button{padding:10px 25px;border-radius:6px;font-size:1em}
+/* Hint */
+#hintBox{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(0,50,30,.95);border:1px solid var(--accent);border-radius:8px;padding:10px 20px;font-size:.85em;display:none;z-index:60;max-width:350px;text-align:center}
+/* Mobile */
+@media(max-width:768px){
+  #gameScreen{flex-direction:column}
+  #machinePanel{width:100%;min-width:0;height:auto;flex-direction:row;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid #333;order:3;padding:3px}
+  #machinePanel h3{display:none}
+  .machine-btn{flex-direction:row;gap:4px;padding:5px 8px;white-space:nowrap;min-width:auto}
+  .machine-btn .micon{font-size:1.2em;margin:0}
+  #centerArea{order:1}
+  #topBar{font-size:.8em}
+  #bottomBar{order:2;padding:5px 8px}
+  .ctrl-btn{padding:5px 10px;font-size:.8em}
+}
+/* Rotate indicator */
+.rot-indicator{position:absolute;background:var(--accent);color:#000;padding:2px 6px;border-radius:4px;font-size:.7em;pointer-events:none;z-index:30;display:none}
+</style>
+</head>
+<body>
+
+<!-- TITLE SCREEN -->
+<div id="titleScreen" class="screen active">
+  <h1>로봇 팩토리</h1>
+  <p class="subtitle">자동화 공장 시뮬레이션 퍼즐</p>
+  <button class="title-btn" onclick="showLevelSelect()">레벨 선택</button>
+  <button class="title-btn" onclick="startFreeMode()">자유 모드</button>
+</div>
+
+<!-- LEVEL SELECT -->
+<div id="levelScreen" class="screen">
+  <button class="back-btn" onclick="showTitle()">← 메인</button>
+  <h2>레벨 선택</h2>
+  <div id="levelList"></div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="gameScreen" class="screen">
+  <div id="machinePanel">
+    <h3>기계 목록</h3>
+  </div>
+  <div id="centerArea">
+    <div id="topBar">
+      <div class="goal-info">목표: <span id="goalText">-</span></div>
+      <div class="budget-info">예산: <span id="budgetText">0/0</span></div>
+      <div style="font-size:.85em">시간: <span id="timeText">0:00</span></div>
+    </div>
+    <div id="canvasWrap">
+      <canvas id="gameCanvas"></canvas>
+      <div id="tooltip"></div>
+      <div id="hintBox"></div>
+      <div id="tutorial"><h3 id="tutTitle"></h3><p id="tutText"></p><button onclick="closeTutorial()">확인</button></div>
+      <div id="levelComplete">
+        <h2>레벨 클리어!</h2>
+        <div class="stars-display" id="starsDisplay"></div>
+        <div class="stats-display" id="statsDisplay"></div>
+        <div class="lc-btns">
+          <button style="background:#444;color:var(--text)" onclick="goToLevelSelect()">레벨 선택</button>
+          <button style="background:var(--accent);color:#000" id="nextLevelBtn" onclick="goNextLevel()">다음 레벨</button>
+        </div>
+      </div>
+    </div>
+    <div id="bottomBar">
+      <button class="ctrl-btn" id="btnPlay" onclick="toggleSim()">▶ 시작</button>
+      <button class="ctrl-btn" id="btnSpeed" onclick="cycleSpeed()">x1</button>
+      <button class="ctrl-btn danger" onclick="resetSim()">↩ 리셋</button>
+      <button class="ctrl-btn" onclick="showHint()">💡 힌트</button>
+      <button class="ctrl-btn" onclick="undoAction()">↶</button>
+      <button class="ctrl-btn" onclick="redoAction()">↷</button>
+      <button class="ctrl-btn" id="btnRotate" onclick="rotatePlacement()">R 회전</button>
+      <button class="ctrl-btn" id="btnDelete" onclick="toggleDeleteMode()">🗑 삭제</button>
+      <button class="ctrl-btn" onclick="goToLevelSelect()">📋 레벨</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== CONSTANTS =====================
+const MACHINE_TYPES = {
+  conveyor:   {name:'컨베이어',icon:'⬆',size:[1,1],cost:5,inDir:['back'],outDir:['front'],processTime:0,color:'#666'},
+  curve:      {name:'커브 벨트',icon:'↱',size:[1,1],cost:8,inDir:['back'],outDir:['right'],processTime:0,color:'#777'},
+  splitter:   {name:'분배기',icon:'⇶',size:[1,1],cost:15,inDir:['back'],outDir:['left','right'],processTime:0,color:'#8888cc'},
+  merger:     {name:'합류기',icon:'⇉',size:[1,1],cost:15,inDir:['left','right'],outDir:['front'],processTime:0,color:'#88cc88'},
+  cutter:     {name:'절단기',icon:'✂',size:[1,1],cost:30,inDir:['back'],outDir:['front'],processTime:1,color:'#cc8844'},
+  furnace:    {name:'용광로',icon:'🔥',size:[2,1],cost:50,inDir:['back'],outDir:['front'],processTime:6,color:'#dd6622'},
+  press:      {name:'프레스기',icon:'⬇',size:[1,1],cost:40,inDir:['back'],outDir:['front'],processTime:4,color:'#4488cc'},
+  assembler:  {name:'조립기',icon:'⚙',size:[2,1],cost:60,inDir:['left','right'],outDir:['front'],processTime:8,color:'#44aa44'},
+  painter:    {name:'도색기',icon:'🎨',size:[1,1],cost:35,inDir:['back'],outDir:['front'],processTime:2,color:'#cc44cc'},
+  inspector:  {name:'품질검사기',icon:'🔍',size:[1,1],cost:25,inDir:['back'],outDir:['front','right'],processTime:1,color:'#aaaa44'},
+  packager:   {name:'포장기',icon:'📦',size:[1,1],cost:45,inDir:['back'],outDir:['front'],processTime:4,color:'#aa6644'},
+  storage:    {name:'저장소',icon:'🗄',size:[1,1],cost:20,inDir:['back'],outDir:['front'],processTime:0,color:'#888',maxStore:10}
+};
+
+const ITEM_NAMES = {
+  iron_ore:'철광석',copper_ore:'구리광석',wood:'목재',glass:'유리',plastic:'플라스틱',
+  iron_ingot:'철괴',copper_ingot:'구리괴',
+  iron_plate:'철판',copper_plate:'구리판',plank:'판자',glass_pane:'유리판',plastic_sheet:'플라스틱 시트',
+  circuit_board:'회로기판',casing:'케이싱',electronic:'전자부품',window:'창문',furniture_frame:'가구 프레임',robot_core:'로봇 코어',
+  red_iron_plate:'빨간 철판',
+  packed_circuit_board:'포장된 회로기판'
+};
+
+const ITEM_COLORS = {
+  iron_ore:'#aaa',copper_ore:'#cc8844',wood:'#aa7744',glass:'#aaddff',plastic:'#ffaacc',
+  iron_ingot:'#ccc',copper_ingot:'#ddaa55',
+  iron_plate:'#ddd',copper_plate:'#eebb66',plank:'#cc9955',glass_pane:'#bbddff',plastic_sheet:'#ffbbdd',
+  circuit_board:'#44cc44',casing:'#aabbcc',electronic:'#44aaff',window:'#88eeff',furniture_frame:'#bb8844',robot_core:'#ff4488',
+  red_iron_plate:'#ff4444',
+  packed_circuit_board:'#44cc44'
+};
+
+// Processing transforms
+const FURNACE_MAP = {iron_ore:'iron_ingot',copper_ore:'copper_ingot'};
+const PRESS_MAP = {iron_ingot:'iron_plate',copper_ingot:'copper_plate',plastic:'plastic_sheet'};
+const CUTTER_MAP = {wood:'plank',glass:'glass_pane'};
+const PAINT_MAP = {iron_plate:'red_iron_plate'};
+const PACK_MAP = {circuit_board:'packed_circuit_board',electronic:'packed_electronic',casing:'packed_casing',robot_core:'packed_robot_core'};
+
+// Assembly recipes: [inputA, inputB] => output
+const RECIPES = [
+  {inputs:['iron_plate','copper_plate'],output:'circuit_board'},
+  {inputs:['iron_plate','plastic_sheet'],output:'casing'},
+  {inputs:['circuit_board','casing'],output:'electronic'},
+  {inputs:['plank','glass_pane'],output:'window'},
+  {inputs:['iron_plate','plank'],output:'furniture_frame'},
+  {inputs:['electronic','casing'],output:'robot_core'}
+];
+
+// Direction helpers
+const DIR_OFFSETS = {0:{dx:0,dy:-1},1:{dx:1,dy:0},2:{dx:0,dy:1},3:{dx:-1,dy:0}}; // 0=up,1=right,2=down,3=left
+const DIR_NAMES = ['up','right','down','left'];
+const REL_TO_ABS = {
+  front: r => r,
+  back: r => (r+2)%4,
+  left: r => (r+3)%4,
+  right: r => (r+1)%4
+};
+
+// ===================== LEVELS =====================
+const LEVELS = [
+  {id:1,name:'첫 번째 라인',gw:6,gh:4,budget:50,
+   goal:{item:'iron_ore',qty:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:3}],
+   outputs:[{x:5,y:1}],obstacles:[],
+   unlockMachines:['conveyor'],
+   tutorial:{title:'환영합니다!',text:'왼쪽에서 컨베이어 벨트를 선택한 뒤\n그리드에 클릭하여 배치하세요.\n공급기(S)에서 출하지점(E)까지\n벨트를 연결하면 됩니다.\n\nR키로 방향을 회전할 수 있습니다.'}},
+  {id:2,name:'커브의 기술',gw:6,gh:6,budget:80,
+   goal:{item:'iron_ore',qty:5},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:3}],
+   outputs:[{x:5,y:4}],obstacles:[{x:2,y:2},{x:3,y:2},{x:4,y:2}],
+   unlockMachines:['conveyor','curve'],
+   tutorial:{title:'커브 벨트',text:'장애물을 피해서 경로를 만드세요!\n커브 벨트는 방향을 90도 바꿉니다.\nR키로 회전하여 원하는 방향으로 설정하세요.'}},
+  {id:3,name:'제련 입문',gw:8,gh:6,budget:120,
+   goal:{item:'iron_ingot',qty:5},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:4}],
+   outputs:[{x:7,y:2}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace'],
+   tutorial:{title:'용광로',text:'용광로는 광석을 금속 괴로 제련합니다.\n크기가 2x1이므로 공간을 잘 확보하세요.\n제련에는 시간이 걸립니다.'}},
+  {id:4,name:'이중 라인',gw:8,gh:6,budget:200,
+   goal:{item:'iron_ingot',qty:5,item2:'copper_ingot',qty2:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:4},{x:0,y:4,material:'copper_ore',interval:4}],
+   outputs:[{x:7,y:1},{x:7,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','splitter','merger']},
+  {id:5,name:'품질 관리',gw:8,gh:8,budget:200,
+   goal:{item:'iron_ingot',qty:8,maxDefects:2},
+   suppliers:[{x:0,y:3,material:'iron_ore',interval:3}],
+   outputs:[{x:7,y:3}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','inspector']},
+  {id:6,name:'조립 시작',gw:10,gh:8,budget:300,
+   goal:{item:'circuit_board',qty:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:4},{x:0,y:6,material:'copper_ore',interval:4}],
+   outputs:[{x:9,y:3}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger']},
+  {id:7,name:'프레스 공정',gw:10,gh:8,budget:250,
+   goal:{item:'iron_plate',qty:8},
+   suppliers:[{x:0,y:3,material:'iron_ore',interval:3}],
+   outputs:[{x:9,y:3}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press']},
+  {id:8,name:'색을 입히다',gw:10,gh:8,budget:280,
+   goal:{item:'red_iron_plate',qty:5},
+   suppliers:[{x:0,y:3,material:'iron_ore',interval:4}],
+   outputs:[{x:9,y:3}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','painter']},
+  {id:9,name:'복합 공정',gw:10,gh:10,budget:350,
+   goal:{item:'casing',qty:5},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:4},{x:0,y:7,material:'plastic',interval:4}],
+   outputs:[{x:9,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger']},
+  {id:10,name:'시간과의 싸움',gw:10,gh:10,budget:350,
+   goal:{item:'circuit_board',qty:10,timeLimit:180},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:3},{x:0,y:7,material:'copper_ore',interval:3}],
+   outputs:[{x:9,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger']},
+  {id:11,name:'포장과 출하',gw:12,gh:10,budget:400,
+   goal:{item:'packed_circuit_board',qty:8},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:3},{x:0,y:7,material:'copper_ore',interval:3}],
+   outputs:[{x:11,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','packager','splitter','merger']},
+  {id:12,name:'저장의 기술',gw:12,gh:10,budget:400,
+   goal:{item:'electronic',qty:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:3},{x:0,y:5,material:'copper_ore',interval:3},{x:0,y:8,material:'plastic',interval:4}],
+   outputs:[{x:11,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','storage','splitter','merger']},
+  {id:13,name:'절약 도전',gw:10,gh:8,budget:180,
+   goal:{item:'circuit_board',qty:8},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:3},{x:0,y:6,material:'copper_ore',interval:3}],
+   outputs:[{x:9,y:3}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger']},
+  {id:14,name:'대량 생산',gw:14,gh:10,budget:550,
+   goal:{item:'electronic',qty:15},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:2},{x:0,y:5,material:'copper_ore',interval:3},{x:0,y:8,material:'plastic',interval:3}],
+   outputs:[{x:13,y:4}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger','storage','inspector']},
+  {id:15,name:'로봇 코어 I',gw:14,gh:12,budget:700,
+   goal:{item:'robot_core',qty:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:2},{x:0,y:5,material:'copper_ore',interval:3},{x:0,y:9,material:'plastic',interval:3}],
+   outputs:[{x:13,y:5}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger','storage','inspector']},
+  {id:16,name:'다중 목표',gw:14,gh:12,budget:550,
+   goal:{item:'furniture_frame',qty:5,item2:'window',qty2:5},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:3},{x:0,y:5,material:'wood',interval:3},{x:0,y:9,material:'glass',interval:3}],
+   outputs:[{x:13,y:3},{x:13,y:9}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','cutter','assembler','splitter','merger']},
+  {id:17,name:'장애물 공장',gw:12,gh:10,budget:450,
+   goal:{item:'casing',qty:10},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:3},{x:0,y:7,material:'plastic',interval:3}],
+   outputs:[{x:11,y:4}],
+   obstacles:[{x:3,y:3},{x:3,y:4},{x:3,y:5},{x:7,y:3},{x:7,y:6}],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger']},
+  {id:18,name:'효율의 끝',gw:16,gh:12,budget:900,
+   goal:{item:'robot_core',qty:8,minEfficiency:85},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:2},{x:0,y:6,material:'copper_ore',interval:2},{x:0,y:10,material:'plastic',interval:3}],
+   outputs:[{x:15,y:5}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger','storage','inspector','cutter','painter','packager']},
+  {id:19,name:'전력 제한',gw:16,gh:12,budget:800,
+   goal:{item:'electronic',qty:12},
+   suppliers:[{x:0,y:2,material:'iron_ore',interval:2},{x:0,y:6,material:'copper_ore',interval:3},{x:0,y:10,material:'plastic',interval:3}],
+   outputs:[{x:15,y:5}],obstacles:[{x:5,y:5},{x:10,y:5}],
+   unlockMachines:['conveyor','curve','furnace','press','assembler','splitter','merger','storage','inspector']},
+  {id:20,name:'마스터 공장',gw:16,gh:12,budget:1200,
+   goal:{item:'robot_core',qty:3,item2:'window',qty2:3,item3:'furniture_frame',qty3:3},
+   suppliers:[{x:0,y:1,material:'iron_ore',interval:2},{x:0,y:4,material:'copper_ore',interval:3},{x:0,y:7,material:'wood',interval:3},{x:0,y:10,material:'glass',interval:4}],
+   outputs:[{x:15,y:2},{x:15,y:6},{x:15,y:10}],obstacles:[],
+   unlockMachines:['conveyor','curve','furnace','press','cutter','assembler','splitter','merger','storage','inspector','painter','packager']}
+];
+
+// ===================== GAME STATE =====================
+let save = {version:1,unlockedLevels:1,stars:{},currentLevelLayout:null};
+let G = null; // current game state
+let selectedMachine = null;
+let placementRotation = 0;
+let deleteMode = false;
+let simInterval = null;
+let animFrame = null;
+let cellSize = 50;
+let canvasOffset = {x:0,y:0};
+let undoStack = [];
+let redoStack = [];
+let lastHintTime = 0;
+let isFreeMode = false;
+let dragPlacing = false;
+let lastDragCell = null;
+let hoverCell = null;
+let itemIdCounter = 0;
+let splitterStates = {}; // track alternating state for splitters
+
+// ===================== SAVE/LOAD =====================
+function loadSave(){
+  try{
+    const d=localStorage.getItem('robotFactory_save');
+    if(d){save=JSON.parse(d);if(!save.stars)save.stars={}}
+  }catch(e){}
+}
+function saveSave(){
+  try{localStorage.setItem('robotFactory_save',JSON.stringify(save))}catch(e){}
+}
+function saveLayout(){
+  if(!G||isFreeMode)return;
+  const machines=[];
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const c=G.grid[y]?.[x];
+    if(c&&!c.isSecondary)machines.push({x,y,type:c.type,rotation:c.rotation});
+  }
+  save.currentLevelLayout={levelId:G.levelId,machines};
+  saveSave();
+}
+
+// ===================== SCREENS =====================
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function showTitle(){
+  stopSim();showScreen('titleScreen');
+}
+function showLevelSelect(){
+  loadSave();
+  const list=document.getElementById('levelList');
+  list.innerHTML='';
+  const sections=[
+    {name:'튜토리얼',range:[1,3]},
+    {name:'기초',range:[4,7]},
+    {name:'중급',range:[8,12]},
+    {name:'고급',range:[13,16]},
+    {name:'마스터',range:[17,20]}
+  ];
+  sections.forEach(sec=>{
+    const sd=document.createElement('div');sd.className='level-section';
+    sd.innerHTML=`<h3>${sec.name}</h3>`;
+    const grid=document.createElement('div');grid.className='level-grid';
+    for(let i=sec.range[0];i<=sec.range[1];i++){
+      const lv=LEVELS[i-1];
+      const unlocked=i<=save.unlockedLevels;
+      const stars=save.stars[i]||[false,false,false];
+      const starStr=stars.map(s=>s?'★':'☆').join('');
+      const card=document.createElement('div');
+      card.className='level-card'+(unlocked?'':' locked');
+      card.innerHTML=`<div class="lnum">레벨 ${i}</div><div class="lname">${lv.name}</div><div class="lstars">${unlocked?starStr:'🔒'}</div>`;
+      if(unlocked)card.onclick=()=>startLevel(i);
+      grid.appendChild(card);
+    }
+    sd.appendChild(grid);
+    list.appendChild(sd);
+  });
+  showScreen('levelScreen');
+}
+function goToLevelSelect(){stopSim();saveLayout();showLevelSelect();}
+function goNextLevel(){
+  document.getElementById('levelComplete').style.display='none';
+  if(G&&G.levelId<20){startLevel(G.levelId+1);}
+  else showLevelSelect();
+}
+
+// ===================== INIT LEVEL =====================
+function startLevel(id){
+  const lv=LEVELS[id-1];
+  isFreeMode=false;
+  initGame(lv);
+  showScreen('gameScreen');
+  buildMachinePanel();
+  // Restore layout if saved
+  if(save.currentLevelLayout&&save.currentLevelLayout.levelId===id){
+    save.currentLevelLayout.machines.forEach(m=>{
+      placeMachineAt(m.x,m.y,m.type,m.rotation,true);
+    });
+  }
+  resizeCanvas();
+  // Show tutorial
+  if(lv.tutorial){
+    setTimeout(()=>showTutorial(lv.tutorial.title,lv.tutorial.text),300);
+  }
+  requestRender();
+}
+function startFreeMode(){
+  isFreeMode=true;
+  const lv={id:99,name:'자유 모드',gw:16,gh:12,budget:99999,
+    goal:{item:'robot_core',qty:999},
+    suppliers:[{x:0,y:1,material:'iron_ore',interval:3},{x:0,y:4,material:'copper_ore',interval:3},{x:0,y:7,material:'wood',interval:3},{x:0,y:10,material:'plastic',interval:3}],
+    outputs:[{x:15,y:2},{x:15,y:5},{x:15,y:8},{x:15,y:11}],
+    obstacles:[],
+    unlockMachines:Object.keys(MACHINE_TYPES)};
+  initGame(lv);
+  showScreen('gameScreen');
+  buildMachinePanel();
+  resizeCanvas();
+  requestRender();
+}
+
+function initGame(lv){
+  stopSim();
+  undoStack=[];redoStack=[];
+  splitterStates={};
+  itemIdCounter=0;
+  G={
+    levelId:lv.id,gw:lv.gw,gh:lv.gh,budget:lv.budget,spent:0,
+    goal:lv.goal,
+    suppliers:JSON.parse(JSON.stringify(lv.suppliers)),
+    outputs:JSON.parse(JSON.stringify(lv.outputs)),
+    obstacles:JSON.parse(JSON.stringify(lv.obstacles||[])),
+    unlockMachines:lv.unlockMachines||Object.keys(MACHINE_TYPES),
+    grid:[],items:[],
+    running:false,speed:1,tick:0,produced:0,produced2:0,produced3:0,defects:0,elapsed:0,
+    stats:{throughput:0,bottlenecks:[],idle:0,efficiency:100}
+  };
+  // init grid
+  for(let y=0;y<lv.gh;y++){G.grid[y]=[];for(let x=0;x<lv.gw;x++)G.grid[y][x]=null;}
+  updateUI();
+}
+
+// ===================== MACHINE PANEL =====================
+function buildMachinePanel(){
+  const panel=document.getElementById('machinePanel');
+  panel.innerHTML='<h3>기계 목록</h3>';
+  const allTypes=Object.keys(MACHINE_TYPES);
+  allTypes.forEach(key=>{
+    const m=MACHINE_TYPES[key];
+    const unlocked=!G||G.unlockMachines.includes(key);
+    const btn=document.createElement('button');
+    btn.className='machine-btn'+(unlocked?'':' locked-m');
+    btn.innerHTML=`<span class="micon">${m.icon}</span><span>${m.name}</span><span class="mcost">$${m.cost}</span>`;
+    btn.onclick=()=>{if(unlocked)selectMachine(key)};
+    btn.dataset.type=key;
+    panel.appendChild(btn);
+  });
+}
+function selectMachine(type){
+  if(G&&G.running)return;
+  deleteMode=false;
+  document.getElementById('btnDelete').classList.remove('active');
+  selectedMachine=selectedMachine===type?null:type;
+  document.querySelectorAll('.machine-btn').forEach(b=>{
+    b.classList.toggle('selected',b.dataset.type===selectedMachine);
+  });
+  requestRender();
+}
+function toggleDeleteMode(){
+  if(G&&G.running)return;
+  deleteMode=!deleteMode;
+  selectedMachine=null;
+  document.querySelectorAll('.machine-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('btnDelete').classList.toggle('active',deleteMode);
+  requestRender();
+}
+function rotatePlacement(){
+  placementRotation=(placementRotation+1)%4;
+  requestRender();
+}
+
+// ===================== PLACEMENT =====================
+function isBlocked(x,y){
+  if(x<0||y<0||x>=G.gw||y>=G.gh)return true;
+  if(G.obstacles.some(o=>o.x===x&&o.y===y))return true;
+  if(G.suppliers.some(s=>s.x===x&&s.y===y))return true;
+  if(G.outputs.some(o=>o.x===x&&o.y===y))return true;
+  return false;
+}
+function canPlace(x,y,type,rotation){
+  const mt=MACHINE_TYPES[type];
+  const cells=getMachineCells(x,y,type,rotation);
+  for(const c of cells){
+    if(c.x<0||c.y<0||c.x>=G.gw||c.y>=G.gh)return false;
+    if(G.grid[c.y][c.x])return false;
+    if(isBlocked(c.x,c.y))return false;
+  }
+  return true;
+}
+function getMachineCells(x,y,type,rotation){
+  const mt=MACHINE_TYPES[type];
+  const cells=[{x,y}];
+  if(mt.size[0]===2){
+    // Second cell is in front direction
+    const d=DIR_OFFSETS[rotation];
+    cells.push({x:x+d.dx,y:y+d.dy});
+  }
+  return cells;
+}
+function placeMachineAt(x,y,type,rotation,noUndo){
+  if(!canPlace(x,y,type,rotation))return false;
+  const mt=MACHINE_TYPES[type];
+  if(!isFreeMode&&G.spent+mt.cost>G.budget)return false;
+  const machine={type,rotation,timer:0,inputQueue:[],inputQueue2:[],processing:null,stored:[],outputBlocked:false};
+  G.grid[y][x]=machine;
+  const cells=getMachineCells(x,y,type,rotation);
+  if(cells.length>1){
+    G.grid[cells[1].y][cells[1].x]={isSecondary:true,parentX:x,parentY:y,type};
+  }
+  G.spent+=mt.cost;
+  if(!noUndo){
+    undoStack.push({action:'place',x,y,type,rotation});
+    redoStack=[];
+  }
+  updateUI();
+  return true;
+}
+function removeMachineAt(x,y,noUndo){
+  let cell=G.grid[y]?.[x];
+  if(!cell)return false;
+  if(cell.isSecondary){x=cell.parentX;y=cell.parentY;cell=G.grid[y][x];}
+  if(!cell||cell.isSecondary)return false;
+  const type=cell.type;
+  const rotation=cell.rotation;
+  const mt=MACHINE_TYPES[type];
+  const cells=getMachineCells(x,y,type,rotation);
+  cells.forEach(c=>{G.grid[c.y][c.x]=null;});
+  G.spent-=mt.cost;
+  if(!noUndo){
+    undoStack.push({action:'remove',x,y,type,rotation});
+    redoStack=[];
+  }
+  updateUI();
+  return true;
+}
+function undoAction(){
+  if(G&&G.running)return;
+  const a=undoStack.pop();
+  if(!a)return;
+  if(a.action==='place'){removeMachineAt(a.x,a.y,true);redoStack.push(a);}
+  else if(a.action==='remove'){placeMachineAt(a.x,a.y,a.type,a.rotation,true);redoStack.push(a);}
+  requestRender();
+}
+function redoAction(){
+  if(G&&G.running)return;
+  const a=redoStack.pop();
+  if(!a)return;
+  if(a.action==='place'){placeMachineAt(a.x,a.y,a.type,a.rotation,true);undoStack.push(a);}
+  else if(a.action==='remove'){removeMachineAt(a.x,a.y,true);undoStack.push(a);}
+  requestRender();
+}
+
+// ===================== SIMULATION =====================
+function toggleSim(){
+  if(!G)return;
+  if(G.running){pauseSim();}
+  else{startSim();}
+}
+function startSim(){
+  if(!G||G.running)return;
+  G.running=true;
+  lastHintTime=Date.now();
+  const interval=500/G.speed;
+  simInterval=setInterval(simTick,interval);
+  document.getElementById('btnPlay').textContent='⏸ 일시정지';
+  document.getElementById('btnPlay').classList.add('active');
+}
+function pauseSim(){
+  if(!G)return;
+  G.running=false;
+  if(simInterval){clearInterval(simInterval);simInterval=null;}
+  document.getElementById('btnPlay').textContent='▶ 시작';
+  document.getElementById('btnPlay').classList.remove('active');
+}
+function stopSim(){
+  pauseSim();
+}
+function resetSim(){
+  if(!G)return;
+  pauseSim();
+  G.items=[];G.tick=0;G.produced=0;G.produced2=0;G.produced3=0;G.defects=0;G.elapsed=0;
+  splitterStates={};
+  // Reset all machine states
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const c=G.grid[y][x];
+    if(c&&!c.isSecondary){c.timer=0;c.inputQueue=[];c.inputQueue2=[];c.processing=null;c.stored=[];c.outputBlocked=false;}
+  }
+  updateUI();requestRender();
+}
+function cycleSpeed(){
+  if(!G)return;
+  const speeds=[0.5,1,2,4];
+  const idx=(speeds.indexOf(G.speed)+1)%speeds.length;
+  G.speed=speeds[idx];
+  document.getElementById('btnSpeed').textContent='x'+G.speed;
+  if(G.running){
+    clearInterval(simInterval);
+    simInterval=setInterval(simTick,500/G.speed);
+  }
+}
+
+function simTick(){
+  if(!G||!G.running)return;
+  G.tick++;
+  G.elapsed+=0.5/G.speed*G.speed; // 0.5s per tick at x1
+
+  // 1. Suppliers generate items
+  G.suppliers.forEach(s=>{
+    if(G.tick%s.interval===0){
+      // Check if the cell in front of supplier has space
+      // Supplier outputs to the right (rotation 1)
+      const nx=s.x+1,ny=s.y;
+      if(nx<G.gw){
+        const existingItem=G.items.find(it=>Math.round(it.x)===nx&&Math.round(it.y)===ny&&it.progress>=0.8);
+        if(!existingItem){
+          G.items.push({id:++itemIdCounter,type:s.material,x:s.x,y:s.y,quality:100,targetX:nx,targetY:ny,progress:0});
+        }
+      }
+    }
+  });
+
+  // 2. Process machines (timers)
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const cell=G.grid[y][x];
+    if(!cell||cell.isSecondary)continue;
+    if(cell.processing&&cell.timer>0){
+      cell.timer--;
+      if(cell.timer<=0){
+        // Processing complete - try to output
+        cell.outputReady=true;
+      }
+    }
+  }
+
+  // 3. Try output from machines & move items on belts
+  // Process from output side first
+  for(let y=G.gh-1;y>=0;y--)for(let x=G.gw-1;x>=0;x--){
+    const cell=G.grid[y][x];
+    if(!cell||cell.isSecondary)continue;
+
+    // Handle storage output
+    if(cell.type==='storage'&&cell.stored.length>0){
+      const outDir=REL_TO_ABS.front(cell.rotation);
+      const od=DIR_OFFSETS[outDir];
+      const nx=x+od.dx,ny=y+od.dy;
+      if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh){
+        const blocked=G.items.some(it=>Math.round(it.x)===nx&&Math.round(it.y)===ny);
+        if(!blocked){
+          const item=cell.stored.shift();
+          G.items.push({id:++itemIdCounter,type:item.type,x,y,quality:item.quality,targetX:nx,targetY:ny,progress:0});
+        }
+      }
+    }
+
+    // Output ready items
+    if(cell.outputReady&&cell.processing){
+      const result=processItem(cell,x,y);
+      if(result!==false){
+        cell.outputReady=false;
+        cell.processing=null;
+        // emit result item
+        const outDir=REL_TO_ABS.front(cell.rotation);
+        // For inspector, defects go right
+        if(cell.type==='inspector'&&result.quality<70){
+          const rDir=REL_TO_ABS.right(cell.rotation);
+          const rd=DIR_OFFSETS[rDir];
+          const rnx=x+rd.dx,rny=y+rd.dy;
+          if(rnx>=0&&rny>=0&&rnx<G.gw&&rny<G.gh){
+            const blocked=G.items.some(it=>Math.round(it.x)===rnx&&Math.round(it.y)===rny);
+            if(!blocked){
+              G.items.push({id:++itemIdCounter,type:result.type,x,y,quality:result.quality,targetX:rnx,targetY:rny,progress:0,defect:true});
+            } else {cell.outputReady=true;cell.processing=result;cell.outputBlocked=true;}
+          }
+        } else {
+          const od=DIR_OFFSETS[outDir];
+          const nx=x+od.dx,ny=y+od.dy;
+          if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh){
+            const blocked=G.items.some(it=>Math.round(it.x)===nx&&Math.round(it.y)===ny);
+            if(!blocked){
+              G.items.push({id:++itemIdCounter,type:result.type,x,y,quality:result.quality||100,targetX:nx,targetY:ny,progress:0});
+              cell.outputBlocked=false;
+            } else {cell.outputReady=true;cell.processing=result;cell.outputBlocked=true;}
+          } else {cell.outputReady=true;cell.processing=result;cell.outputBlocked=true;}
+        }
+      }
+    }
+  }
+
+  // 4. Move items
+  const toRemove=[];
+  G.items.forEach(item=>{
+    if(item.progress<1){
+      item.progress=Math.min(1,item.progress+0.25);
+      item.x=lerp(item.x,item.targetX,item.progress);
+      item.y=lerp(item.y,item.targetY,item.progress);
+      return;
+    }
+    // Item arrived at target
+    const cx=Math.round(item.targetX),cy=Math.round(item.targetY);
+
+    // Check if at output
+    if(G.outputs.some(o=>o.x===cx&&o.y===cy)){
+      // Score!
+      if(!item.defect){
+        if(item.type===G.goal.item)G.produced++;
+        if(G.goal.item2&&item.type===G.goal.item2)G.produced2++;
+        if(G.goal.item3&&item.type===G.goal.item3)G.produced3++;
+      } else {
+        G.defects++;
+      }
+      toRemove.push(item.id);
+      updateUI();
+      checkWin();
+      return;
+    }
+
+    // Check grid cell
+    const cell=G.grid[cy]?.[cx];
+    if(!cell){toRemove.push(item.id);return;} // no machine = item lost
+
+    let actualCell=cell;
+    let ax=cx,ay=cy;
+    if(cell.isSecondary){ax=cell.parentX;ay=cell.parentY;actualCell=G.grid[ay][ax];}
+
+    const mt=MACHINE_TYPES[actualCell.type];
+
+    // Conveyor/curve: pass through immediately
+    if(actualCell.type==='conveyor'||actualCell.type==='curve'){
+      const outDir=REL_TO_ABS[mt.outDir[0]](actualCell.rotation);
+      const od=DIR_OFFSETS[outDir];
+      const nx=cx+od.dx,ny=cy+od.dy;
+      if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh){
+        const blocked=G.items.some(it=>it!==item&&Math.round(it.targetX)===nx&&Math.round(it.targetY)===ny);
+        if(!blocked){
+          item.x=cx;item.y=cy;item.targetX=nx;item.targetY=ny;item.progress=0;
+        }
+      }
+      return;
+    }
+
+    // Splitter: alternate left/right
+    if(actualCell.type==='splitter'){
+      const key=ax+','+ay;
+      if(!splitterStates[key])splitterStates[key]=0;
+      const side=splitterStates[key]%2===0?'left':'right';
+      splitterStates[key]++;
+      const outDir=REL_TO_ABS[side](actualCell.rotation);
+      const od=DIR_OFFSETS[outDir];
+      const nx=cx+od.dx,ny=cy+od.dy;
+      if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh){
+        const blocked=G.items.some(it=>it!==item&&Math.round(it.targetX)===nx&&Math.round(it.targetY)===ny);
+        if(!blocked){
+          item.x=cx;item.y=cy;item.targetX=nx;item.targetY=ny;item.progress=0;
+        }
+      }
+      return;
+    }
+
+    // Merger: pass to front
+    if(actualCell.type==='merger'){
+      const outDir=REL_TO_ABS.front(actualCell.rotation);
+      const od=DIR_OFFSETS[outDir];
+      const nx=ax+od.dx,ny=ay+od.dy;
+      if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh){
+        const blocked=G.items.some(it=>it!==item&&Math.round(it.targetX)===nx&&Math.round(it.targetY)===ny);
+        if(!blocked){
+          item.x=cx;item.y=cy;item.targetX=nx;item.targetY=ny;item.progress=0;
+        }
+      }
+      return;
+    }
+
+    // Storage: absorb
+    if(actualCell.type==='storage'){
+      if(actualCell.stored.length<(MACHINE_TYPES.storage.maxStore||10)){
+        actualCell.stored.push({type:item.type,quality:item.quality});
+        toRemove.push(item.id);
+      }
+      return;
+    }
+
+    // Processing machines: accept input
+    if(actualCell.type==='assembler'){
+      // Needs two inputs from left and right
+      // Determine which side this item came from
+      const leftDir=REL_TO_ABS.left(actualCell.rotation);
+      const rightDir=REL_TO_ABS.right(actualCell.rotation);
+      const ld=DIR_OFFSETS[leftDir];
+      const rd=DIR_OFFSETS[rightDir];
+      // Check which input slot
+      if(cx===ax-ld.dx&&cy===ay-ld.dy||actualCell.inputQueue.length<=actualCell.inputQueue2.length){
+        if(actualCell.inputQueue.length<3){
+          actualCell.inputQueue.push({type:item.type,quality:item.quality});
+          toRemove.push(item.id);
+          if(actualCell.inputQueue.length>0&&actualCell.inputQueue2.length>0&&!actualCell.processing){
+            startProcessing(actualCell);
+          }
+        }
+      } else {
+        if(actualCell.inputQueue2.length<3){
+          actualCell.inputQueue2.push({type:item.type,quality:item.quality});
+          toRemove.push(item.id);
+          if(actualCell.inputQueue.length>0&&actualCell.inputQueue2.length>0&&!actualCell.processing){
+            startProcessing(actualCell);
+          }
+        }
+      }
+      // Quality penalty for overload
+      if(actualCell.inputQueue.length>3||actualCell.inputQueue2.length>3){
+        if(actualCell.processing)actualCell.processing.quality=Math.max(0,(actualCell.processing.quality||100)-10);
+      }
+      return;
+    }
+
+    // Other processing machines
+    if(!actualCell.processing){
+      if(actualCell.inputQueue.length<3){
+        actualCell.inputQueue.push({type:item.type,quality:item.quality});
+        toRemove.push(item.id);
+        if(!actualCell.processing)startProcessing(actualCell);
+      }
+      if(actualCell.inputQueue.length>3){
+        if(actualCell.processing)actualCell.processing.quality=Math.max(0,(actualCell.processing.quality||100)-10);
+      }
+    } else {
+      if(actualCell.inputQueue.length<4){
+        actualCell.inputQueue.push({type:item.type,quality:item.quality});
+        toRemove.push(item.id);
+      }
+    }
+  });
+
+  G.items=G.items.filter(it=>!toRemove.includes(it.id));
+
+  // 5. Start processing for machines with queued items
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const cell=G.grid[y][x];
+    if(!cell||cell.isSecondary)continue;
+    if(!cell.processing&&!cell.outputReady){
+      if(cell.type==='assembler'){
+        if(cell.inputQueue.length>0&&cell.inputQueue2.length>0)startProcessing(cell);
+      } else if(cell.inputQueue&&cell.inputQueue.length>0&&MACHINE_TYPES[cell.type].processTime>0){
+        startProcessing(cell);
+      }
+    }
+  }
+
+  // Update stats
+  updateStats();
+  updateUI();
+
+  // Check time limit
+  if(G.goal.timeLimit&&G.elapsed>=G.goal.timeLimit){
+    if(!checkWinCondition()){
+      pauseSim();
+      showTutorial('시간 초과!','제한 시간 내에 목표를 달성하지 못했습니다.\n리셋하고 다시 도전하세요.');
+    }
+  }
+}
+
+function startProcessing(cell){
+  const mt=MACHINE_TYPES[cell.type];
+  if(cell.type==='assembler'){
+    if(cell.inputQueue.length>0&&cell.inputQueue2.length>0){
+      const a=cell.inputQueue.shift();
+      const b=cell.inputQueue2.shift();
+      cell.processing={inputA:a,inputB:b,quality:Math.min(a.quality,b.quality)};
+      cell.timer=mt.processTime;
+    }
+  } else {
+    if(cell.inputQueue.length>0){
+      const item=cell.inputQueue.shift();
+      cell.processing={type:item.type,quality:item.quality};
+      cell.timer=mt.processTime;
+    }
+  }
+}
+
+function processItem(cell,x,y){
+  if(!cell.processing)return false;
+  const p=cell.processing;
+  switch(cell.type){
+    case 'furnace':
+      return {type:FURNACE_MAP[p.type]||p.type,quality:p.quality};
+    case 'press':
+      return {type:PRESS_MAP[p.type]||p.type,quality:p.quality};
+    case 'cutter':
+      return {type:CUTTER_MAP[p.type]||p.type,quality:p.quality};
+    case 'painter':
+      return {type:PAINT_MAP[p.type]||p.type,quality:p.quality};
+    case 'packager':
+      return {type:PACK_MAP[p.type]||p.type,quality:p.quality};
+    case 'inspector':
+      return {type:p.type,quality:p.quality};
+    case 'assembler':{
+      const a=p.inputA,b=p.inputB;
+      const recipe=RECIPES.find(r=>
+        (r.inputs.includes(a.type)&&r.inputs.includes(b.type)&&a.type!==b.type)||
+        (r.inputs[0]===a.type&&r.inputs[1]===b.type)||(r.inputs[0]===b.type&&r.inputs[1]===a.type)
+      );
+      if(recipe)return {type:recipe.output,quality:p.quality};
+      return {type:'defect',quality:0};
+    }
+    default:
+      return {type:p.type,quality:p.quality};
+  }
+}
+
+function lerp(a,b,t){return a+(b-a)*t;}
+
+function checkWinCondition(){
+  let met=G.produced>=G.goal.qty;
+  if(G.goal.item2)met=met&&(G.produced2>=(G.goal.qty2||0));
+  if(G.goal.item3)met=met&&(G.produced3>=(G.goal.qty3||0));
+  if(G.goal.maxDefects!==undefined)met=met&&G.defects<=G.goal.maxDefects;
+  if(G.goal.minEfficiency)met=met&&G.stats.efficiency>=G.goal.minEfficiency;
+  return met;
+}
+
+function checkWin(){
+  if(!checkWinCondition())return;
+  pauseSim();
+  // Calculate stars
+  const stars=[true,false,false];
+  // Star 2: time/cost efficiency
+  if(G.goal.timeLimit){stars[1]=G.elapsed<=G.goal.timeLimit*0.7;}
+  else{stars[1]=G.spent<=G.budget*0.7;}
+  // Star 3: perfect efficiency
+  const idleRatio=G.stats.idle/(countMachines()||1);
+  stars[2]=idleRatio<0.1&&G.defects<=Math.max(1,G.produced*0.05);
+
+  // Save
+  if(!isFreeMode){
+    const prev=save.stars[G.levelId]||[false,false,false];
+    save.stars[G.levelId]=stars.map((s,i)=>s||prev[i]);
+    if(G.levelId>=save.unlockedLevels&&G.levelId<20)save.unlockedLevels=G.levelId+1;
+    save.currentLevelLayout=null;
+    saveSave();
+  }
+
+  // Show popup
+  const sd=document.getElementById('starsDisplay');
+  sd.textContent=stars.map(s=>s?'★':'☆').join(' ');
+  const st=document.getElementById('statsDisplay');
+  st.innerHTML=`생산: ${G.produced}개 | 불량: ${G.defects}개<br>시간: ${formatTime(G.elapsed)} | 비용: $${G.spent}/${G.budget}<br>효율: ${Math.round(G.stats.efficiency)}%`;
+  document.getElementById('levelComplete').style.display='block';
+  if(G.levelId>=20)document.getElementById('nextLevelBtn').style.display='none';
+  else document.getElementById('nextLevelBtn').style.display='';
+}
+
+function countMachines(){
+  let c=0;
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    if(G.grid[y][x]&&!G.grid[y][x].isSecondary)c++;
+  }
+  return c;
+}
+
+function updateStats(){
+  let idle=0,total=0,bottlenecks=0;
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const c=G.grid[y][x];
+    if(!c||c.isSecondary)continue;
+    total++;
+    if(!c.processing&&c.inputQueue.length===0&&(c.type!=='conveyor'&&c.type!=='curve'&&c.type!=='splitter'&&c.type!=='merger'))idle++;
+    if(c.outputBlocked)bottlenecks++;
+    if(c.inputQueue.length>3)bottlenecks++;
+  }
+  G.stats.idle=idle;
+  G.stats.bottlenecks=bottlenecks;
+  G.stats.efficiency=total>0?Math.round(((total-idle)/total)*100):100;
+  G.stats.throughput=G.elapsed>0?Math.round(G.produced/(G.elapsed/60)*10)/10:0;
+}
+
+// ===================== UI =====================
+function updateUI(){
+  if(!G)return;
+  const goalName=ITEM_NAMES[G.goal.item]||G.goal.item;
+  let goalStr=`${goalName} ${G.produced}/${G.goal.qty}`;
+  if(G.goal.item2)goalStr+=` | ${ITEM_NAMES[G.goal.item2]} ${G.produced2}/${G.goal.qty2}`;
+  if(G.goal.item3)goalStr+=` | ${ITEM_NAMES[G.goal.item3]} ${G.produced3}/${G.goal.qty3}`;
+  if(G.goal.maxDefects!==undefined)goalStr+=` | 불량 ${G.defects}/${G.goal.maxDefects}`;
+  document.getElementById('goalText').textContent=goalStr;
+  document.getElementById('budgetText').textContent=`$${G.spent}/$${G.budget}`;
+  document.getElementById('timeText').textContent=formatTime(G.elapsed);
+}
+function formatTime(s){
+  const m=Math.floor(s/60);const sec=Math.floor(s%60);
+  return m+':'+(sec<10?'0':'')+sec;
+}
+
+function showTutorial(title,text){
+  document.getElementById('tutTitle').textContent=title;
+  document.getElementById('tutText').textContent=text;
+  document.getElementById('tutorial').style.display='block';
+}
+function closeTutorial(){document.getElementById('tutorial').style.display='none';}
+
+function showHint(){
+  if(!G)return;
+  let hint='';
+  // Check if any path from supplier to output exists
+  const hasPath=checkPath();
+  if(!hasPath){hint='컨베이어 벨트로 공급기(S)와 출하지점(E)을 연결하세요.';}
+  else if(G.running&&G.stats.bottlenecks>0){hint='병목이 발생하고 있습니다. 라인을 분기하거나 기계를 추가하세요.';}
+  else{
+    // Check if required machines are placed
+    const needed=getNeededMachines(G.goal.item);
+    const placed=new Set();
+    for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){if(G.grid[y][x]&&!G.grid[y][x].isSecondary)placed.add(G.grid[y][x].type);}
+    for(const m of needed){if(!placed.has(m)){hint=`이 제품에는 ${MACHINE_TYPES[m]?.name||m}이(가) 필요합니다.`;break;}}
+    if(!hint)hint='라인이 잘 구성되어 있습니다. 시뮬레이션을 시작하세요!';
+  }
+  const box=document.getElementById('hintBox');
+  box.textContent=hint;box.style.display='block';
+  setTimeout(()=>{box.style.display='none';},5000);
+}
+
+function getNeededMachines(item){
+  const machines=[];
+  switch(item){
+    case 'iron_ore':case'copper_ore':case'wood':case'glass':case'plastic':break;
+    case 'iron_ingot':case'copper_ingot':machines.push('furnace');break;
+    case 'iron_plate':machines.push('furnace','press');break;
+    case 'copper_plate':machines.push('furnace','press');break;
+    case 'plank':machines.push('cutter');break;
+    case 'glass_pane':machines.push('cutter');break;
+    case 'plastic_sheet':machines.push('press');break;
+    case 'circuit_board':machines.push('furnace','press','assembler');break;
+    case 'casing':machines.push('furnace','press','assembler');break;
+    case 'electronic':machines.push('furnace','press','assembler');break;
+    case 'robot_core':machines.push('furnace','press','assembler');break;
+    case 'red_iron_plate':machines.push('furnace','press','painter');break;
+    case 'packed_circuit_board':machines.push('furnace','press','assembler','packager');break;
+    case 'window':machines.push('cutter','assembler');break;
+    case 'furniture_frame':machines.push('furnace','press','cutter','assembler');break;
+  }
+  return machines;
+}
+
+function checkPath(){
+  // Simple BFS from each supplier
+  for(const s of G.suppliers){
+    const visited=new Set();
+    const queue=[{x:s.x+1,y:s.y}];
+    while(queue.length>0){
+      const {x,y}=queue.shift();
+      const key=x+','+y;
+      if(visited.has(key))continue;
+      visited.add(key);
+      if(G.outputs.some(o=>o.x===x&&o.y===y))return true;
+      const cell=G.grid[y]?.[x];
+      if(!cell)continue;
+      let ac=cell,ax=x,ay=y;
+      if(cell.isSecondary){ax=cell.parentX;ay=cell.parentY;ac=G.grid[ay][ax];}
+      if(!ac)continue;
+      const mt=MACHINE_TYPES[ac.type];
+      if(!mt)continue;
+      mt.outDir.forEach(d=>{
+        const absDir=REL_TO_ABS[d](ac.rotation);
+        const od=DIR_OFFSETS[absDir];
+        const nx=x+od.dx,ny=y+od.dy;
+        if(nx>=0&&ny>=0&&nx<G.gw&&ny<G.gh)queue.push({x:nx,y:ny});
+      });
+    }
+  }
+  return false;
+}
+
+// ===================== CANVAS RENDERING =====================
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+
+function resizeCanvas(){
+  const wrap=document.getElementById('canvasWrap');
+  const w=wrap.clientWidth,h=wrap.clientHeight;
+  canvas.width=w;canvas.height=h;
+  if(!G)return;
+  // Calculate cell size to fit grid
+  const maxCellW=Math.floor((w-20)/G.gw);
+  const maxCellH=Math.floor((h-20)/G.gh);
+  cellSize=Math.min(maxCellW,maxCellH,60);
+  cellSize=Math.max(cellSize,25);
+  canvasOffset.x=Math.floor((w-G.gw*cellSize)/2);
+  canvasOffset.y=Math.floor((h-G.gh*cellSize)/2);
+  requestRender();
+}
+
+function requestRender(){
+  if(animFrame)return;
+  animFrame=requestAnimationFrame(render);
+}
+
+function render(){
+  animFrame=null;
+  if(!G)return;
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#2d2d2d';
+  ctx.fillRect(0,0,w,h);
+
+  const ox=canvasOffset.x,oy=canvasOffset.y;
+  const cs=cellSize;
+
+  // Grid lines
+  ctx.strokeStyle='#444';ctx.lineWidth=1;
+  for(let x=0;x<=G.gw;x++){
+    ctx.beginPath();ctx.moveTo(ox+x*cs,oy);ctx.lineTo(ox+x*cs,oy+G.gh*cs);ctx.stroke();
+  }
+  for(let y=0;y<=G.gh;y++){
+    ctx.beginPath();ctx.moveTo(ox,oy+y*cs);ctx.lineTo(ox+G.gw*cs,oy+y*cs);ctx.stroke();
+  }
+
+  // Obstacles
+  G.obstacles.forEach(o=>{
+    ctx.fillStyle='#3a3a3a';
+    ctx.fillRect(ox+o.x*cs+1,oy+o.y*cs+1,cs-2,cs-2);
+    ctx.strokeStyle='#555';ctx.lineWidth=2;
+    ctx.strokeRect(ox+o.x*cs+1,oy+o.y*cs+1,cs-2,cs-2);
+    // X pattern
+    ctx.strokeStyle='#666';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(ox+o.x*cs+4,oy+o.y*cs+4);ctx.lineTo(ox+(o.x+1)*cs-4,oy+(o.y+1)*cs-4);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ox+(o.x+1)*cs-4,oy+o.y*cs+4);ctx.lineTo(ox+o.x*cs+4,oy+(o.y+1)*cs-4);ctx.stroke();
+  });
+
+  // Suppliers
+  G.suppliers.forEach(s=>{
+    ctx.fillStyle='#226622';
+    ctx.fillRect(ox+s.x*cs+1,oy+s.y*cs+1,cs-2,cs-2);
+    ctx.fillStyle='#44ff44';ctx.font=`bold ${cs*0.35}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('S',ox+s.x*cs+cs/2,oy+s.y*cs+cs*0.35);
+    ctx.font=`${cs*0.2}px sans-serif`;ctx.fillStyle='#aaffaa';
+    ctx.fillText(ITEM_NAMES[s.material]||s.material,ox+s.x*cs+cs/2,oy+s.y*cs+cs*0.7);
+  });
+
+  // Outputs
+  G.outputs.forEach(o=>{
+    ctx.fillStyle='#662222';
+    ctx.fillRect(ox+o.x*cs+1,oy+o.y*cs+1,cs-2,cs-2);
+    ctx.fillStyle='#ff4444';ctx.font=`bold ${cs*0.4}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('E',ox+o.x*cs+cs/2,oy+o.y*cs+cs/2);
+  });
+
+  // Machines
+  for(let y=0;y<G.gh;y++)for(let x=0;x<G.gw;x++){
+    const cell=G.grid[y][x];
+    if(!cell||cell.isSecondary)continue;
+    drawMachine(x,y,cell);
+  }
+
+  // Items on belts
+  G.items.forEach(item=>{
+    const ix=ox+item.x*cs+cs/2;
+    const iy=oy+item.y*cs+cs/2;
+    const r=cs*0.15;
+    ctx.fillStyle=ITEM_COLORS[item.type]||'#fff';
+    ctx.beginPath();ctx.arc(ix,iy,r,0,Math.PI*2);ctx.fill();
+    if(item.defect){
+      ctx.strokeStyle='#ff0000';ctx.lineWidth=2;ctx.stroke();
+    }
+    // Item name (small)
+    if(cs>35){
+      ctx.fillStyle='#fff';ctx.font=`${Math.max(8,cs*0.15)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(ITEM_NAMES[item.type]||'',ix,iy+r+1);
+    }
+  });
+
+  // Hover preview
+  if(hoverCell&&selectedMachine&&!G.running){
+    const mt=MACHINE_TYPES[selectedMachine];
+    const can=canPlace(hoverCell.x,hoverCell.y,selectedMachine,placementRotation);
+    ctx.globalAlpha=0.5;
+    ctx.fillStyle=can?mt.color:'#ff0000';
+    const cells=getMachineCells(hoverCell.x,hoverCell.y,selectedMachine,placementRotation);
+    cells.forEach(c=>{
+      if(c.x>=0&&c.y>=0&&c.x<G.gw&&c.y<G.gh)
+        ctx.fillRect(ox+c.x*cs+2,oy+c.y*cs+2,cs-4,cs-4);
+    });
+    ctx.globalAlpha=1;
+    // Draw direction arrow
+    drawDirectionArrow(hoverCell.x,hoverCell.y,placementRotation,cs*0.7);
+  }
+
+  // Delete mode indicator
+  if(hoverCell&&deleteMode&&!G.running){
+    const cell=G.grid[hoverCell.y]?.[hoverCell.x];
+    if(cell){
+      ctx.strokeStyle='#ff0000';ctx.lineWidth=3;
+      ctx.strokeRect(ox+hoverCell.x*cs,oy+hoverCell.y*cs,cs,cs);
+    }
+  }
+
+  // Stats overlay
+  if(G.running){
+    ctx.fillStyle='rgba(0,0,0,0.7)';
+    ctx.fillRect(ox,oy+G.gh*cs+5,G.gw*cs,20);
+    ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='left';
+    ctx.fillText(`처리량: ${G.stats.throughput}/분 | 효율: ${G.stats.efficiency}% | 병목: ${G.stats.bottlenecks} | 유휴: ${G.stats.idle}`,ox+5,oy+G.gh*cs+18);
+  }
+
+  if(G.running)animFrame=requestAnimationFrame(render);
+}
+
+function drawMachine(x,y,cell){
+  const ox=canvasOffset.x,oy=canvasOffset.y,cs=cellSize;
+  const mt=MACHINE_TYPES[cell.type];
+  const cells=getMachineCells(x,y,cell.type,cell.rotation);
+
+  // Draw machine body
+  cells.forEach(c=>{
+    ctx.fillStyle=mt.color;
+    ctx.fillRect(ox+c.x*cs+2,oy+c.y*cs+2,cs-4,cs-4);
+
+    // Processing indicator
+    if(cell.processing&&cell.timer>0){
+      const pct=1-cell.timer/mt.processTime;
+      ctx.fillStyle='rgba(0,255,136,0.3)';
+      ctx.fillRect(ox+c.x*cs+2,oy+c.y*cs+cs-6,(cs-4)*pct,4);
+    }
+
+    // Bottleneck warning
+    if(cell.outputBlocked||(cell.inputQueue&&cell.inputQueue.length>3)){
+      ctx.fillStyle=`rgba(255,0,0,${0.3+0.3*Math.sin(Date.now()/200)})`;
+      ctx.fillRect(ox+c.x*cs+2,oy+c.y*cs+2,cs-4,cs-4);
+    }
+  });
+
+  // Icon
+  const cx=ox+x*cs+cs/2,cy=oy+y*cs+cs/2;
+  ctx.fillStyle='#fff';ctx.font=`${cs*0.35}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(mt.icon,cx,cy);
+
+  // Direction arrow
+  drawDirectionArrow(x,y,cell.rotation,cs*0.3);
+
+  // Queue count
+  if(cell.inputQueue&&cell.inputQueue.length>0){
+    ctx.fillStyle='#ffaa00';ctx.font=`bold ${cs*0.2}px sans-serif`;
+    ctx.fillText(cell.inputQueue.length,ox+x*cs+cs-8,oy+y*cs+10);
+  }
+
+  // Storage count
+  if(cell.type==='storage'&&cell.stored.length>0){
+    ctx.fillStyle='#00aaff';ctx.font=`bold ${cs*0.22}px sans-serif`;
+    ctx.fillText(cell.stored.length+'/10',ox+x*cs+cs/2,oy+y*cs+cs-6);
+  }
+}
+
+function drawDirectionArrow(x,y,rotation,size){
+  const ox=canvasOffset.x,oy=canvasOffset.y,cs=cellSize;
+  const cx=ox+x*cs+cs/2,cy=oy+y*cs+cs/2;
+  const d=DIR_OFFSETS[rotation];
+  ctx.strokeStyle='rgba(0,255,136,0.6)';ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+d.dx*size,cy+d.dy*size);
+  ctx.stroke();
+  // Arrowhead
+  const angle=Math.atan2(d.dy,d.dx);
+  const ax=cx+d.dx*size,ay=cy+d.dy*size;
+  ctx.beginPath();
+  ctx.moveTo(ax,ay);
+  ctx.lineTo(ax-8*Math.cos(angle-0.5),ay-8*Math.sin(angle-0.5));
+  ctx.lineTo(ax-8*Math.cos(angle+0.5),ay-8*Math.sin(angle+0.5));
+  ctx.closePath();ctx.fillStyle='rgba(0,255,136,0.6)';ctx.fill();
+}
+
+// ===================== INPUT HANDLING =====================
+function getCellFromPos(px,py){
+  const ox=canvasOffset.x,oy=canvasOffset.y;
+  const gx=Math.floor((px-ox)/cellSize);
+  const gy=Math.floor((py-oy)/cellSize);
+  if(gx<0||gy<0||!G||gx>=G.gw||gy>=G.gh)return null;
+  return {x:gx,y:gy};
+}
+
+canvas.addEventListener('mousemove',(e)=>{
+  const rect=canvas.getBoundingClientRect();
+  const cell=getCellFromPos(e.clientX-rect.left,e.clientY-rect.top);
+  hoverCell=cell;
+
+  // Drag placing conveyors
+  if(dragPlacing&&cell&&selectedMachine&&!G.running){
+    const key=cell.x+','+cell.y;
+    if(!lastDragCell||lastDragCell.x!==cell.x||lastDragCell.y!==cell.y){
+      // Auto-determine rotation based on direction from last cell
+      if(lastDragCell){
+        const dx=cell.x-lastDragCell.x,dy=cell.y-lastDragCell.y;
+        if(dx===1)placementRotation=1;
+        else if(dx===-1)placementRotation=3;
+        else if(dy===1)placementRotation=2;
+        else if(dy===-1)placementRotation=0;
+      }
+      if(selectedMachine==='conveyor'||selectedMachine==='curve'){
+        placeMachineAt(cell.x,cell.y,selectedMachine,placementRotation);
+      }
+      lastDragCell=cell;
+    }
+  }
+
+  // Tooltip
+  if(cell&&G){
+    const c=G.grid[cell.y]?.[cell.x];
+    if(c){
+      let ac=c,ax=cell.x,ay=cell.y;
+      if(c.isSecondary){ax=c.parentX;ay=c.parentY;ac=G.grid[ay][ax];}
+      if(ac&&!ac.isSecondary){
+        const mt=MACHINE_TYPES[ac.type];
+        let info=`${mt.name} (${mt.icon})\n비용: $${mt.cost}`;
+        if(ac.processing)info+=`\n가공 중: ${ITEM_NAMES[ac.processing.type||'']||'조립'}`;
+        if(ac.inputQueue.length>0)info+=`\n대기열: ${ac.inputQueue.length}`;
+        if(ac.stored&&ac.stored.length>0)info+=`\n저장: ${ac.stored.length}/10`;
+        const tt=document.getElementById('tooltip');
+        tt.style.display='block';
+        tt.style.left=(e.clientX-canvas.getBoundingClientRect().left+10)+'px';
+        tt.style.top=(e.clientY-canvas.getBoundingClientRect().top+10)+'px';
+        tt.textContent=info;
+      } else {document.getElementById('tooltip').style.display='none';}
+    } else {document.getElementById('tooltip').style.display='none';}
+  }
+
+  if(!G?.running)requestRender();
+});
+
+canvas.addEventListener('mousedown',(e)=>{
+  if(!G||G.running)return;
+  const rect=canvas.getBoundingClientRect();
+  const cell=getCellFromPos(e.clientX-rect.left,e.clientY-rect.top);
+  if(!cell)return;
+
+  if(e.button===2){// Right click = delete
+    e.preventDefault();
+    removeMachineAt(cell.x,cell.y);
+    requestRender();
+    return;
+  }
+
+  if(deleteMode){
+    removeMachineAt(cell.x,cell.y);
+    requestRender();
+    return;
+  }
+
+  if(selectedMachine){
+    const placed=placeMachineAt(cell.x,cell.y,selectedMachine,placementRotation);
+    if(placed){
+      dragPlacing=true;
+      lastDragCell=cell;
+    }
+    requestRender();
+  }
+});
+
+canvas.addEventListener('mouseup',()=>{dragPlacing=false;lastDragCell=null;});
+canvas.addEventListener('mouseleave',()=>{
+  hoverCell=null;dragPlacing=false;lastDragCell=null;
+  document.getElementById('tooltip').style.display='none';
+  if(!G?.running)requestRender();
+});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Touch support
+let touchStartPos=null;
+let touchTimer=null;
+canvas.addEventListener('touchstart',(e)=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  const rect=canvas.getBoundingClientRect();
+  const cell=getCellFromPos(t.clientX-rect.left,t.clientY-rect.top);
+  touchStartPos={x:t.clientX,y:t.clientY,cell};
+
+  // Long press for delete
+  touchTimer=setTimeout(()=>{
+    if(cell&&G&&!G.running){
+      removeMachineAt(cell.x,cell.y);
+      requestRender();
+    }
+    touchTimer=null;
+  },500);
+},{passive:false});
+
+canvas.addEventListener('touchmove',(e)=>{
+  e.preventDefault();
+  if(touchTimer){clearTimeout(touchTimer);touchTimer=null;}
+  const t=e.touches[0];
+  const rect=canvas.getBoundingClientRect();
+  const cell=getCellFromPos(t.clientX-rect.left,t.clientY-rect.top);
+  hoverCell=cell;
+
+  // Drag place conveyors
+  if(cell&&selectedMachine&&!G?.running&&(selectedMachine==='conveyor'||selectedMachine==='curve')){
+    if(lastDragCell&&(lastDragCell.x!==cell.x||lastDragCell.y!==cell.y)){
+      const dx=cell.x-lastDragCell.x,dy=cell.y-lastDragCell.y;
+      if(dx===1)placementRotation=1;else if(dx===-1)placementRotation=3;
+      else if(dy===1)placementRotation=2;else if(dy===-1)placementRotation=0;
+      placeMachineAt(cell.x,cell.y,selectedMachine,placementRotation);
+    }
+    lastDragCell=cell;
+  }
+  if(!G?.running)requestRender();
+},{passive:false});
+
+canvas.addEventListener('touchend',(e)=>{
+  e.preventDefault();
+  if(touchTimer){
+    clearTimeout(touchTimer);touchTimer=null;
+    // Tap = place
+    if(touchStartPos&&touchStartPos.cell&&G&&!G.running){
+      if(deleteMode){
+        removeMachineAt(touchStartPos.cell.x,touchStartPos.cell.y);
+      } else if(selectedMachine){
+        placeMachineAt(touchStartPos.cell.x,touchStartPos.cell.y,selectedMachine,placementRotation);
+      }
+      requestRender();
+    }
+  }
+  touchStartPos=null;lastDragCell=null;
+},{passive:false});
+
+// Keyboard
+document.addEventListener('keydown',(e)=>{
+  if(!G)return;
+  switch(e.key){
+    case 'r':case'R':rotatePlacement();break;
+    case' ':e.preventDefault();toggleSim();break;
+    case'Delete':case'Backspace':if(hoverCell&&!G.running)removeMachineAt(hoverCell.x,hoverCell.y);requestRender();break;
+    case'z':if(e.ctrlKey||e.metaKey){e.preventDefault();undoAction();requestRender();}break;
+    case'y':if(e.ctrlKey||e.metaKey){e.preventDefault();redoAction();requestRender();}break;
+    case'+':case'=':cycleSpeed();break;
+    case'-':cycleSpeed();break;
+  }
+});
+
+// Resize
+window.addEventListener('resize',()=>{resizeCanvas();});
+
+// ===================== INIT =====================
+loadSave();
+</script>
+</body>
+</html>
