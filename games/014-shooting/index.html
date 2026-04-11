@@ -14,6 +14,639 @@ canvas { display: block; margin: 0 auto; touch-action: none; }
 <canvas id="c"></canvas>
 <script>
 'use strict';
+
+// ── Sprite System ──
+const GameSprites = (function() {
+    const sprites = {};
+    const explosionFrames = [];
+    let ready = false;
+
+    function makeCanvas(w, h) {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        return c;
+    }
+
+    function drawToCanvas(w, h, drawFn) {
+        const c = makeCanvas(w, h);
+        const x = c.getContext('2d');
+        x.translate(w / 2, h / 2);
+        drawFn(x, w, h);
+        return c;
+    }
+
+    function createPlayerShip() {
+        sprites.player = drawToCanvas(48, 48, (x) => {
+            // Engine glow base
+            const eg = x.createRadialGradient(0, 14, 0, 0, 14, 18);
+            eg.addColorStop(0, 'rgba(0,170,255,0.5)');
+            eg.addColorStop(1, 'transparent');
+            x.fillStyle = eg;
+            x.fillRect(-18, -4, 36, 36);
+
+            // Engine flame
+            x.fillStyle = '#0cf';
+            x.globalAlpha = 0.9;
+            x.beginPath();
+            x.moveTo(-6, 10);
+            x.lineTo(0, 22);
+            x.lineTo(6, 10);
+            x.fill();
+            // Inner flame
+            x.fillStyle = '#fff';
+            x.globalAlpha = 0.7;
+            x.beginPath();
+            x.moveTo(-3, 10);
+            x.lineTo(0, 18);
+            x.lineTo(3, 10);
+            x.fill();
+            x.globalAlpha = 1;
+
+            // Main hull - metallic gradient
+            const hullGrad = x.createLinearGradient(-12, -14, 12, 14);
+            hullGrad.addColorStop(0, '#cceeff');
+            hullGrad.addColorStop(0.3, '#88bbdd');
+            hullGrad.addColorStop(0.5, '#aaddff');
+            hullGrad.addColorStop(0.7, '#6699bb');
+            hullGrad.addColorStop(1, '#88bbdd');
+            x.fillStyle = hullGrad;
+            x.strokeStyle = '#0af';
+            x.lineWidth = 1.5;
+            x.beginPath();
+            x.moveTo(0, -14);
+            x.lineTo(-12, 10);
+            x.lineTo(-8, 14);
+            x.lineTo(8, 14);
+            x.lineTo(12, 10);
+            x.closePath();
+            x.fill();
+            x.stroke();
+
+            // Hull panel lines
+            x.strokeStyle = 'rgba(0,170,255,0.3)';
+            x.lineWidth = 0.5;
+            x.beginPath();
+            x.moveTo(-6, 0); x.lineTo(-10, 12);
+            x.moveTo(6, 0); x.lineTo(10, 12);
+            x.stroke();
+
+            // Cockpit - glass effect
+            const cockGrad = x.createLinearGradient(0, -10, 0, 2);
+            cockGrad.addColorStop(0, '#66eeff');
+            cockGrad.addColorStop(0.5, '#00ccff');
+            cockGrad.addColorStop(1, '#004466');
+            x.fillStyle = cockGrad;
+            x.beginPath();
+            x.moveTo(0, -10);
+            x.lineTo(-5, 2);
+            x.lineTo(5, 2);
+            x.closePath();
+            x.fill();
+            // Cockpit highlight
+            x.fillStyle = 'rgba(255,255,255,0.4)';
+            x.beginPath();
+            x.moveTo(-1, -8);
+            x.lineTo(-3, -2);
+            x.lineTo(0, -3);
+            x.closePath();
+            x.fill();
+
+            // Wings - metallic
+            const wingGrad = x.createLinearGradient(-18, 5, -8, 14);
+            wingGrad.addColorStop(0, '#6699cc');
+            wingGrad.addColorStop(1, '#88bbee');
+            x.fillStyle = wingGrad;
+            x.beginPath();
+            x.moveTo(-8, 5); x.lineTo(-18, 12); x.lineTo(-10, 14);
+            x.closePath();
+            x.fill();
+            const wingGrad2 = x.createLinearGradient(8, 5, 18, 14);
+            wingGrad2.addColorStop(0, '#88bbee');
+            wingGrad2.addColorStop(1, '#6699cc');
+            x.fillStyle = wingGrad2;
+            x.beginPath();
+            x.moveTo(8, 5); x.lineTo(18, 12); x.lineTo(10, 14);
+            x.closePath();
+            x.fill();
+
+            // Wing tip lights
+            x.fillStyle = '#ff4444';
+            x.beginPath(); x.arc(-16, 12, 1.5, 0, Math.PI * 2); x.fill();
+            x.fillStyle = '#44ff44';
+            x.beginPath(); x.arc(16, 12, 1.5, 0, Math.PI * 2); x.fill();
+        });
+    }
+
+    function createEnemyBasic() {
+        sprites.enemyBasic = drawToCanvas(40, 40, (x) => {
+            const r = 14;
+            // Hull
+            const grad = x.createLinearGradient(-r, -r, r, r);
+            grad.addColorStop(0, '#ff6688');
+            grad.addColorStop(0.5, '#ff4466');
+            grad.addColorStop(1, '#aa2244');
+            x.fillStyle = grad;
+            x.beginPath();
+            x.moveTo(0, r);
+            x.lineTo(-r, -r * 0.6);
+            x.lineTo(0, -r * 0.3);
+            x.lineTo(r, -r * 0.6);
+            x.closePath();
+            x.fill();
+            x.strokeStyle = '#ff8899';
+            x.lineWidth = 1;
+            x.stroke();
+            // Engine detail
+            x.fillStyle = '#ff2244';
+            x.beginPath();
+            x.arc(0, r * 0.3, 4, 0, Math.PI * 2);
+            x.fill();
+            x.fillStyle = '#ffaa88';
+            x.beginPath();
+            x.arc(0, r * 0.3, 2, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createEnemyZigzag() {
+        sprites.enemyZigzag = drawToCanvas(36, 36, (x) => {
+            const r = 12;
+            const grad = x.createLinearGradient(-r, -r, r, r);
+            grad.addColorStop(0, '#ffaa66');
+            grad.addColorStop(0.5, '#ff8844');
+            grad.addColorStop(1, '#cc6622');
+            x.fillStyle = grad;
+            x.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI * 2 / 6) * i - Math.PI / 2;
+                x.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            x.closePath();
+            x.fill();
+            x.strokeStyle = '#ffbb66';
+            x.lineWidth = 1;
+            x.stroke();
+            // Inner hexagon detail
+            x.fillStyle = '#cc5500';
+            x.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI * 2 / 6) * i;
+                x.lineTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5);
+            }
+            x.closePath();
+            x.fill();
+            // Center eye
+            x.fillStyle = '#ffee88';
+            x.beginPath();
+            x.arc(0, 0, 3, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createEnemyBomber() {
+        sprites.enemyBomber = drawToCanvas(44, 44, (x) => {
+            const r = 16;
+            // Outer ring
+            const grad = x.createRadialGradient(0, 0, r * 0.4, 0, 0, r);
+            grad.addColorStop(0, '#dd55ff');
+            grad.addColorStop(1, '#8822aa');
+            x.fillStyle = grad;
+            x.beginPath();
+            x.arc(0, 0, r, 0, Math.PI * 2);
+            x.fill();
+            x.strokeStyle = '#ee88ff';
+            x.lineWidth = 1.5;
+            x.stroke();
+            // Inner dark core
+            x.fillStyle = '#220033';
+            x.beginPath();
+            x.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+            x.fill();
+            // Energy ring
+            x.strokeStyle = '#ff88ff';
+            x.lineWidth = 1;
+            x.beginPath();
+            x.arc(0, 0, r * 0.7, 0, Math.PI * 2);
+            x.stroke();
+            // Center glow
+            x.fillStyle = '#ff88dd';
+            x.beginPath();
+            x.arc(0, 0, 3, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createEnemyShield() {
+        sprites.enemyShield = drawToCanvas(48, 48, (x) => {
+            const r = 18;
+            // Shield ring
+            x.strokeStyle = '#66aaff';
+            x.lineWidth = 3;
+            x.globalAlpha = 0.6;
+            x.beginPath();
+            x.arc(0, 0, r + 4, 0, Math.PI * 2);
+            x.stroke();
+            x.globalAlpha = 1;
+            // Body diamond
+            const grad = x.createLinearGradient(-r, 0, r, 0);
+            grad.addColorStop(0, '#2266cc');
+            grad.addColorStop(0.5, '#4488ff');
+            grad.addColorStop(1, '#2266cc');
+            x.fillStyle = grad;
+            x.beginPath();
+            x.moveTo(0, r);
+            x.lineTo(-r, 0);
+            x.lineTo(0, -r);
+            x.lineTo(r, 0);
+            x.closePath();
+            x.fill();
+            x.strokeStyle = '#88ccff';
+            x.lineWidth = 1;
+            x.stroke();
+            // Inner diamond
+            x.fillStyle = '#1144aa';
+            x.beginPath();
+            x.moveTo(0, r * 0.5);
+            x.lineTo(-r * 0.5, 0);
+            x.lineTo(0, -r * 0.5);
+            x.lineTo(r * 0.5, 0);
+            x.closePath();
+            x.fill();
+            // Center gem
+            x.fillStyle = '#88ddff';
+            x.beginPath();
+            x.arc(0, 0, 3, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createBoss() {
+        sprites.boss = drawToCanvas(88, 88, (x) => {
+            const r = 36;
+            // Cannons
+            x.fillStyle = '#662233';
+            x.fillRect(-r - 4, -5, 8, 20);
+            x.fillRect(r - 4, -5, 8, 20);
+            // Cannon tips
+            x.fillStyle = '#ff4466';
+            x.fillRect(-r - 3, 13, 6, 3);
+            x.fillRect(r - 3, 13, 6, 3);
+
+            // Main body - armored plating
+            const bodyGrad = x.createLinearGradient(-r, -r, r, r);
+            bodyGrad.addColorStop(0, '#aa1133');
+            bodyGrad.addColorStop(0.3, '#881122');
+            bodyGrad.addColorStop(0.5, '#992233');
+            bodyGrad.addColorStop(0.7, '#771122');
+            bodyGrad.addColorStop(1, '#661122');
+            x.fillStyle = bodyGrad;
+            x.beginPath();
+            x.moveTo(0, -r);
+            x.lineTo(-r * 0.8, -r * 0.3);
+            x.lineTo(-r, r * 0.5);
+            x.lineTo(-r * 0.4, r);
+            x.lineTo(r * 0.4, r);
+            x.lineTo(r, r * 0.5);
+            x.lineTo(r * 0.8, -r * 0.3);
+            x.closePath();
+            x.fill();
+            x.strokeStyle = '#ff2244';
+            x.lineWidth = 2;
+            x.stroke();
+
+            // Armor panel lines
+            x.strokeStyle = 'rgba(255,34,68,0.3)';
+            x.lineWidth = 1;
+            x.beginPath();
+            x.moveTo(-r * 0.5, -r * 0.5); x.lineTo(-r * 0.6, r * 0.3);
+            x.moveTo(r * 0.5, -r * 0.5); x.lineTo(r * 0.6, r * 0.3);
+            x.moveTo(-r * 0.2, -r * 0.8); x.lineTo(-r * 0.2, r * 0.5);
+            x.moveTo(r * 0.2, -r * 0.8); x.lineTo(r * 0.2, r * 0.5);
+            x.stroke();
+
+            // Core
+            const coreGrad = x.createRadialGradient(0, 5, 0, 0, 5, 12);
+            coreGrad.addColorStop(0, '#ff8888');
+            coreGrad.addColorStop(0.5, '#ff4466');
+            coreGrad.addColorStop(1, 'rgba(255,68,102,0)');
+            x.fillStyle = coreGrad;
+            x.beginPath();
+            x.arc(0, 5, 12, 0, Math.PI * 2);
+            x.fill();
+            x.fillStyle = '#ff6688';
+            x.beginPath();
+            x.arc(0, 5, 6, 0, Math.PI * 2);
+            x.fill();
+
+            // Eyes
+            x.fillStyle = '#ff0033';
+            x.beginPath();
+            x.arc(-10, -8, 5, 0, Math.PI * 2);
+            x.arc(10, -8, 5, 0, Math.PI * 2);
+            x.fill();
+            // Eye pupils
+            x.fillStyle = '#ff8899';
+            x.beginPath();
+            x.arc(-10, -8, 2, 0, Math.PI * 2);
+            x.arc(10, -8, 2, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createPlayerBullet() {
+        sprites.playerBullet = drawToCanvas(16, 16, (x) => {
+            // Outer glow
+            const g = x.createRadialGradient(0, 0, 0, 0, 0, 8);
+            g.addColorStop(0, 'rgba(0,255,255,0.6)');
+            g.addColorStop(0.5, 'rgba(0,200,255,0.2)');
+            g.addColorStop(1, 'transparent');
+            x.fillStyle = g;
+            x.fillRect(-8, -8, 16, 16);
+            // Core
+            x.fillStyle = '#0ff';
+            x.beginPath();
+            x.arc(0, 0, 3, 0, Math.PI * 2);
+            x.fill();
+            // White center
+            x.fillStyle = '#fff';
+            x.beginPath();
+            x.arc(0, 0, 1.5, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createEnemyBullet(name, color) {
+        sprites[name] = drawToCanvas(20, 20, (x) => {
+            // Outer glow
+            const g = x.createRadialGradient(0, 0, 0, 0, 0, 10);
+            g.addColorStop(0, color.replace(')', ',0.5)').replace('rgb', 'rgba'));
+            g.addColorStop(1, 'transparent');
+            x.fillStyle = g;
+            x.fillRect(-10, -10, 20, 20);
+            // Main ball
+            x.fillStyle = color;
+            x.beginPath();
+            x.arc(0, 0, 4, 0, Math.PI * 2);
+            x.fill();
+            // White center
+            x.fillStyle = '#fff';
+            x.globalAlpha = 0.7;
+            x.beginPath();
+            x.arc(0, 0, 1.6, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createExplosionFrames() {
+        const frameCount = 8;
+        for (let f = 0; f < frameCount; f++) {
+            const progress = f / (frameCount - 1);
+            const c = drawToCanvas(64, 64, (x) => {
+                const maxR = 28;
+                // Outer ring
+                const r1 = maxR * (0.3 + progress * 0.7);
+                const alpha1 = 1 - progress;
+                x.globalAlpha = alpha1 * 0.4;
+                const g1 = x.createRadialGradient(0, 0, r1 * 0.5, 0, 0, r1);
+                g1.addColorStop(0, '#ff8844');
+                g1.addColorStop(1, 'transparent');
+                x.fillStyle = g1;
+                x.beginPath();
+                x.arc(0, 0, r1, 0, Math.PI * 2);
+                x.fill();
+
+                // Mid ring
+                x.globalAlpha = alpha1 * 0.7;
+                const r2 = maxR * (0.2 + progress * 0.5);
+                const g2 = x.createRadialGradient(0, 0, 0, 0, 0, r2);
+                g2.addColorStop(0, '#ffff88');
+                g2.addColorStop(0.4, '#ffcc44');
+                g2.addColorStop(1, '#ff4444');
+                x.fillStyle = g2;
+                x.beginPath();
+                x.arc(0, 0, r2, 0, Math.PI * 2);
+                x.fill();
+
+                // Core flash (early frames)
+                if (progress < 0.5) {
+                    x.globalAlpha = (1 - progress * 2) * 0.9;
+                    const r3 = maxR * (0.1 + progress * 0.3);
+                    x.fillStyle = '#fff';
+                    x.beginPath();
+                    x.arc(0, 0, r3, 0, Math.PI * 2);
+                    x.fill();
+                }
+
+                // Debris particles (later frames)
+                if (progress > 0.2) {
+                    x.globalAlpha = alpha1 * 0.8;
+                    const debris = 8;
+                    for (let i = 0; i < debris; i++) {
+                        const a = (Math.PI * 2 / debris) * i + f * 0.3;
+                        const dr = r1 * (0.4 + progress * 0.6);
+                        const dx = Math.cos(a) * dr;
+                        const dy = Math.sin(a) * dr;
+                        const ds = 2 * (1 - progress);
+                        x.fillStyle = i % 2 === 0 ? '#ffcc44' : '#ff6644';
+                        x.fillRect(dx - ds, dy - ds, ds * 2, ds * 2);
+                    }
+                }
+            });
+            explosionFrames.push(c);
+        }
+    }
+
+    function createPowerup(name, color, drawIcon) {
+        sprites[name] = drawToCanvas(32, 32, (x) => {
+            // Outer glow
+            const g = x.createRadialGradient(0, 0, 4, 0, 0, 16);
+            g.addColorStop(0, color.replace(')', ',0.4)').replace('rgb', 'rgba'));
+            g.addColorStop(1, 'transparent');
+            x.fillStyle = g;
+            x.fillRect(-16, -16, 32, 32);
+            // Ring
+            x.strokeStyle = color;
+            x.lineWidth = 2;
+            x.beginPath();
+            x.arc(0, 0, 10, 0, Math.PI * 2);
+            x.stroke();
+            // Background disc
+            x.fillStyle = color.replace(')', ',0.2)').replace('rgb', 'rgba');
+            x.beginPath();
+            x.arc(0, 0, 9, 0, Math.PI * 2);
+            x.fill();
+            // Icon
+            drawIcon(x, color);
+        });
+    }
+
+    function createPowerups() {
+        // Shield powerup - shield icon
+        createPowerup('powerShield', 'rgb(68,68,255)', (x, c) => {
+            x.strokeStyle = '#88aaff';
+            x.lineWidth = 2;
+            x.beginPath();
+            x.arc(0, -1, 6, -Math.PI * 0.8, -Math.PI * 0.2);
+            x.lineTo(0, 7);
+            x.lineTo(-5, 2);
+            x.stroke();
+        });
+
+        // Weapon upgrade - arrow up
+        createPowerup('powerWeapon', 'rgb(255,68,68)', (x, c) => {
+            x.fillStyle = '#ff8888';
+            x.beginPath();
+            x.moveTo(0, -6);
+            x.lineTo(-5, 1);
+            x.lineTo(-2, 1);
+            x.lineTo(-2, 6);
+            x.lineTo(2, 6);
+            x.lineTo(2, 1);
+            x.lineTo(5, 1);
+            x.closePath();
+            x.fill();
+        });
+
+        // Speed - lightning bolt
+        createPowerup('powerSpeed', 'rgb(68,255,68)', (x, c) => {
+            x.fillStyle = '#88ff88';
+            x.beginPath();
+            x.moveTo(1, -7);
+            x.lineTo(-4, 0);
+            x.lineTo(0, 0);
+            x.lineTo(-1, 7);
+            x.lineTo(4, 0);
+            x.lineTo(0, 0);
+            x.closePath();
+            x.fill();
+        });
+
+        // Bomb - bomb icon
+        createPowerup('powerBomb', 'rgb(255,255,68)', (x, c) => {
+            x.fillStyle = '#ffff88';
+            x.beginPath();
+            x.arc(0, 1, 5, 0, Math.PI * 2);
+            x.fill();
+            // Fuse
+            x.strokeStyle = '#ffcc44';
+            x.lineWidth = 1.5;
+            x.beginPath();
+            x.moveTo(2, -4);
+            x.quadraticCurveTo(5, -7, 3, -7);
+            x.stroke();
+            // Spark
+            x.fillStyle = '#fff';
+            x.beginPath();
+            x.arc(3, -7, 1.5, 0, Math.PI * 2);
+            x.fill();
+        });
+    }
+
+    function createStarTile() {
+        // 64x64 star pattern tile
+        sprites.starTile = drawToCanvas(64, 64, (x) => {
+            x.translate(-32, -32); // undo the default centering
+            for (let i = 0; i < 20; i++) {
+                const sx = Math.random() * 64;
+                const sy = Math.random() * 64;
+                const sr = 0.3 + Math.random() * 1.8;
+                const bright = 0.3 + Math.random() * 0.7;
+                x.globalAlpha = bright;
+                x.fillStyle = '#fff';
+                if (sr > 1.2) {
+                    // Larger stars get a cross shape
+                    x.fillRect(sx - sr, sy - 0.3, sr * 2, 0.6);
+                    x.fillRect(sx - 0.3, sy - sr, 0.6, sr * 2);
+                    x.beginPath();
+                    x.arc(sx, sy, sr * 0.5, 0, Math.PI * 2);
+                    x.fill();
+                } else {
+                    x.fillRect(sx, sy, sr, sr);
+                }
+            }
+        });
+    }
+
+    function createAsteroid() {
+        sprites.asteroid = drawToCanvas(48, 48, (x) => {
+            const r = 18;
+            // Irregular rocky shape
+            const points = [];
+            const segs = 10;
+            for (let i = 0; i < segs; i++) {
+                const a = (Math.PI * 2 / segs) * i;
+                const rr = r * (0.7 + Math.random() * 0.3);
+                points.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr });
+            }
+            // Body
+            const grad = x.createRadialGradient(-4, -4, 0, 0, 0, r);
+            grad.addColorStop(0, '#887766');
+            grad.addColorStop(0.6, '#665544');
+            grad.addColorStop(1, '#443322');
+            x.fillStyle = grad;
+            x.beginPath();
+            x.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                x.lineTo(points[i].x, points[i].y);
+            }
+            x.closePath();
+            x.fill();
+            x.strokeStyle = '#554433';
+            x.lineWidth = 1;
+            x.stroke();
+            // Craters
+            x.fillStyle = 'rgba(0,0,0,0.25)';
+            x.beginPath(); x.arc(-5, -3, 4, 0, Math.PI * 2); x.fill();
+            x.beginPath(); x.arc(4, 5, 3, 0, Math.PI * 2); x.fill();
+            x.beginPath(); x.arc(6, -6, 2, 0, Math.PI * 2); x.fill();
+            // Crater rims (highlights)
+            x.strokeStyle = 'rgba(255,255,255,0.1)';
+            x.lineWidth = 0.5;
+            x.beginPath(); x.arc(-5, -3, 4, -Math.PI * 0.8, -Math.PI * 0.2); x.stroke();
+            x.beginPath(); x.arc(4, 5, 3, -Math.PI * 0.8, 0); x.stroke();
+        });
+    }
+
+    function init() {
+        createPlayerShip();
+        createEnemyBasic();
+        createEnemyZigzag();
+        createEnemyBomber();
+        createEnemyShield();
+        createBoss();
+        createPlayerBullet();
+        createEnemyBullet('eBulletRed', '#ff4488');
+        createEnemyBullet('eBulletOrange', '#ffaa44');
+        createEnemyBullet('eBulletPurple', '#cc66ff');
+        createEnemyBullet('eBulletBlue', '#6688ff');
+        createEnemyBullet('eBulletBossA', '#ff2266');
+        createEnemyBullet('eBulletBossB', '#ff4488');
+        createEnemyBullet('eBulletBossC', '#ff6644');
+        createEnemyBullet('eBulletBossD', '#ff2288');
+        createExplosionFrames();
+        createPowerups();
+        createStarTile();
+        createAsteroid();
+        ready = true;
+    }
+
+    function get(name) {
+        return ready ? sprites[name] : null;
+    }
+
+    function getExplosionFrame(index) {
+        if (!ready || index < 0 || index >= explosionFrames.length) return null;
+        return explosionFrames[index];
+    }
+
+    return {
+        init: init,
+        get: get,
+        getExplosionFrame: getExplosionFrame,
+        EXPLOSION_FRAMES: 8
+    };
+})();
+
 // ── Canvas Setup ──
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -709,54 +1342,54 @@ function drawPlayer() {
     ctx.save();
     ctx.translate(x, y);
 
-    // Engine glow
-    drawGlow(0, 14, 20, '#0af', 0.3 + Math.sin(frame * 0.3) * 0.1);
+    const spr = GameSprites.get('player');
+    if (spr) {
+        // Animated engine glow (additive feel)
+        drawGlow(0, 14, 20, '#0af', 0.3 + Math.sin(frame * 0.3) * 0.1);
+        // Animated flame extension beyond sprite
+        ctx.fillStyle = '#0cf';
+        ctx.globalAlpha = 0.5;
+        const flameExt = Math.sin(frame * 0.5) * 4;
+        ctx.beginPath();
+        ctx.moveTo(-4, 18);
+        ctx.lineTo(0, 22 + flameExt);
+        ctx.lineTo(4, 18);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Draw sprite
+        ctx.drawImage(spr, -24, -24, 48, 48);
+    } else {
+        // Fallback: original procedural drawing
+        drawGlow(0, 14, 20, '#0af', 0.3 + Math.sin(frame * 0.3) * 0.1);
+        ctx.fillStyle = '#0cf';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-5, 10);
+        ctx.lineTo(0, 18 + Math.sin(frame * 0.5) * 4);
+        ctx.lineTo(5, 10);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#aaddff';
+        ctx.strokeStyle = '#0af';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -14); ctx.lineTo(-12, 10); ctx.lineTo(-8, 14);
+        ctx.lineTo(8, 14); ctx.lineTo(12, 10);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#0cf';
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(-4, 2); ctx.lineTo(4, 2);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#88bbee';
+        ctx.beginPath();
+        ctx.moveTo(-8, 5); ctx.lineTo(-18, 12); ctx.lineTo(-10, 14);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(8, 5); ctx.lineTo(18, 12); ctx.lineTo(10, 14);
+        ctx.closePath(); ctx.fill();
+    }
 
-    // Engine flame
-    ctx.fillStyle = '#0cf';
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(-5, 10);
-    ctx.lineTo(0, 18 + Math.sin(frame * 0.5) * 4);
-    ctx.lineTo(5, 10);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Ship body
-    ctx.fillStyle = '#aaddff';
-    ctx.strokeStyle = '#0af';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(-12, 10);
-    ctx.lineTo(-8, 14);
-    ctx.lineTo(8, 14);
-    ctx.lineTo(12, 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Cockpit
-    ctx.fillStyle = '#0cf';
-    ctx.beginPath();
-    ctx.moveTo(0, -8);
-    ctx.lineTo(-4, 2);
-    ctx.lineTo(4, 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Wings
-    ctx.fillStyle = '#88bbee';
-    ctx.beginPath();
-    ctx.moveTo(-8, 5); ctx.lineTo(-18, 12); ctx.lineTo(-10, 14);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(8, 5); ctx.lineTo(18, 12); ctx.lineTo(10, 14);
-    ctx.closePath();
-    ctx.fill();
-
-    // Shield
+    // Shield (always drawn on top, animated)
     if (playerShield) {
         ctx.strokeStyle = '#0ff';
         ctx.globalAlpha = 0.4 + Math.sin(frame * 0.1) * 0.2;
@@ -803,161 +1436,219 @@ function drawEnemy(e) {
     // Glow
     drawGlow(0, 0, e.radius + 8, e.color, 0.2);
 
-    switch (e.type) {
-        case 'basic':
-            ctx.fillStyle = e.color;
-            ctx.beginPath();
-            ctx.moveTo(0, e.radius);
-            ctx.lineTo(-e.radius, -e.radius * 0.6);
-            ctx.lineTo(0, -e.radius * 0.3);
-            ctx.lineTo(e.radius, -e.radius * 0.6);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#ff8899';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            break;
-        case 'zigzag':
-            ctx.fillStyle = e.color;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const a = (Math.PI * 2 / 6) * i - Math.PI / 2 + e.timer * 0.05;
-                const r = e.radius;
-                ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#ffbb66';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            break;
-        case 'bomber':
-            ctx.fillStyle = e.color;
-            ctx.beginPath();
-            ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#220033';
-            ctx.beginPath();
-            ctx.arc(0, 0, e.radius * 0.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#ee88ff';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
-            ctx.stroke();
-            break;
-        case 'shield':
-            // Shield ring
-            ctx.strokeStyle = '#66aaff';
-            ctx.lineWidth = 3;
-            ctx.globalAlpha = 0.4 + (e.hp / e.maxHp) * 0.6;
-            ctx.beginPath();
-            ctx.arc(0, 0, e.radius + 4, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-            // Body
-            ctx.fillStyle = e.color;
-            ctx.beginPath();
-            ctx.moveTo(0, e.radius);
-            ctx.lineTo(-e.radius, 0);
-            ctx.lineTo(0, -e.radius);
-            ctx.lineTo(e.radius, 0);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#88ccff';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            break;
-        case 'boss':
-            // Body
-            ctx.fillStyle = '#881122';
-            ctx.beginPath();
-            ctx.moveTo(0, -e.radius);
-            ctx.lineTo(-e.radius * 0.8, -e.radius * 0.3);
-            ctx.lineTo(-e.radius, e.radius * 0.5);
-            ctx.lineTo(-e.radius * 0.4, e.radius);
-            ctx.lineTo(e.radius * 0.4, e.radius);
-            ctx.lineTo(e.radius, e.radius * 0.5);
-            ctx.lineTo(e.radius * 0.8, -e.radius * 0.3);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = e.color;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            // Core
-            ctx.fillStyle = '#ff4466';
-            ctx.globalAlpha = 0.6 + Math.sin(frame * 0.1) * 0.3;
-            ctx.beginPath();
-            ctx.arc(0, 5, 10, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            // Eyes
-            ctx.fillStyle = '#ff0033';
-            ctx.beginPath();
-            ctx.arc(-10, -8, 4, 0, Math.PI * 2);
-            ctx.arc(10, -8, 4, 0, Math.PI * 2);
-            ctx.fill();
-            // Cannons
-            ctx.fillStyle = '#662233';
-            ctx.fillRect(-e.radius - 4, -5, 8, 20);
-            ctx.fillRect(e.radius - 4, -5, 8, 20);
-            break;
+    const spriteMap = {
+        basic: 'enemyBasic',
+        zigzag: 'enemyZigzag',
+        bomber: 'enemyBomber',
+        shield: 'enemyShield',
+        boss: 'boss'
+    };
+    const spr = GameSprites.get(spriteMap[e.type]);
+
+    if (spr && e.type === 'basic') {
+        ctx.drawImage(spr, -20, -20, 40, 40);
+    } else if (spr && e.type === 'zigzag') {
+        ctx.save();
+        ctx.rotate(e.timer * 0.05);
+        ctx.drawImage(spr, -18, -18, 36, 36);
+        ctx.restore();
+    } else if (spr && e.type === 'bomber') {
+        ctx.drawImage(spr, -22, -22, 44, 44);
+    } else if (spr && e.type === 'shield') {
+        // Dynamic shield ring (fades with HP)
+        ctx.strokeStyle = '#66aaff';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.4 + (e.hp / e.maxHp) * 0.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.drawImage(spr, -24, -24, 48, 48);
+    } else if (spr && e.type === 'boss') {
+        // Animated core glow
+        ctx.fillStyle = '#ff4466';
+        ctx.globalAlpha = 0.6 + Math.sin(frame * 0.1) * 0.3;
+        ctx.beginPath();
+        ctx.arc(0, 5, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.drawImage(spr, -44, -44, 88, 88);
+    } else {
+        // Fallback: original procedural drawing
+        switch (e.type) {
+            case 'basic':
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                ctx.moveTo(0, e.radius);
+                ctx.lineTo(-e.radius, -e.radius * 0.6);
+                ctx.lineTo(0, -e.radius * 0.3);
+                ctx.lineTo(e.radius, -e.radius * 0.6);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#ff8899'; ctx.lineWidth = 1; ctx.stroke();
+                break;
+            case 'zigzag':
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = (Math.PI * 2 / 6) * i - Math.PI / 2 + e.timer * 0.05;
+                    ctx.lineTo(Math.cos(a) * e.radius, Math.sin(a) * e.radius);
+                }
+                ctx.closePath(); ctx.fill();
+                ctx.strokeStyle = '#ffbb66'; ctx.lineWidth = 1; ctx.stroke();
+                break;
+            case 'bomber':
+                ctx.fillStyle = e.color;
+                ctx.beginPath(); ctx.arc(0, 0, e.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#220033';
+                ctx.beginPath(); ctx.arc(0, 0, e.radius * 0.5, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#ee88ff'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, e.radius, 0, Math.PI * 2); ctx.stroke();
+                break;
+            case 'shield':
+                ctx.strokeStyle = '#66aaff'; ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.4 + (e.hp / e.maxHp) * 0.6;
+                ctx.beginPath(); ctx.arc(0, 0, e.radius + 4, 0, Math.PI * 2); ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                ctx.moveTo(0, e.radius); ctx.lineTo(-e.radius, 0);
+                ctx.lineTo(0, -e.radius); ctx.lineTo(e.radius, 0);
+                ctx.closePath(); ctx.fill();
+                ctx.strokeStyle = '#88ccff'; ctx.lineWidth = 1; ctx.stroke();
+                break;
+            case 'boss':
+                ctx.fillStyle = '#881122';
+                ctx.beginPath();
+                ctx.moveTo(0, -e.radius);
+                ctx.lineTo(-e.radius * 0.8, -e.radius * 0.3);
+                ctx.lineTo(-e.radius, e.radius * 0.5);
+                ctx.lineTo(-e.radius * 0.4, e.radius);
+                ctx.lineTo(e.radius * 0.4, e.radius);
+                ctx.lineTo(e.radius, e.radius * 0.5);
+                ctx.lineTo(e.radius * 0.8, -e.radius * 0.3);
+                ctx.closePath(); ctx.fill();
+                ctx.strokeStyle = e.color; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#ff4466';
+                ctx.globalAlpha = 0.6 + Math.sin(frame * 0.1) * 0.3;
+                ctx.beginPath(); ctx.arc(0, 5, 10, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#ff0033';
+                ctx.beginPath();
+                ctx.arc(-10, -8, 4, 0, Math.PI * 2);
+                ctx.arc(10, -8, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#662233';
+                ctx.fillRect(-e.radius - 4, -5, 8, 20);
+                ctx.fillRect(e.radius - 4, -5, 8, 20);
+                break;
+        }
     }
     ctx.restore();
 }
 
 function drawBullets() {
     // Player bullets
+    const pbSpr = GameSprites.get('playerBullet');
     for (const b of playerBullets) {
-        drawGlow(b.x, b.y, 8, '#0ff', 0.3);
-        ctx.fillStyle = '#0ff';
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r * 0.5, 0, Math.PI * 2);
-        ctx.fill();
+        if (pbSpr) {
+            ctx.drawImage(pbSpr, b.x - 8, b.y - 8, 16, 16);
+        } else {
+            drawGlow(b.x, b.y, 8, '#0ff', 0.3);
+            ctx.fillStyle = '#0ff';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
+
+    // Enemy bullet sprite lookup
+    const eBulletMap = {
+        '#ff4488': 'eBulletRed',
+        '#ffaa44': 'eBulletOrange',
+        '#cc66ff': 'eBulletPurple',
+        '#6688ff': 'eBulletBlue',
+        '#ff2266': 'eBulletBossA',
+        '#ff4488': 'eBulletRed',
+        '#ff6644': 'eBulletBossC',
+        '#ff2288': 'eBulletBossD'
+    };
 
     // Enemy bullets
     for (const b of enemyBullets) {
         const c = b.color || '#ff4488';
-        drawGlow(b.x, b.y, 10, c, 0.25);
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.globalAlpha = 0.7;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        const ebName = eBulletMap[c];
+        const ebSpr = ebName ? GameSprites.get(ebName) : null;
+        if (ebSpr) {
+            ctx.drawImage(ebSpr, b.x - 10, b.y - 10, 20, 20);
+        } else {
+            drawGlow(b.x, b.y, 10, c, 0.25);
+            ctx.fillStyle = c;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
     }
 }
 
 function drawPowerups() {
+    const puMap = {
+        power: 'powerWeapon',
+        speed: 'powerSpeed',
+        shield: 'powerShield',
+        bomb: 'powerBomb'
+    };
     for (const p of powerups) {
         const pulse = Math.sin(p.timer * 0.15) * 3;
-        let color, label;
+        const puSpr = GameSprites.get(puMap[p.type]);
+        let color;
         switch (p.type) {
-            case 'power': color = '#ff4444'; label = 'P'; break;
-            case 'speed': color = '#44ff44'; label = 'S'; break;
-            case 'shield': color = '#4444ff'; label = 'D'; break;
-            case 'bomb': color = '#ffff44'; label = 'B'; break;
+            case 'power': color = '#ff4444'; break;
+            case 'speed': color = '#44ff44'; break;
+            case 'shield': color = '#4444ff'; break;
+            case 'bomb': color = '#ffff44'; break;
         }
-        drawGlow(p.x, p.y, 16, color, 0.3);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius + pulse, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, p.x, p.y);
+        if (puSpr) {
+            // Animated pulse ring around sprite
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.5 + Math.sin(p.timer * 0.15) * 0.3;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius + pulse + 4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            const sz = 32 + pulse * 0.5;
+            ctx.drawImage(puSpr, p.x - sz / 2, p.y - sz / 2, sz, sz);
+        } else {
+            drawGlow(p.x, p.y, 16, color, 0.3);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius + pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = color;
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            let label;
+            switch (p.type) {
+                case 'power': label = 'P'; break;
+                case 'speed': label = 'S'; break;
+                case 'shield': label = 'D'; break;
+                case 'bomb': label = 'B'; break;
+            }
+            ctx.fillText(label, p.x, p.y);
+        }
     }
 }
 
@@ -1068,26 +1759,24 @@ function drawTitle() {
     ctx.fillText('STAR STRIKER', W / 2, H / 2 - 50);
 
     // Draw demo ship
-    ctx.save();
-    ctx.translate(W / 2, H / 2 + 10);
-    ctx.scale(2, 2);
-    ctx.fillStyle = '#aaddff';
-    ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(-12, 10);
-    ctx.lineTo(-8, 14);
-    ctx.lineTo(8, 14);
-    ctx.lineTo(12, 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#0cf';
-    ctx.beginPath();
-    ctx.moveTo(0, -8);
-    ctx.lineTo(-4, 2);
-    ctx.lineTo(4, 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    const titleSpr = GameSprites.get('player');
+    if (titleSpr) {
+        ctx.drawImage(titleSpr, W / 2 - 48, H / 2 - 38, 96, 96);
+    } else {
+        ctx.save();
+        ctx.translate(W / 2, H / 2 + 10);
+        ctx.scale(2, 2);
+        ctx.fillStyle = '#aaddff';
+        ctx.beginPath();
+        ctx.moveTo(0, -14); ctx.lineTo(-12, 10); ctx.lineTo(-8, 14);
+        ctx.lineTo(8, 14); ctx.lineTo(12, 10);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#0cf';
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(-4, 2); ctx.lineTo(4, 2);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
 
     ctx.fillStyle = '#fff';
     ctx.globalAlpha = 0.5 + Math.sin(frame * 0.08) * 0.5;
@@ -1197,6 +1886,7 @@ function loop() {
     draw();
     requestAnimationFrame(loop);
 }
+GameSprites.init();
 loop();
 </script>
 </body>

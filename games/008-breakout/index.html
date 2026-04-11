@@ -101,6 +101,249 @@ const BRICK_H = 20;
 const BRICK_TOP = 60;
 const BRICK_PAD = 2;
 
+// ===== 스프라이트 에셋 =====
+const GameSprites = (function() {
+  let ballSprite = null;
+  let paddleSprite = null;
+  const brickSprites = {}; // keyed by color
+  let bgSprite = null;
+  let ready = false;
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return c;
+  }
+
+  function buildBall() {
+    const size = BALL_R * 4; // extra room for glow
+    const c = createCanvas(size, size);
+    const g = c.getContext('2d');
+    const cx = size / 2, cy = size / 2;
+
+    // Subtle shadow
+    g.beginPath();
+    g.arc(cx + 1, cy + 1, BALL_R, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(0,0,0,0.4)';
+    g.fill();
+
+    // Outer glow
+    const glow = g.createRadialGradient(cx, cy, BALL_R * 0.2, cx, cy, BALL_R * 1.8);
+    glow.addColorStop(0, 'rgba(255,255,255,0)');
+    glow.addColorStop(0.5, 'rgba(200,220,255,0.08)');
+    glow.addColorStop(1, 'rgba(200,220,255,0)');
+    g.beginPath();
+    g.arc(cx, cy, BALL_R * 1.8, 0, Math.PI * 2);
+    g.fillStyle = glow;
+    g.fill();
+
+    // Main sphere with radial gradient
+    const main = g.createRadialGradient(cx - BALL_R * 0.3, cy - BALL_R * 0.3, BALL_R * 0.1, cx, cy, BALL_R);
+    main.addColorStop(0, '#ffffff');
+    main.addColorStop(0.4, '#ddeeff');
+    main.addColorStop(0.8, '#88aacc');
+    main.addColorStop(1, '#556688');
+    g.beginPath();
+    g.arc(cx, cy, BALL_R, 0, Math.PI * 2);
+    g.fillStyle = main;
+    g.fill();
+
+    // Specular highlight
+    const spec = g.createRadialGradient(cx - BALL_R * 0.3, cy - BALL_R * 0.35, 0, cx - BALL_R * 0.3, cy - BALL_R * 0.35, BALL_R * 0.5);
+    spec.addColorStop(0, 'rgba(255,255,255,0.9)');
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    g.beginPath();
+    g.arc(cx, cy, BALL_R, 0, Math.PI * 2);
+    g.fillStyle = spec;
+    g.fill();
+
+    ballSprite = c;
+  }
+
+  function buildPaddle() {
+    const pad = 6; // extra for glow
+    const w = PADDLE_W + pad * 2;
+    const h = PADDLE_H + pad * 2;
+    const c = createCanvas(w, h);
+    const g = c.getContext('2d');
+    const px = pad, py = pad;
+    const radius = PADDLE_H / 2;
+
+    // Glow
+    g.shadowColor = '#00ffcc';
+    g.shadowBlur = 10;
+
+    // Metallic body gradient
+    const bodyGrad = g.createLinearGradient(px, py, px, py + PADDLE_H);
+    bodyGrad.addColorStop(0, '#44ffdd');
+    bodyGrad.addColorStop(0.15, '#00ffcc');
+    bodyGrad.addColorStop(0.5, '#009980');
+    bodyGrad.addColorStop(0.85, '#00aa88');
+    bodyGrad.addColorStop(1, '#44ffdd');
+    g.fillStyle = bodyGrad;
+    g.beginPath();
+    g.roundRect(px, py, PADDLE_W, PADDLE_H, radius);
+    g.fill();
+    g.shadowBlur = 0;
+
+    // Top highlight (glossy reflection)
+    const hlGrad = g.createLinearGradient(px, py, px, py + PADDLE_H * 0.45);
+    hlGrad.addColorStop(0, 'rgba(255,255,255,0.5)');
+    hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = hlGrad;
+    g.beginPath();
+    g.roundRect(px + 2, py + 1, PADDLE_W - 4, PADDLE_H * 0.45, [radius, radius, 2, 2]);
+    g.fill();
+
+    // Edge highlights (left & right rounded ends)
+    const edgeL = g.createRadialGradient(px + radius, py + PADDLE_H / 2, 0, px + radius, py + PADDLE_H / 2, radius);
+    edgeL.addColorStop(0, 'rgba(255,255,255,0.25)');
+    edgeL.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = edgeL;
+    g.fillRect(px, py, radius * 2, PADDLE_H);
+
+    const edgeR = g.createRadialGradient(px + PADDLE_W - radius, py + PADDLE_H / 2, 0, px + PADDLE_W - radius, py + PADDLE_H / 2, radius);
+    edgeR.addColorStop(0, 'rgba(255,255,255,0.25)');
+    edgeR.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = edgeR;
+    g.fillRect(px + PADDLE_W - radius * 2, py, radius * 2, PADDLE_H);
+
+    paddleSprite = c;
+  }
+
+  function buildBrick(color) {
+    const bw = Math.ceil(BRICK_W - BRICK_PAD * 2);
+    const bh = BRICK_H - BRICK_PAD;
+    const c = createCanvas(bw, bh);
+    const g = c.getContext('2d');
+
+    // Parse color for manipulation
+    const tempC = document.createElement('canvas').getContext('2d');
+    tempC.fillStyle = color;
+    const hex = tempC.fillStyle; // normalized to #rrggbb
+
+    // Base fill gradient (3D bevel - lighter top, darker bottom)
+    const baseGrad = g.createLinearGradient(0, 0, 0, bh);
+    baseGrad.addColorStop(0, lighten(hex, 30));
+    baseGrad.addColorStop(0.15, lighten(hex, 15));
+    baseGrad.addColorStop(0.5, hex);
+    baseGrad.addColorStop(0.85, darken(hex, 15));
+    baseGrad.addColorStop(1, darken(hex, 30));
+    g.fillStyle = baseGrad;
+    g.fillRect(0, 0, bw, bh);
+
+    // Top bevel highlight
+    g.fillStyle = 'rgba(255,255,255,0.25)';
+    g.fillRect(0, 0, bw, 2);
+
+    // Left bevel highlight
+    g.fillStyle = 'rgba(255,255,255,0.15)';
+    g.fillRect(0, 0, 2, bh);
+
+    // Bottom bevel shadow
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    g.fillRect(0, bh - 2, bw, 2);
+
+    // Right bevel shadow
+    g.fillStyle = 'rgba(0,0,0,0.15)';
+    g.fillRect(bw - 2, 0, 2, bh);
+
+    // Inner highlight (gloss)
+    const innerGrad = g.createLinearGradient(0, 2, 0, bh * 0.5);
+    innerGrad.addColorStop(0, 'rgba(255,255,255,0.3)');
+    innerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = innerGrad;
+    g.fillRect(3, 2, bw - 6, bh * 0.4);
+
+    // Subtle border
+    g.strokeStyle = 'rgba(255,255,255,0.15)';
+    g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, bw - 1, bh - 1);
+
+    return c;
+  }
+
+  function buildBackground() {
+    const c = createCanvas(W, H);
+    const g = c.getContext('2d');
+
+    // Base color
+    g.fillStyle = '#0d0520';
+    g.fillRect(0, 0, W, H);
+
+    // Starfield
+    const starCount = 120;
+    for (let i = 0; i < starCount; i++) {
+      const sx = Math.random() * W;
+      const sy = Math.random() * H;
+      const sr = Math.random() * 1.2 + 0.3;
+      const brightness = Math.random() * 0.5 + 0.2;
+
+      const starGrad = g.createRadialGradient(sx, sy, 0, sx, sy, sr * 2);
+      starGrad.addColorStop(0, `rgba(200,210,255,${brightness})`);
+      starGrad.addColorStop(1, 'rgba(200,210,255,0)');
+      g.fillStyle = starGrad;
+      g.beginPath();
+      g.arc(sx, sy, sr * 2, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // Subtle nebula patches
+    for (let i = 0; i < 3; i++) {
+      const nx = Math.random() * W;
+      const ny = Math.random() * H;
+      const nr = 80 + Math.random() * 120;
+      const colors = ['20,10,60','40,5,50','10,20,50'];
+      const nebula = g.createRadialGradient(nx, ny, 0, nx, ny, nr);
+      nebula.addColorStop(0, `rgba(${colors[i]},0.15)`);
+      nebula.addColorStop(1, `rgba(${colors[i]},0)`);
+      g.fillStyle = nebula;
+      g.beginPath();
+      g.arc(nx, ny, nr, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    bgSprite = c;
+  }
+
+  // Color helpers
+  function parseHex(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b];
+  }
+  function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+  function lighten(hex, pct) {
+    const [r, g, b] = parseHex(hex);
+    const f = pct / 100;
+    return `rgb(${clamp(r + (255 - r) * f)},${clamp(g + (255 - g) * f)},${clamp(b + (255 - b) * f)})`;
+  }
+  function darken(hex, pct) {
+    const [r, g, b] = parseHex(hex);
+    const f = 1 - pct / 100;
+    return `rgb(${clamp(r * f)},${clamp(g * f)},${clamp(b * f)})`;
+  }
+
+  return {
+    init: function() {
+      buildBall();
+      buildPaddle();
+      buildBackground();
+      BRICK_COLORS.forEach(color => {
+        brickSprites[color] = buildBrick(color);
+      });
+      ready = true;
+    },
+    isReady: function() { return ready; },
+    getBall: function() { return ballSprite; },
+    getPaddle: function() { return paddleSprite; },
+    getBrick: function(color) { return brickSprites[color] || null; },
+    getBackground: function() { return bgSprite; }
+  };
+})();
+
 const BRICK_COLORS = ['#ff6b6b','#ffa06b','#ffd93d','#6bcb77','#4ecdc4','#45b7d1','#a06bff'];
 
 let paddle, ball, bricks, score, lives, level, gameState;
@@ -153,22 +396,42 @@ function resetBall() {
 
 // ===== 렌더링 =====
 function draw() {
-  ctx.fillStyle = '#0d0520';
-  ctx.fillRect(0, 0, W, H);
+  // Background: sprite or fallback
+  const bgImg = GameSprites.isReady() && GameSprites.getBackground();
+  if (bgImg) {
+    ctx.drawImage(bgImg, 0, 0);
+  } else {
+    ctx.fillStyle = '#0d0520';
+    ctx.fillRect(0, 0, W, H);
+  }
 
   // 벽돌
   bricks.forEach(b => {
     if (!b.alive) return;
     const alpha = b.hp / b.maxHp;
-    ctx.fillStyle = b.color;
-    ctx.globalAlpha = 0.4 + alpha * 0.6;
+    const brickImg = GameSprites.isReady() && GameSprites.getBrick(b.color);
 
-    // 글로우
-    ctx.shadowColor = b.color;
-    ctx.shadowBlur = 8;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
+    if (brickImg) {
+      ctx.globalAlpha = 0.4 + alpha * 0.6;
+      // Glow behind brick
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 8;
+      ctx.drawImage(brickImg, b.x, b.y, b.w, b.h);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    } else {
+      // Fallback: original flat rendering
+      ctx.fillStyle = b.color;
+      ctx.globalAlpha = 0.4 + alpha * 0.6;
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 8;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+    }
 
     // hp 표시 (2이상일 때)
     if (b.hp >= 2) {
@@ -177,33 +440,41 @@ function draw() {
       ctx.textAlign = 'center';
       ctx.fillText(b.hp, b.x + b.w/2, b.y + b.h/2 + 4);
     }
-
-    // 테두리
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
   });
 
   // 패들
-  const paddleGrad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + PADDLE_H);
-  paddleGrad.addColorStop(0, '#00ffcc');
-  paddleGrad.addColorStop(1, '#00aa88');
-  ctx.fillStyle = paddleGrad;
-  ctx.shadowColor = '#00ffcc';
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.roundRect(paddle.x, paddle.y, paddle.w, PADDLE_H, 4);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  const paddleImg = GameSprites.isReady() && GameSprites.getPaddle();
+  if (paddleImg) {
+    const padX = 6; // padding used in sprite
+    ctx.drawImage(paddleImg, paddle.x - padX, paddle.y - padX);
+  } else {
+    // Fallback: original rendering
+    const paddleGrad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + PADDLE_H);
+    paddleGrad.addColorStop(0, '#00ffcc');
+    paddleGrad.addColorStop(1, '#00aa88');
+    ctx.fillStyle = paddleGrad;
+    ctx.shadowColor = '#00ffcc';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.roundRect(paddle.x, paddle.y, paddle.w, PADDLE_H, 4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
 
   // 공
-  ctx.fillStyle = '#fff';
-  ctx.shadowColor = '#fff';
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  const ballImg = GameSprites.isReady() && GameSprites.getBall();
+  if (ballImg) {
+    ctx.drawImage(ballImg, ball.x - ballImg.width / 2, ball.y - ballImg.height / 2);
+  } else {
+    // Fallback: original rendering
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
 
   // 공 궤적
   if (ball.launched) {
@@ -358,6 +629,8 @@ canvas.addEventListener('touchstart', (e) => {
   if (!ball.launched && gameState === 'playing') ball.launched = true;
   movePaddle(e.touches[0].clientX);
 }, { passive: true });
+
+GameSprites.init();
 
 startBtn.addEventListener('click', () => {
   init();

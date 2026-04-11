@@ -138,6 +138,606 @@ const COLS = 15, ROWS = 12, CELL = 40;
 canvas.width = COLS * CELL;
 canvas.height = ROWS * CELL;
 
+// ===== Canvas Sprite Assets =====
+const GameSprites = (function() {
+  const sprites = {};
+  const ready = { value: false };
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  // ----- Towers -----
+  function drawArcherTower(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Wooden base
+    x.fillStyle = '#8B6914';
+    x.fillRect(mid - size*0.3, mid - size*0.25, size*0.6, size*0.5);
+    // Lighter wood planks
+    x.fillStyle = '#A07828';
+    x.fillRect(mid - size*0.25, mid - size*0.2, size*0.5, size*0.15);
+    x.fillRect(mid - size*0.25, mid + size*0.05, size*0.5, size*0.15);
+    // Roof (triangle)
+    x.fillStyle = '#5C3D10';
+    x.beginPath();
+    x.moveTo(mid - size*0.35, mid - size*0.25);
+    x.lineTo(mid, mid - size*0.48);
+    x.lineTo(mid + size*0.35, mid - size*0.25);
+    x.closePath();
+    x.fill();
+    // Bow
+    x.strokeStyle = '#C8A84E';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.arc(mid + size*0.1, mid - size*0.05, size*0.22, -Math.PI*0.6, Math.PI*0.6);
+    x.stroke();
+    // Bowstring
+    x.strokeStyle = '#E8D8A8';
+    x.lineWidth = 1;
+    x.beginPath();
+    x.moveTo(mid + size*0.1 + size*0.22*Math.cos(-Math.PI*0.6), mid - size*0.05 + size*0.22*Math.sin(-Math.PI*0.6));
+    x.lineTo(mid + size*0.1 + size*0.22*Math.cos(Math.PI*0.6), mid - size*0.05 + size*0.22*Math.sin(Math.PI*0.6));
+    x.stroke();
+    return c;
+  }
+
+  function drawMagicTower(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Crystal base
+    x.fillStyle = '#4A2A6A';
+    x.fillRect(mid - size*0.22, mid + size*0.05, size*0.44, size*0.25);
+    // Crystal body (hexagonal)
+    const grad = x.createLinearGradient(mid - size*0.2, mid - size*0.4, mid + size*0.2, mid + size*0.1);
+    grad.addColorStop(0, '#D08CF0');
+    grad.addColorStop(0.5, '#9B4DCA');
+    grad.addColorStop(1, '#6B2FA0');
+    x.fillStyle = grad;
+    x.beginPath();
+    x.moveTo(mid, mid - size*0.45);
+    x.lineTo(mid + size*0.22, mid - size*0.2);
+    x.lineTo(mid + size*0.22, mid + size*0.1);
+    x.lineTo(mid, mid + size*0.2);
+    x.lineTo(mid - size*0.22, mid + size*0.1);
+    x.lineTo(mid - size*0.22, mid - size*0.2);
+    x.closePath();
+    x.fill();
+    // Glow effect
+    x.shadowColor = '#C070FF';
+    x.shadowBlur = 10;
+    x.fillStyle = 'rgba(200,130,255,0.5)';
+    x.beginPath();
+    x.arc(mid, mid - size*0.1, size*0.12, 0, Math.PI*2);
+    x.fill();
+    x.shadowBlur = 0;
+    // Inner shine
+    x.fillStyle = 'rgba(255,220,255,0.6)';
+    x.beginPath();
+    x.arc(mid - size*0.05, mid - size*0.2, size*0.05, 0, Math.PI*2);
+    x.fill();
+    return c;
+  }
+
+  function drawCannonTower(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Metal base platform
+    x.fillStyle = '#555';
+    x.fillRect(mid - size*0.3, mid + size*0.1, size*0.6, size*0.2);
+    // Rivets
+    x.fillStyle = '#888';
+    [[-0.22, 0.18], [0.22, 0.18]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, 2, 0, Math.PI*2); x.fill();
+    });
+    // Barrel body
+    const bg = x.createLinearGradient(mid, mid - size*0.15, mid, mid + size*0.15);
+    bg.addColorStop(0, '#888');
+    bg.addColorStop(0.5, '#666');
+    bg.addColorStop(1, '#444');
+    x.fillStyle = bg;
+    x.beginPath();
+    x.ellipse(mid, mid - size*0.05, size*0.18, size*0.22, 0, 0, Math.PI*2);
+    x.fill();
+    // Barrel opening
+    x.fillStyle = '#333';
+    x.save();
+    x.translate(mid + size*0.12, mid - size*0.18);
+    x.rotate(Math.PI*0.25);
+    x.fillRect(-size*0.06, -size*0.2, size*0.12, size*0.25);
+    // Dark bore
+    x.fillStyle = '#111';
+    x.beginPath();
+    x.arc(0, -size*0.2, size*0.04, 0, Math.PI*2);
+    x.fill();
+    x.restore();
+    // Metal band
+    x.strokeStyle = '#999';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.ellipse(mid, mid - size*0.05, size*0.2, size*0.24, 0, 0, Math.PI*2);
+    x.stroke();
+    return c;
+  }
+
+  function drawSniperTower(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Tall base
+    x.fillStyle = '#3A3A5A';
+    x.fillRect(mid - size*0.15, mid - size*0.1, size*0.3, size*0.4);
+    // Platform top
+    x.fillStyle = '#4A4A6A';
+    x.fillRect(mid - size*0.25, mid - size*0.15, size*0.5, size*0.1);
+    // Scope/rifle barrel
+    x.strokeStyle = '#C060E0';
+    x.lineWidth = 3;
+    x.beginPath();
+    x.moveTo(mid - size*0.15, mid - size*0.2);
+    x.lineTo(mid + size*0.3, mid - size*0.35);
+    x.stroke();
+    // Scope lens
+    x.fillStyle = '#E060FF';
+    x.shadowColor = '#E060FF';
+    x.shadowBlur = 6;
+    x.beginPath();
+    x.arc(mid + size*0.3, mid - size*0.35, size*0.06, 0, Math.PI*2);
+    x.fill();
+    x.shadowBlur = 0;
+    // Crosshair
+    x.strokeStyle = '#FF90FF';
+    x.lineWidth = 1;
+    x.beginPath();
+    x.moveTo(mid + size*0.3 - size*0.09, mid - size*0.35);
+    x.lineTo(mid + size*0.3 + size*0.09, mid - size*0.35);
+    x.moveTo(mid + size*0.3, mid - size*0.35 - size*0.09);
+    x.lineTo(mid + size*0.3, mid - size*0.35 + size*0.09);
+    x.stroke();
+    return c;
+  }
+
+  // ----- Enemies -----
+  function drawGoblin(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Body
+    x.fillStyle = '#D04040';
+    x.beginPath();
+    x.arc(mid, mid + size*0.05, size*0.35, 0, Math.PI*2);
+    x.fill();
+    // Ears
+    x.fillStyle = '#C03030';
+    [[-0.3, -0.2], [0.3, -0.2]].forEach(([ox, oy]) => {
+      x.beginPath();
+      x.moveTo(mid + size*ox, mid + size*oy);
+      x.lineTo(mid + size*ox*1.5, mid + size*oy - size*0.2);
+      x.lineTo(mid + size*ox*0.5, mid + size*oy);
+      x.closePath();
+      x.fill();
+    });
+    // Eyes
+    x.fillStyle = '#FFE060';
+    [[-0.12, -0.05], [0.12, -0.05]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.07, 0, Math.PI*2); x.fill();
+    });
+    x.fillStyle = '#111';
+    [[-0.12, -0.05], [0.12, -0.05]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.03, 0, Math.PI*2); x.fill();
+    });
+    return c;
+  }
+
+  function drawWolf(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Body (elongated)
+    x.fillStyle = '#D4A020';
+    x.beginPath();
+    x.ellipse(mid, mid + size*0.05, size*0.38, size*0.25, 0, 0, Math.PI*2);
+    x.fill();
+    // Ears (pointed)
+    x.fillStyle = '#C09018';
+    [[-0.2, -0.15], [0.2, -0.15]].forEach(([ox, oy]) => {
+      x.beginPath();
+      x.moveTo(mid + size*ox - size*0.06, mid + size*oy);
+      x.lineTo(mid + size*ox, mid + size*oy - size*0.22);
+      x.lineTo(mid + size*ox + size*0.06, mid + size*oy);
+      x.closePath();
+      x.fill();
+    });
+    // Snout
+    x.fillStyle = '#B88010';
+    x.beginPath();
+    x.ellipse(mid, mid + size*0.15, size*0.12, size*0.08, 0, 0, Math.PI*2);
+    x.fill();
+    // Eyes
+    x.fillStyle = '#FF3030';
+    [[-0.12, -0.02], [0.12, -0.02]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.05, 0, Math.PI*2); x.fill();
+    });
+    return c;
+  }
+
+  function drawTank(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Armor body
+    x.fillStyle = '#7040B0';
+    x.beginPath();
+    x.moveTo(mid, mid - size*0.4);
+    x.lineTo(mid + size*0.35, mid - size*0.1);
+    x.lineTo(mid + size*0.3, mid + size*0.35);
+    x.lineTo(mid - size*0.3, mid + size*0.35);
+    x.lineTo(mid - size*0.35, mid - size*0.1);
+    x.closePath();
+    x.fill();
+    // Armor plates
+    x.strokeStyle = '#9060D0';
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.moveTo(mid - size*0.25, mid); x.lineTo(mid + size*0.25, mid);
+    x.moveTo(mid - size*0.2, mid + size*0.18); x.lineTo(mid + size*0.2, mid + size*0.18);
+    x.stroke();
+    // Helmet visor
+    x.fillStyle = '#200840';
+    x.fillRect(mid - size*0.18, mid - size*0.15, size*0.36, size*0.1);
+    // Eyes behind visor
+    x.fillStyle = '#FF4040';
+    [[-0.08, -0.1], [0.08, -0.1]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.03, 0, Math.PI*2); x.fill();
+    });
+    // Shield emblem
+    x.fillStyle = '#A070E0';
+    x.beginPath();
+    x.arc(mid, mid + size*0.08, size*0.06, 0, Math.PI*2);
+    x.fill();
+    return c;
+  }
+
+  function drawFlying(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Wings
+    x.fillStyle = '#606080';
+    // Left wing
+    x.beginPath();
+    x.moveTo(mid - size*0.05, mid);
+    x.quadraticCurveTo(mid - size*0.45, mid - size*0.4, mid - size*0.4, mid - size*0.1);
+    x.quadraticCurveTo(mid - size*0.25, mid + size*0.05, mid - size*0.05, mid);
+    x.fill();
+    // Right wing
+    x.beginPath();
+    x.moveTo(mid + size*0.05, mid);
+    x.quadraticCurveTo(mid + size*0.45, mid - size*0.4, mid + size*0.4, mid - size*0.1);
+    x.quadraticCurveTo(mid + size*0.25, mid + size*0.05, mid + size*0.05, mid);
+    x.fill();
+    // Body
+    x.fillStyle = '#404060';
+    x.beginPath();
+    x.ellipse(mid, mid + size*0.05, size*0.1, size*0.2, 0, 0, Math.PI*2);
+    x.fill();
+    // Eyes
+    x.fillStyle = '#FF6060';
+    [[-0.05, -0.05], [0.05, -0.05]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.03, 0, Math.PI*2); x.fill();
+    });
+    // Ears
+    x.fillStyle = '#505070';
+    [[-0.08, -0.15], [0.08, -0.15]].forEach(([ox, oy]) => {
+      x.beginPath();
+      x.moveTo(mid + size*ox - size*0.04, mid + size*oy + size*0.05);
+      x.lineTo(mid + size*ox, mid + size*oy - size*0.1);
+      x.lineTo(mid + size*ox + size*0.04, mid + size*oy + size*0.05);
+      x.closePath();
+      x.fill();
+    });
+    return c;
+  }
+
+  function drawBoss(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Aura
+    const ag = x.createRadialGradient(mid, mid, size*0.15, mid, mid, size*0.48);
+    ag.addColorStop(0, 'rgba(255,50,50,0.3)');
+    ag.addColorStop(1, 'rgba(255,50,50,0)');
+    x.fillStyle = ag;
+    x.fillRect(0, 0, size, size);
+    // Body
+    x.fillStyle = '#CC2020';
+    x.beginPath();
+    x.arc(mid, mid, size*0.35, 0, Math.PI*2);
+    x.fill();
+    // Crown/horns
+    x.fillStyle = '#FFD700';
+    [[-0.2, -0.3], [0, -0.4], [0.2, -0.3]].forEach(([ox, oy]) => {
+      x.beginPath();
+      x.moveTo(mid + size*ox - size*0.05, mid + size*oy + size*0.12);
+      x.lineTo(mid + size*ox, mid + size*oy);
+      x.lineTo(mid + size*ox + size*0.05, mid + size*oy + size*0.12);
+      x.closePath();
+      x.fill();
+    });
+    // Face
+    x.fillStyle = '#FF4040';
+    x.beginPath();
+    x.ellipse(mid, mid + size*0.05, size*0.25, size*0.2, 0, 0, Math.PI*2);
+    x.fill();
+    // Eyes
+    x.fillStyle = '#FFE000';
+    x.shadowColor = '#FFE000';
+    x.shadowBlur = 6;
+    [[-0.1, -0.02], [0.1, -0.02]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.06, 0, Math.PI*2); x.fill();
+    });
+    x.shadowBlur = 0;
+    x.fillStyle = '#111';
+    [[-0.1, -0.02], [0.1, -0.02]].forEach(([ox, oy]) => {
+      x.beginPath(); x.arc(mid + size*ox, mid + size*oy, size*0.03, 0, Math.PI*2); x.fill();
+    });
+    // Mouth
+    x.strokeStyle = '#800000';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.arc(mid, mid + size*0.12, size*0.1, 0.1, Math.PI - 0.1);
+    x.stroke();
+    // Gold outline
+    x.strokeStyle = '#FFD700';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.arc(mid, mid, size*0.37, 0, Math.PI*2);
+    x.stroke();
+    return c;
+  }
+
+  // ----- Projectiles -----
+  function drawArrow(w, h) {
+    const c = createCanvas(w, h);
+    const x = c.getContext('2d');
+    // Shaft
+    x.fillStyle = '#A08040';
+    x.fillRect(2, h/2 - 1, w - 6, 2);
+    // Arrowhead
+    x.fillStyle = '#C0C0C0';
+    x.beginPath();
+    x.moveTo(w, h/2);
+    x.lineTo(w - 5, h/2 - 3);
+    x.lineTo(w - 5, h/2 + 3);
+    x.closePath();
+    x.fill();
+    // Fletching
+    x.fillStyle = '#4ade80';
+    x.beginPath();
+    x.moveTo(2, h/2 - 1); x.lineTo(0, h/2 - 4); x.lineTo(4, h/2 - 1);
+    x.closePath(); x.fill();
+    x.beginPath();
+    x.moveTo(2, h/2 + 1); x.lineTo(0, h/2 + 4); x.lineTo(4, h/2 + 1);
+    x.closePath(); x.fill();
+    return c;
+  }
+
+  function drawMagicBolt(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Outer glow
+    const g = x.createRadialGradient(mid, mid, 0, mid, mid, mid);
+    g.addColorStop(0, 'rgba(100,180,255,0.9)');
+    g.addColorStop(0.5, 'rgba(56,189,248,0.5)');
+    g.addColorStop(1, 'rgba(56,189,248,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, size, size);
+    // Core
+    x.fillStyle = '#fff';
+    x.beginPath();
+    x.arc(mid, mid, size*0.15, 0, Math.PI*2);
+    x.fill();
+    return c;
+  }
+
+  function drawCannonball(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Ball
+    const g = x.createRadialGradient(mid - size*0.1, mid - size*0.1, 0, mid, mid, size*0.4);
+    g.addColorStop(0, '#888');
+    g.addColorStop(1, '#333');
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(mid, mid, size*0.35, 0, Math.PI*2);
+    x.fill();
+    // Fuse spark
+    x.fillStyle = '#FF8800';
+    x.shadowColor = '#FF8800';
+    x.shadowBlur = 4;
+    x.beginPath();
+    x.arc(mid + size*0.2, mid - size*0.2, size*0.1, 0, Math.PI*2);
+    x.fill();
+    x.shadowBlur = 0;
+    return c;
+  }
+
+  function drawSniperBolt(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    const g = x.createRadialGradient(mid, mid, 0, mid, mid, mid);
+    g.addColorStop(0, 'rgba(232,121,249,1)');
+    g.addColorStop(0.4, 'rgba(200,80,230,0.6)');
+    g.addColorStop(1, 'rgba(200,80,230,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, size, size);
+    x.fillStyle = '#fff';
+    x.beginPath();
+    x.arc(mid, mid, size*0.12, 0, Math.PI*2);
+    x.fill();
+    return c;
+  }
+
+  // ----- Tiles -----
+  function drawPathTile(size) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    // Base dirt
+    x.fillStyle = '#B89860';
+    x.fillRect(0, 0, size, size);
+    // Texture noise
+    const rng = (seed) => { let s = seed; return () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; }; };
+    const rand = rng(42);
+    for (let i = 0; i < 20; i++) {
+      const px = rand() * size;
+      const py = rand() * size;
+      const tone = Math.floor(rand() * 40) - 20;
+      x.fillStyle = `rgb(${164+tone},${136+tone},${80+tone})`;
+      x.fillRect(px, py, 2 + rand()*3, 2 + rand()*3);
+    }
+    // Small pebbles
+    x.fillStyle = '#9A8060';
+    for (let i = 0; i < 4; i++) {
+      x.beginPath();
+      x.arc(rand()*size, rand()*size, 1 + rand()*2, 0, Math.PI*2);
+      x.fill();
+    }
+    // Edge darkening
+    x.strokeStyle = 'rgba(0,0,0,0.15)';
+    x.lineWidth = 2;
+    x.strokeRect(1, 1, size-2, size-2);
+    return c;
+  }
+
+  function drawGrassTile(size, variant) {
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const seed = variant || 0;
+    const rng = (s) => { let v = s + 1; return () => { v = (v * 16807 + 0) % 2147483647; return v / 2147483647; }; };
+    const rand = rng(seed * 137);
+    // Base green
+    const g = 100 + (seed % 3) * 8;
+    x.fillStyle = `rgb(${35 + (seed%2)*5},${g},${30 + (seed%3)*4})`;
+    x.fillRect(0, 0, size, size);
+    // Grass blades
+    for (let i = 0; i < 12; i++) {
+      const bx = rand() * size;
+      const by = rand() * size;
+      const tone = Math.floor(rand() * 30) - 10;
+      x.strokeStyle = `rgb(${40+tone},${110+tone},${35+tone})`;
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(bx, by);
+      x.lineTo(bx + (rand()-0.5)*4, by - 3 - rand()*4);
+      x.stroke();
+    }
+    // Light speckles
+    x.fillStyle = 'rgba(100,180,80,0.3)';
+    for (let i = 0; i < 5; i++) {
+      x.beginPath();
+      x.arc(rand()*size, rand()*size, 1 + rand(), 0, Math.PI*2);
+      x.fill();
+    }
+    return c;
+  }
+
+  // ----- UI elements -----
+  function drawRangeCircle(radius) {
+    const size = radius * 2 + 4;
+    const c = createCanvas(size, size);
+    const x = c.getContext('2d');
+    const mid = size / 2;
+    // Dashed circle with gradient
+    x.strokeStyle = 'rgba(255,255,255,0.25)';
+    x.lineWidth = 1.5;
+    x.setLineDash([4, 4]);
+    x.beginPath();
+    x.arc(mid, mid, radius, 0, Math.PI*2);
+    x.stroke();
+    x.setLineDash([]);
+    // Faint fill
+    const g = x.createRadialGradient(mid, mid, 0, mid, mid, radius);
+    g.addColorStop(0, 'rgba(255,255,255,0.03)');
+    g.addColorStop(1, 'rgba(255,255,255,0.01)');
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(mid, mid, radius, 0, Math.PI*2);
+    x.fill();
+    return c;
+  }
+
+  function init() {
+    const tSize = CELL + 4; // tower sprite slightly larger than cell
+    const eSmall = 20, eMed = 28, eLarge = 36, eBoss = 44;
+
+    sprites.towers = {
+      archer:  drawArcherTower(tSize),
+      cannon:  drawCannonTower(tSize),
+      freeze:  drawMagicTower(tSize),  // freeze uses crystal/magic look
+      sniper:  drawSniperTower(tSize)
+    };
+
+    sprites.enemies = {
+      normal: drawGoblin(eSmall),
+      fast:   drawWolf(eMed),
+      tank:   drawTank(eLarge),
+      boss:   drawBoss(eBoss)
+    };
+
+    sprites.projectiles = {
+      archer:  drawArrow(14, 8),
+      cannon:  drawCannonball(12),
+      freeze:  drawMagicBolt(14),
+      sniper:  drawSniperBolt(14)
+    };
+
+    sprites.pathTile = drawPathTile(CELL);
+
+    sprites.grass = [];
+    for (let i = 0; i < 6; i++) {
+      sprites.grass.push(drawGrassTile(CELL, i));
+    }
+
+    // Pre-generate range circle cache for common sizes
+    sprites.rangeCircles = {};
+
+    ready.value = true;
+  }
+
+  function getRangeCircle(radius) {
+    const key = Math.round(radius);
+    if (!sprites.rangeCircles[key]) {
+      sprites.rangeCircles[key] = drawRangeCircle(radius);
+    }
+    return sprites.rangeCircles[key];
+  }
+
+  return {
+    init,
+    get: (category, type) => {
+      if (!ready.value) return null;
+      if (type !== undefined) {
+        return sprites[category] ? sprites[category][type] || null : null;
+      }
+      return sprites[category] || null;
+    },
+    getGrass: (col, row) => {
+      if (!ready.value || !sprites.grass) return null;
+      return sprites.grass[(col * 7 + row * 13) % sprites.grass.length];
+    },
+    getRangeCircle,
+    isReady: () => ready.value
+  };
+})();
+
 const goldEl = document.getElementById('gold');
 const waveEl = document.getElementById('wave');
 const hpEl = document.getElementById('hp');
@@ -341,7 +941,8 @@ function updateTowers() {
         speed: t.projSpeed,
         color: t.projColor,
         splash: t.splash,
-        slow: t.slow
+        slow: t.slow,
+        towerType: t.type
       });
     }
   });
@@ -395,18 +996,47 @@ function draw() {
   ctx.fillStyle = '#2d5a27';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  const useSprites = GameSprites.isReady();
+
+  // 잔디 배경 타일
+  if (useSprites) {
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        if (!pathSet.has(`${c},${r}`)) {
+          const grassTile = GameSprites.getGrass(c, r);
+          if (grassTile) {
+            ctx.drawImage(grassTile, c * CELL, r * CELL);
+          }
+        }
+      }
+    }
+  }
+
   // 경로
   PATH.forEach(([c, r]) => {
-    ctx.fillStyle = '#c4a96a';
-    ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 4, CELL - 4);
+    const pathSprite = useSprites ? GameSprites.get('pathTile') : null;
+    if (pathSprite) {
+      ctx.drawImage(pathSprite, c * CELL, r * CELL);
+    } else {
+      ctx.fillStyle = '#c4a96a';
+      ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 4, CELL - 4);
+    }
   });
 
   // 시작/끝 마커
-  ctx.fillStyle = '#00ff00';
+  ctx.fillStyle = 'rgba(0,255,0,0.35)';
   ctx.fillRect(PATH[0][0] * CELL, PATH[0][1] * CELL, CELL, CELL);
-  ctx.fillStyle = '#ff0000';
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('START', PATH[0][0] * CELL + CELL/2, PATH[0][1] * CELL + CELL/2);
   const last = PATH[PATH.length - 1];
+  ctx.fillStyle = 'rgba(255,0,0,0.35)';
   ctx.fillRect(last[0] * CELL, last[1] * CELL, CELL, CELL);
+  ctx.fillStyle = '#ff4444';
+  ctx.fillText('END', last[0] * CELL + CELL/2, last[1] * CELL + CELL/2);
+  ctx.textBaseline = 'alphabetic';
 
   // 그리드 (은은하게)
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -421,64 +1051,121 @@ function draw() {
 
     // 선택된 타워 사거리 표시
     if (selectedTower === t) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, t.range * CELL, 0, Math.PI * 2);
-      ctx.stroke();
+      const rangePixels = Math.round(t.range * CELL);
+      if (useSprites) {
+        const rangeSprite = GameSprites.getRangeCircle(rangePixels);
+        if (rangeSprite) {
+          ctx.drawImage(rangeSprite, cx - rangeSprite.width/2, cy - rangeSprite.height/2);
+        }
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rangePixels, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     // 타워 본체
-    ctx.fillStyle = t.color;
-    ctx.shadowColor = t.color;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    const towerSprite = useSprites ? GameSprites.get('towers', t.type) : null;
+    if (towerSprite) {
+      ctx.drawImage(towerSprite, cx - towerSprite.width/2, cy - towerSprite.height/2);
+    } else {
+      ctx.fillStyle = t.color;
+      ctx.shadowColor = t.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
     // 레벨 표시
     if (t.level > 1) {
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = '#ffd700';
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 4;
       ctx.font = 'bold 10px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('★'.repeat(t.level - 1), cx, cy + 4);
+      ctx.fillText('★'.repeat(t.level - 1), cx, cy + CELL/2 - 2);
+      ctx.shadowBlur = 0;
     }
   });
 
   // 적
   enemies.forEach(e => {
-    // HP바
-    const barW = e.radius * 2;
+    // HP바 배경
+    const barW = Math.max(e.radius * 2.5, 16);
     const hpRatio = e.hp / e.maxHp;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(e.x - barW/2 - 1, e.y - e.radius - 10, barW + 2, 6);
     ctx.fillStyle = '#333';
-    ctx.fillRect(e.x - barW/2, e.y - e.radius - 8, barW, 4);
+    ctx.fillRect(e.x - barW/2, e.y - e.radius - 9, barW, 4);
     ctx.fillStyle = hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#fbbf24' : '#ef4444';
-    ctx.fillRect(e.x - barW/2, e.y - e.radius - 8, barW * hpRatio, 4);
+    ctx.fillRect(e.x - barW/2, e.y - e.radius - 9, barW * hpRatio, 4);
 
     // 본체
-    ctx.fillStyle = e.slowTimer > 0 ? '#88ccff' : e.color;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 보스 외곽선
-    if (e.type === 'boss') {
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    const enemySprite = useSprites ? GameSprites.get('enemies', e.type) : null;
+    if (enemySprite) {
+      ctx.save();
+      // Tint blue if slowed
+      if (e.slowTimer > 0) {
+        ctx.globalAlpha = 0.7;
+        ctx.drawImage(enemySprite, e.x - enemySprite.width/2, e.y - enemySprite.height/2);
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#88ccff';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius + 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      } else {
+        ctx.drawImage(enemySprite, e.x - enemySprite.width/2, e.y - enemySprite.height/2);
+      }
+      ctx.restore();
+    } else {
+      ctx.fillStyle = e.slowTimer > 0 ? '#88ccff' : e.color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.fill();
+      if (e.type === 'boss') {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
     }
   });
 
   // 투사체
   projectiles.forEach(p => {
-    ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    const projSprite = useSprites ? GameSprites.get('projectiles', p.towerType) : null;
+    if (projSprite) {
+      ctx.save();
+      // Rotate projectile toward target
+      if (p.target) {
+        const angle = Math.atan2(p.target.y - p.y, p.target.x - p.x);
+        ctx.translate(p.x, p.y);
+        ctx.rotate(angle);
+        ctx.drawImage(projSprite, -projSprite.width/2, -projSprite.height/2);
+      } else {
+        ctx.drawImage(projSprite, p.x - projSprite.width/2, p.y - projSprite.height/2);
+      }
+      ctx.restore();
+      // Trail effect
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
   });
 
   // 배치 미리보기
@@ -488,14 +1175,34 @@ function draw() {
     const cy = hoverCell.row * CELL + CELL/2;
     const canPlace = canPlaceTower(hoverCell.col, hoverCell.row);
 
+    // Range circle
+    const rangePixels = Math.round(data.range * CELL);
+    if (useSprites) {
+      ctx.globalAlpha = canPlace ? 0.5 : 0.3;
+      const rangeSprite = GameSprites.getRangeCircle(rangePixels);
+      if (rangeSprite) {
+        ctx.drawImage(rangeSprite, cx - rangeSprite.width/2, cy - rangeSprite.height/2);
+      }
+      ctx.globalAlpha = 1.0;
+    }
     ctx.strokeStyle = canPlace ? 'rgba(0,255,0,0.4)' : 'rgba(255,0,0,0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(cx, cy, data.range * CELL, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rangePixels, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = canPlace ? 'rgba(0,255,0,0.3)' : 'rgba(255,0,0,0.3)';
     ctx.fillRect(hoverCell.col * CELL, hoverCell.row * CELL, CELL, CELL);
+
+    // Ghost tower preview
+    if (canPlace) {
+      const previewSprite = useSprites ? GameSprites.get('towers', selectedTowerType) : null;
+      if (previewSprite) {
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(previewSprite, cx - previewSprite.width/2, cy - previewSprite.height/2);
+        ctx.globalAlpha = 1.0;
+      }
+    }
   }
 }
 
@@ -651,6 +1358,9 @@ towerBtns.forEach(btn => {
 waveBtnEl.addEventListener('click', startWave);
 upgradeBtnEl.addEventListener('click', upgradeTower);
 sellBtnEl.addEventListener('click', sellTower);
+
+// Initialize sprites on load
+GameSprites.init();
 
 startBtn.addEventListener('click', () => {
   initGame();

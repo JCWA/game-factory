@@ -140,6 +140,681 @@ canvas { border: 1px solid #222; border-radius: 4px; image-rendering: pixelated;
 </div>
 
 <script>
+// ===== GameSprites IIFE — offscreen Canvas pixel-art sprites =====
+const GameSprites = (function() {
+  const S = 20; // sprite size matches TILE
+  const cache = {};
+
+  function create(name, drawFn) {
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    drawFn(g, S);
+    cache[name] = c;
+  }
+
+  // Helpers
+  function px(g, x, y, w, h, color) {
+    g.fillStyle = color;
+    g.fillRect(x, y, w || 1, h || 1);
+  }
+
+  function init() {
+    // ===== WALL — stone brick with depth =====
+    create('wall', (g, s) => {
+      const grad = g.createLinearGradient(0, 0, 0, s);
+      grad.addColorStop(0, '#4a4a5a');
+      grad.addColorStop(0.5, '#3a3a4a');
+      grad.addColorStop(1, '#2a2a3a');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, s, s);
+      // brick lines
+      g.strokeStyle = '#55556a';
+      g.lineWidth = 0.5;
+      g.strokeRect(1, 1, s/2 - 1, s/2 - 1);
+      g.strokeRect(s/2, 1, s/2 - 1, s/2 - 1);
+      g.strokeRect(0, s/2, s/2 + 2, s/2 - 1);
+      g.strokeRect(s/2 + 2, s/2, s/2 - 2, s/2 - 1);
+      // depth shadow bottom/right
+      g.fillStyle = 'rgba(0,0,0,0.3)';
+      g.fillRect(0, s - 1, s, 1);
+      g.fillRect(s - 1, 0, 1, s);
+      // highlight top/left
+      g.fillStyle = 'rgba(255,255,255,0.06)';
+      g.fillRect(0, 0, s, 1);
+      g.fillRect(0, 0, 1, s);
+    });
+
+    // ===== FLOOR — stone tile with subtle variation =====
+    create('floor', (g, s) => {
+      g.fillStyle = '#1a1a2a';
+      g.fillRect(0, 0, s, s);
+      // subtle grain
+      for (let i = 0; i < 6; i++) {
+        const gx = Math.floor(Math.random() * s);
+        const gy = Math.floor(Math.random() * s);
+        g.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.05)';
+        g.fillRect(gx, gy, 1, 1);
+      }
+      // tile edge
+      g.strokeStyle = 'rgba(255,255,255,0.03)';
+      g.lineWidth = 0.5;
+      g.strokeRect(0, 0, s, s);
+    });
+
+    // ===== FLOOR EXPLORED (dim) =====
+    create('floor_explored', (g, s) => {
+      g.fillStyle = '#0e0e16';
+      g.fillRect(0, 0, s, s);
+    });
+
+    // ===== WALL EXPLORED (dim) =====
+    create('wall_explored', (g, s) => {
+      g.fillStyle = '#1a1a22';
+      g.fillRect(0, 0, s, s);
+    });
+
+    // ===== STAIR — descending staircase =====
+    create('stair', (g, s) => {
+      g.fillStyle = '#1a1a2a';
+      g.fillRect(0, 0, s, s);
+      // steps
+      const stepColors = ['#7c5fbf', '#6b4faf', '#5a3f9f', '#493090'];
+      for (let i = 0; i < 4; i++) {
+        const y = 4 + i * 4;
+        const x = 2 + i * 1;
+        const w = s - 4 - i * 2;
+        g.fillStyle = stepColors[i];
+        g.fillRect(x, y, w, 3);
+        g.fillStyle = 'rgba(0,0,0,0.3)';
+        g.fillRect(x, y + 2, w, 1);
+      }
+      // railing
+      g.fillStyle = '#8b7bca';
+      g.fillRect(2, 3, 1, 16);
+      g.fillRect(s - 3, 3, 1, 16);
+    });
+
+    // ===== PLAYER — warrior with helmet/sword =====
+    create('player', (g, s) => {
+      // body gradient
+      const bodyGrad = g.createLinearGradient(6, 6, 14, 18);
+      bodyGrad.addColorStop(0, '#ffd700');
+      bodyGrad.addColorStop(1, '#b8860b');
+      // helmet
+      g.fillStyle = '#c0c0c0';
+      g.fillRect(7, 2, 6, 3);
+      g.fillStyle = '#e0e0e0';
+      g.fillRect(8, 1, 4, 2);
+      // helmet crest
+      g.fillStyle = '#ff4444';
+      g.fillRect(9, 0, 2, 2);
+      // face
+      g.fillStyle = '#ffcc88';
+      g.fillRect(8, 5, 4, 3);
+      // eyes
+      g.fillStyle = '#222';
+      g.fillRect(8, 6, 1, 1);
+      g.fillRect(11, 6, 1, 1);
+      // body / armor
+      g.fillStyle = bodyGrad;
+      g.fillRect(6, 8, 8, 6);
+      g.fillStyle = '#daa520';
+      g.fillRect(7, 9, 6, 4);
+      // belt
+      g.fillStyle = '#8B4513';
+      g.fillRect(7, 13, 6, 1);
+      // legs
+      g.fillStyle = '#6b4c2a';
+      g.fillRect(7, 14, 2, 4);
+      g.fillRect(11, 14, 2, 4);
+      // boots
+      g.fillStyle = '#4a3520';
+      g.fillRect(7, 17, 2, 2);
+      g.fillRect(11, 17, 2, 2);
+      // sword (right side)
+      g.fillStyle = '#e0e0e0';
+      g.fillRect(15, 4, 1, 8);
+      g.fillStyle = '#aaa';
+      g.fillRect(15, 3, 1, 1);
+      // sword handle
+      g.fillStyle = '#8B4513';
+      g.fillRect(14, 11, 3, 1);
+      g.fillStyle = '#b8860b';
+      g.fillRect(15, 12, 1, 2);
+      // shield (left side)
+      g.fillStyle = '#4a7abf';
+      g.fillRect(3, 8, 3, 5);
+      g.fillStyle = '#5a8acf';
+      g.fillRect(4, 9, 1, 3);
+    });
+
+    // ===== ENEMIES =====
+
+    // Rat (쥐)
+    create('enemy_r', (g, s) => {
+      g.fillStyle = '#8b7355';
+      // body
+      g.fillRect(5, 10, 10, 5);
+      g.fillRect(6, 9, 8, 2);
+      // gradient shading
+      g.fillStyle = '#7a6345';
+      g.fillRect(5, 14, 10, 1);
+      // head
+      g.fillStyle = '#9b8365';
+      g.fillRect(13, 8, 4, 4);
+      // nose
+      g.fillStyle = '#ff9999';
+      g.fillRect(17, 10, 1, 1);
+      // eye
+      g.fillStyle = '#222';
+      g.fillRect(15, 9, 1, 1);
+      // ear
+      g.fillStyle = '#aa9375';
+      g.fillRect(14, 7, 2, 2);
+      // tail
+      g.fillStyle = '#aa9375';
+      g.fillRect(2, 10, 3, 1);
+      g.fillRect(1, 9, 2, 1);
+      // legs
+      g.fillStyle = '#6b5345';
+      g.fillRect(7, 15, 2, 2);
+      g.fillRect(12, 15, 2, 2);
+    });
+
+    // Bat (박쥐)
+    create('enemy_b', (g, s) => {
+      // wings
+      g.fillStyle = '#666';
+      g.fillRect(1, 6, 5, 6);
+      g.fillRect(14, 6, 5, 6);
+      g.fillStyle = '#777';
+      g.fillRect(2, 7, 4, 4);
+      g.fillRect(14, 7, 4, 4);
+      // wing tips
+      g.fillStyle = '#555';
+      g.fillRect(0, 5, 2, 3);
+      g.fillRect(18, 5, 2, 3);
+      // body
+      g.fillStyle = '#888';
+      g.fillRect(7, 6, 6, 8);
+      g.fillStyle = '#999';
+      g.fillRect(8, 7, 4, 5);
+      // ears
+      g.fillStyle = '#777';
+      g.fillRect(8, 4, 2, 3);
+      g.fillRect(11, 4, 2, 3);
+      // eyes
+      g.fillStyle = '#ff4444';
+      g.fillRect(8, 8, 1, 1);
+      g.fillRect(11, 8, 1, 1);
+      // fangs
+      g.fillStyle = '#fff';
+      g.fillRect(9, 11, 1, 2);
+      g.fillRect(11, 11, 1, 2);
+    });
+
+    // Slime (슬라임)
+    create('enemy_s', (g, s) => {
+      const grad = g.createRadialGradient(s/2, s/2 + 2, 1, s/2, s/2 + 2, 8);
+      grad.addColorStop(0, '#7fff7f');
+      grad.addColorStop(0.6, '#4ade80');
+      grad.addColorStop(1, '#22aa44');
+      // body blob
+      g.fillStyle = grad;
+      g.beginPath();
+      g.ellipse(s/2, s/2 + 2, 7, 6, 0, 0, Math.PI * 2);
+      g.fill();
+      // highlight
+      g.fillStyle = 'rgba(255,255,255,0.3)';
+      g.fillRect(7, 7, 2, 2);
+      // eyes
+      g.fillStyle = '#fff';
+      g.fillRect(7, 10, 2, 2);
+      g.fillRect(11, 10, 2, 2);
+      g.fillStyle = '#222';
+      g.fillRect(8, 10, 1, 1);
+      g.fillRect(12, 10, 1, 1);
+      // mouth
+      g.fillStyle = '#1a8a3a';
+      g.fillRect(9, 13, 3, 1);
+    });
+
+    // Goblin (고블린)
+    create('enemy_g', (g, s) => {
+      // skin
+      g.fillStyle = '#22c55e';
+      // head
+      g.fillRect(7, 3, 6, 5);
+      g.fillStyle = '#1eaa50';
+      g.fillRect(7, 7, 6, 1);
+      // ears
+      g.fillStyle = '#22c55e';
+      g.fillRect(5, 4, 2, 2);
+      g.fillRect(13, 4, 2, 2);
+      // eyes
+      g.fillStyle = '#ff0';
+      g.fillRect(8, 5, 1, 1);
+      g.fillRect(11, 5, 1, 1);
+      g.fillStyle = '#222';
+      g.fillRect(8, 5, 1, 1);
+      g.fillStyle = '#ff0';
+      g.fillRect(8, 4, 2, 2);
+      g.fillRect(11, 4, 2, 2);
+      g.fillStyle = '#000';
+      g.fillRect(9, 5, 1, 1);
+      g.fillRect(12, 5, 1, 1);
+      // nose
+      g.fillStyle = '#1aaa45';
+      g.fillRect(9, 6, 2, 1);
+      // body
+      g.fillStyle = '#8B4513';
+      g.fillRect(7, 8, 6, 5);
+      // belt
+      g.fillStyle = '#aa8833';
+      g.fillRect(7, 12, 6, 1);
+      // legs
+      g.fillStyle = '#22c55e';
+      g.fillRect(8, 13, 2, 4);
+      g.fillRect(11, 13, 2, 4);
+      // weapon (club)
+      g.fillStyle = '#6b4c2a';
+      g.fillRect(15, 6, 2, 8);
+      g.fillStyle = '#8b6c3a';
+      g.fillRect(14, 5, 4, 2);
+    });
+
+    // Skeleton (스켈레톤)
+    create('enemy_S', (g, s) => {
+      // skull
+      g.fillStyle = '#e2e8f0';
+      g.fillRect(7, 2, 6, 5);
+      g.fillStyle = '#d0d4da';
+      g.fillRect(8, 2, 4, 5);
+      // eye sockets
+      g.fillStyle = '#222';
+      g.fillRect(8, 4, 2, 2);
+      g.fillRect(11, 4, 2, 2);
+      // red eyes
+      g.fillStyle = '#ff3333';
+      g.fillRect(8, 4, 1, 1);
+      g.fillRect(11, 4, 1, 1);
+      // jaw
+      g.fillStyle = '#ccc';
+      g.fillRect(8, 7, 4, 1);
+      // spine
+      g.fillStyle = '#e2e8f0';
+      g.fillRect(9, 8, 2, 4);
+      // ribs
+      g.fillStyle = '#d0d4da';
+      g.fillRect(6, 9, 3, 1);
+      g.fillRect(11, 9, 3, 1);
+      g.fillRect(6, 11, 3, 1);
+      g.fillRect(11, 11, 3, 1);
+      // arms
+      g.fillStyle = '#e2e8f0';
+      g.fillRect(4, 8, 2, 1);
+      g.fillRect(14, 8, 2, 1);
+      g.fillRect(3, 9, 1, 3);
+      g.fillRect(16, 9, 1, 3);
+      // legs
+      g.fillRect(8, 12, 2, 5);
+      g.fillRect(11, 12, 2, 5);
+      // sword
+      g.fillStyle = '#bbb';
+      g.fillRect(16, 4, 1, 6);
+      g.fillStyle = '#888';
+      g.fillRect(15, 9, 3, 1);
+    });
+
+    // Orc (오크)
+    create('enemy_O', (g, s) => {
+      const bodyGrad = g.createLinearGradient(5, 2, 15, 18);
+      bodyGrad.addColorStop(0, '#7ab830');
+      bodyGrad.addColorStop(1, '#4a7810');
+      // head
+      g.fillStyle = '#65a30d';
+      g.fillRect(6, 1, 8, 6);
+      // jaw
+      g.fillStyle = '#558a0d';
+      g.fillRect(7, 6, 6, 2);
+      // tusks
+      g.fillStyle = '#fff';
+      g.fillRect(7, 7, 1, 2);
+      g.fillRect(12, 7, 1, 2);
+      // eyes
+      g.fillStyle = '#ff0';
+      g.fillRect(8, 3, 2, 2);
+      g.fillRect(11, 3, 2, 2);
+      g.fillStyle = '#900';
+      g.fillRect(9, 4, 1, 1);
+      g.fillRect(12, 4, 1, 1);
+      // body/armor
+      g.fillStyle = '#555';
+      g.fillRect(5, 8, 10, 6);
+      g.fillStyle = bodyGrad;
+      g.fillRect(6, 9, 8, 4);
+      // belt
+      g.fillStyle = '#8B4513';
+      g.fillRect(5, 13, 10, 1);
+      // legs
+      g.fillStyle = '#558a0d';
+      g.fillRect(6, 14, 3, 4);
+      g.fillRect(11, 14, 3, 4);
+      // axe
+      g.fillStyle = '#888';
+      g.fillRect(16, 3, 3, 5);
+      g.fillStyle = '#666';
+      g.fillRect(16, 2, 3, 1);
+      g.fillStyle = '#6b4c2a';
+      g.fillRect(17, 8, 1, 8);
+    });
+
+    // Troll (트롤)
+    create('enemy_T', (g, s) => {
+      // large body
+      g.fillStyle = '#059669';
+      g.fillRect(4, 3, 12, 12);
+      const bodyGrad = g.createLinearGradient(4, 3, 16, 15);
+      bodyGrad.addColorStop(0, '#06b67a');
+      bodyGrad.addColorStop(1, '#047855');
+      g.fillStyle = bodyGrad;
+      g.fillRect(5, 4, 10, 10);
+      // head (small relative to body)
+      g.fillStyle = '#059669';
+      g.fillRect(7, 0, 6, 4);
+      // eyes
+      g.fillStyle = '#ff6';
+      g.fillRect(8, 1, 1, 2);
+      g.fillRect(12, 1, 1, 2);
+      // mouth
+      g.fillStyle = '#033';
+      g.fillRect(9, 3, 3, 1);
+      // arms (long)
+      g.fillStyle = '#047855';
+      g.fillRect(1, 5, 3, 9);
+      g.fillRect(16, 5, 3, 9);
+      // hands
+      g.fillStyle = '#059669';
+      g.fillRect(0, 13, 4, 3);
+      g.fillRect(16, 13, 4, 3);
+      // legs
+      g.fillRect(5, 15, 4, 4);
+      g.fillRect(11, 15, 4, 4);
+      // belly
+      g.fillStyle = '#06a06a';
+      g.fillRect(7, 7, 6, 5);
+    });
+
+    // Dragon (드래곤)
+    create('enemy_D', (g, s) => {
+      // body
+      const bodyGrad = g.createLinearGradient(3, 4, 17, 16);
+      bodyGrad.addColorStop(0, '#ef4444');
+      bodyGrad.addColorStop(0.5, '#dc2626');
+      bodyGrad.addColorStop(1, '#991b1b');
+      g.fillStyle = bodyGrad;
+      g.fillRect(5, 6, 10, 8);
+      // head
+      g.fillStyle = '#dc2626';
+      g.fillRect(12, 2, 6, 5);
+      // horns
+      g.fillStyle = '#fbbf24';
+      g.fillRect(13, 0, 1, 3);
+      g.fillRect(16, 0, 1, 3);
+      // eye
+      g.fillStyle = '#ff0';
+      g.fillRect(15, 3, 2, 2);
+      g.fillStyle = '#000';
+      g.fillRect(16, 4, 1, 1);
+      // fire breath
+      g.fillStyle = '#ff6600';
+      g.fillRect(18, 4, 2, 1);
+      g.fillStyle = '#ff9900';
+      g.fillRect(18, 5, 1, 1);
+      // wing
+      g.fillStyle = '#b91c1c';
+      g.fillRect(2, 3, 5, 7);
+      g.fillStyle = '#991b1b';
+      g.fillRect(1, 4, 3, 5);
+      g.fillStyle = '#dc262680';
+      g.fillRect(3, 4, 3, 5);
+      // belly
+      g.fillStyle = '#fca5a5';
+      g.fillRect(7, 9, 6, 4);
+      // legs
+      g.fillStyle = '#991b1b';
+      g.fillRect(6, 14, 3, 4);
+      g.fillRect(12, 14, 3, 4);
+      // claws
+      g.fillStyle = '#fbbf24';
+      g.fillRect(6, 17, 1, 2);
+      g.fillRect(8, 17, 1, 2);
+      g.fillRect(12, 17, 1, 2);
+      g.fillRect(14, 17, 1, 2);
+      // tail
+      g.fillStyle = '#b91c1c';
+      g.fillRect(1, 10, 4, 2);
+      g.fillRect(0, 11, 2, 1);
+    });
+
+    // ===== ITEMS =====
+
+    // Potion (체력 포션) — red bottle with glow
+    create('item_potion', (g, s) => {
+      // bottle body
+      const grad = g.createLinearGradient(6, 6, 14, 16);
+      grad.addColorStop(0, '#ff6b6b');
+      grad.addColorStop(0.5, '#ee3333');
+      grad.addColorStop(1, '#aa1111');
+      g.fillStyle = grad;
+      g.fillRect(7, 8, 6, 8);
+      // bottle neck
+      g.fillStyle = '#cc4444';
+      g.fillRect(8, 5, 4, 3);
+      // cork
+      g.fillStyle = '#8B4513';
+      g.fillRect(9, 4, 2, 2);
+      // highlight/glow
+      g.fillStyle = 'rgba(255,255,255,0.4)';
+      g.fillRect(8, 9, 1, 4);
+      // bottom
+      g.fillStyle = '#881111';
+      g.fillRect(7, 15, 6, 1);
+      // glow effect
+      g.fillStyle = 'rgba(255,100,100,0.15)';
+      g.fillRect(5, 6, 10, 12);
+    });
+
+    // Big Potion — same but deeper red
+    create('item_potion_big', (g, s) => {
+      const grad = g.createLinearGradient(5, 5, 15, 17);
+      grad.addColorStop(0, '#ff4444');
+      grad.addColorStop(0.5, '#dd2222');
+      grad.addColorStop(1, '#881111');
+      g.fillStyle = grad;
+      g.fillRect(6, 7, 8, 9);
+      g.fillStyle = '#cc2222';
+      g.fillRect(8, 4, 4, 3);
+      g.fillStyle = '#8B4513';
+      g.fillRect(9, 3, 2, 2);
+      g.fillStyle = 'rgba(255,255,255,0.4)';
+      g.fillRect(7, 8, 2, 5);
+      g.fillStyle = '#770000';
+      g.fillRect(6, 15, 8, 1);
+      g.fillStyle = 'rgba(255,50,50,0.2)';
+      g.fillRect(4, 5, 12, 13);
+    });
+
+    // Scroll (스크롤) — rolled parchment
+    create('item_scroll', (g, s) => {
+      // parchment body
+      g.fillStyle = '#f5e6c8';
+      g.fillRect(6, 5, 8, 12);
+      // gradient shading
+      const grad = g.createLinearGradient(6, 5, 14, 5);
+      grad.addColorStop(0, 'rgba(139,90,43,0.3)');
+      grad.addColorStop(0.5, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(139,90,43,0.3)');
+      g.fillStyle = grad;
+      g.fillRect(6, 5, 8, 12);
+      // top roll
+      g.fillStyle = '#ddc8a0';
+      g.fillRect(5, 4, 10, 2);
+      // bottom roll
+      g.fillStyle = '#ddc8a0';
+      g.fillRect(5, 16, 10, 2);
+      // text lines
+      g.fillStyle = '#8b6914';
+      g.fillRect(8, 8, 4, 1);
+      g.fillRect(8, 10, 5, 1);
+      g.fillRect(8, 12, 3, 1);
+      // seal
+      g.fillStyle = '#cc3333';
+      g.beginPath();
+      g.arc(10, 14, 1.5, 0, Math.PI * 2);
+      g.fill();
+    });
+
+    // Gold/Exp orb (경험의 구슬)
+    create('item_orb', (g, s) => {
+      const grad = g.createRadialGradient(s/2, s/2, 1, s/2, s/2, 6);
+      grad.addColorStop(0, '#d8b4fe');
+      grad.addColorStop(0.5, '#a78bfa');
+      grad.addColorStop(1, '#6d28d9');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(s/2, s/2, 6, 0, Math.PI * 2);
+      g.fill();
+      // sparkle
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      g.fillRect(7, 7, 2, 2);
+      // glow
+      g.fillStyle = 'rgba(167,139,250,0.15)';
+      g.beginPath();
+      g.arc(s/2, s/2, 8, 0, Math.PI * 2);
+      g.fill();
+    });
+
+    // Gold coin
+    create('item_gold', (g, s) => {
+      const grad = g.createRadialGradient(s/2, s/2, 1, s/2, s/2, 6);
+      grad.addColorStop(0, '#fff2a0');
+      grad.addColorStop(0.5, '#ffd700');
+      grad.addColorStop(1, '#b8860b');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(s/2, s/2, 6, 0, Math.PI * 2);
+      g.fill();
+      // $ symbol
+      g.fillStyle = '#8B6914';
+      g.font = 'bold 10px sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('$', s/2, s/2 + 1);
+      // highlight
+      g.fillStyle = 'rgba(255,255,255,0.4)';
+      g.fillRect(7, 6, 2, 3);
+    });
+
+    // Heart (HP icon)
+    create('heart', (g, s) => {
+      g.fillStyle = '#ff3355';
+      // pixel heart
+      const heart = [
+        [0,0,1,1,0,0,1,1,0,0],
+        [0,1,1,1,1,1,1,1,1,0],
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1],
+        [0,1,1,1,1,1,1,1,1,0],
+        [0,0,1,1,1,1,1,1,0,0],
+        [0,0,0,1,1,1,1,0,0,0],
+        [0,0,0,0,1,1,0,0,0,0],
+      ];
+      const ox = 5, oy = 6;
+      heart.forEach((row, y) => {
+        row.forEach((v, x) => {
+          if (v) g.fillRect(ox + x, oy + y, 1, 1);
+        });
+      });
+      // highlight
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.fillRect(ox + 2, oy + 1, 1, 2);
+    });
+
+    // Sword item
+    create('item_sword', (g, s) => {
+      // blade
+      const bGrad = g.createLinearGradient(8, 1, 12, 1);
+      bGrad.addColorStop(0, '#e8e8e8');
+      bGrad.addColorStop(0.5, '#ffffff');
+      bGrad.addColorStop(1, '#c0c0c0');
+      g.fillStyle = bGrad;
+      g.fillRect(9, 2, 2, 10);
+      // tip
+      g.fillStyle = '#ddd';
+      g.fillRect(10, 1, 1, 1);
+      // guard
+      g.fillStyle = '#ffd700';
+      g.fillRect(7, 12, 6, 2);
+      // handle
+      g.fillStyle = '#8B4513';
+      g.fillRect(9, 14, 2, 3);
+      // pommel
+      g.fillStyle = '#ffd700';
+      g.fillRect(9, 17, 2, 1);
+    });
+
+    // Shield item
+    create('item_shield', (g, s) => {
+      const grad = g.createLinearGradient(4, 3, 16, 17);
+      grad.addColorStop(0, '#5a9acf');
+      grad.addColorStop(0.5, '#3a7abf');
+      grad.addColorStop(1, '#2a5a8f');
+      g.fillStyle = grad;
+      // shield shape
+      g.fillRect(5, 3, 10, 12);
+      g.fillRect(6, 15, 8, 2);
+      g.fillRect(7, 17, 6, 1);
+      g.fillRect(8, 18, 4, 1);
+      // border
+      g.fillStyle = '#b8860b';
+      g.fillRect(5, 3, 10, 1);
+      g.fillRect(5, 3, 1, 12);
+      g.fillRect(14, 3, 1, 12);
+      // emblem
+      g.fillStyle = '#ffd700';
+      g.fillRect(9, 7, 2, 5);
+      g.fillRect(8, 9, 4, 1);
+      // highlight
+      g.fillStyle = 'rgba(255,255,255,0.2)';
+      g.fillRect(6, 4, 3, 8);
+    });
+  }
+
+  function get(name) {
+    return cache[name] || null;
+  }
+
+  // Map item template to sprite name
+  function getItemSprite(item) {
+    if (item.type === 'potion') {
+      return item.effect.hp >= 30 ? 'item_potion_big' : 'item_potion';
+    }
+    if (item.type === 'scroll') return 'item_scroll';
+    if (item.type === 'exp') return 'item_orb';
+    return null;
+  }
+
+  // Map monster ch to sprite name
+  function getMonsterSprite(ch) {
+    return cache['enemy_' + ch] ? 'enemy_' + ch : null;
+  }
+
+  return { init, get, getItemSprite, getMonsterSprite };
+})();
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const logEl = document.getElementById('log');
@@ -488,25 +1163,33 @@ function draw() {
 
       if (visible[y][x]) {
         if (map[y][x] === TILES.WALL) {
-          ctx.fillStyle = '#3a3a4a';
-          ctx.fillRect(px, py, TILE, TILE);
-          ctx.strokeStyle = '#4a4a5a';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(px, py, TILE, TILE);
+          const spr = GameSprites.get('wall');
+          if (spr) { ctx.drawImage(spr, px, py); }
+          else {
+            ctx.fillStyle = '#3a3a4a'; ctx.fillRect(px, py, TILE, TILE);
+            ctx.strokeStyle = '#4a4a5a'; ctx.lineWidth = 0.5; ctx.strokeRect(px, py, TILE, TILE);
+          }
         } else if (map[y][x] === TILES.FLOOR) {
-          ctx.fillStyle = '#1a1a2a';
-          ctx.fillRect(px, py, TILE, TILE);
+          const spr = GameSprites.get('floor');
+          if (spr) { ctx.drawImage(spr, px, py); }
+          else { ctx.fillStyle = '#1a1a2a'; ctx.fillRect(px, py, TILE, TILE); }
         } else if (map[y][x] === TILES.STAIR) {
-          ctx.fillStyle = '#1a1a2a';
-          ctx.fillRect(px, py, TILE, TILE);
-          ctx.fillStyle = '#a78bfa';
-          ctx.font = 'bold 16px Courier New';
-          ctx.textAlign = 'center';
-          ctx.fillText('▼', px + TILE/2, py + TILE - 3);
+          const spr = GameSprites.get('stair');
+          if (spr) { ctx.drawImage(spr, px, py); }
+          else {
+            ctx.fillStyle = '#1a1a2a'; ctx.fillRect(px, py, TILE, TILE);
+            ctx.fillStyle = '#a78bfa'; ctx.font = 'bold 16px Courier New';
+            ctx.textAlign = 'center'; ctx.fillText('▼', px + TILE/2, py + TILE - 3);
+          }
         }
       } else if (explored[y][x]) {
-        ctx.fillStyle = map[y][x] === TILES.WALL ? '#1a1a22' : '#0e0e16';
-        ctx.fillRect(px, py, TILE, TILE);
+        const eName = map[y][x] === TILES.WALL ? 'wall_explored' : 'floor_explored';
+        const spr = GameSprites.get(eName);
+        if (spr) { ctx.drawImage(spr, px, py); }
+        else {
+          ctx.fillStyle = map[y][x] === TILES.WALL ? '#1a1a22' : '#0e0e16';
+          ctx.fillRect(px, py, TILE, TILE);
+        }
       }
     }
   }
@@ -514,19 +1197,31 @@ function draw() {
   // 아이템
   items.forEach(item => {
     if (!visible[item.y][item.x]) return;
-    ctx.fillStyle = item.color;
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText(item.ch, item.x * TILE + TILE/2, item.y * TILE + TILE - 4);
+    const sprName = GameSprites.getItemSprite(item);
+    const spr = sprName ? GameSprites.get(sprName) : null;
+    if (spr) {
+      ctx.drawImage(spr, item.x * TILE, item.y * TILE);
+    } else {
+      ctx.fillStyle = item.color;
+      ctx.font = 'bold 14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.ch, item.x * TILE + TILE/2, item.y * TILE + TILE - 4);
+    }
   });
 
   // 몬스터
   monsters.forEach(m => {
     if (!visible[m.y][m.x]) return;
-    ctx.fillStyle = m.color;
-    ctx.font = 'bold 16px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText(m.ch, m.x * TILE + TILE/2, m.y * TILE + TILE - 3);
+    const sprName = GameSprites.getMonsterSprite(m.ch);
+    const spr = sprName ? GameSprites.get(sprName) : null;
+    if (spr) {
+      ctx.drawImage(spr, m.x * TILE, m.y * TILE);
+    } else {
+      ctx.fillStyle = m.color;
+      ctx.font = 'bold 16px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(m.ch, m.x * TILE + TILE/2, m.y * TILE + TILE - 3);
+    }
 
     // HP바
     if (m.hp < m.maxHp) {
@@ -540,13 +1235,21 @@ function draw() {
   });
 
   // 플레이어
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 16px Courier New';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = '#ffd700';
-  ctx.shadowBlur = 8;
-  ctx.fillText('@', player.x * TILE + TILE/2, player.y * TILE + TILE - 3);
-  ctx.shadowBlur = 0;
+  const playerSpr = GameSprites.get('player');
+  if (playerSpr) {
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur = 8;
+    ctx.drawImage(playerSpr, player.x * TILE, player.y * TILE);
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur = 8;
+    ctx.fillText('@', player.x * TILE + TILE/2, player.y * TILE + TILE - 3);
+    ctx.shadowBlur = 0;
+  }
 }
 
 function updateUI() {
@@ -601,6 +1304,8 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
     }
   });
 });
+
+GameSprites.init();
 
 startBtn.addEventListener('click', () => {
   initGame();

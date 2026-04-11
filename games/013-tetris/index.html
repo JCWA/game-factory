@@ -268,6 +268,190 @@ const COLORS = {
   S: '#00f000', Z: '#f00000', J: '#0000f0', L: '#f0a000'
 };
 
+// --- Canvas Sprite Generator ---
+const GameSprites = (function() {
+  const sprites = {};      // type -> offscreen canvas (block)
+  const ghostSprites = {}; // type -> offscreen canvas (ghost)
+  let gridBg = null;       // full-board grid background
+  let lockFlash = null;    // lock flash overlay for one cell
+  let ready = false;
+
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return { r, g, b };
+  }
+
+  function createBlockSprite(color, size) {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const rgb = hexToRgb(color);
+    const margin = 1;
+    const inner = size - margin * 2;
+
+    // Base fill with gradient
+    const grad = ctx.createLinearGradient(margin, margin, margin + inner, margin + inner);
+    grad.addColorStop(0, `rgba(${Math.min(rgb.r+40,255)},${Math.min(rgb.g+40,255)},${Math.min(rgb.b+40,255)},1)`);
+    grad.addColorStop(0.5, color);
+    grad.addColorStop(1, `rgba(${Math.max(rgb.r-40,0)},${Math.max(rgb.g-40,0)},${Math.max(rgb.b-40,0)},1)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(margin, margin, inner, inner);
+
+    // Top-left highlight bevel
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(margin, margin, inner, 3);
+    ctx.fillRect(margin, margin, 3, inner);
+    // Secondary softer highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(margin + 3, margin, inner - 3, 2);
+    ctx.fillRect(margin, margin + 3, 2, inner - 3);
+
+    // Bottom-right shadow bevel
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(margin, margin + inner - 3, inner, 3);
+    ctx.fillRect(margin + inner - 3, margin, 3, inner);
+    // Secondary softer shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(margin + 1, margin + inner - 5, inner - 1, 2);
+    ctx.fillRect(margin + inner - 5, margin + 1, 2, inner - 1);
+
+    // Inner line detail (subtle inset border)
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(margin + 4.5, margin + 4.5, inner - 9, inner - 9);
+
+    // Glossy top reflection
+    const glossGrad = ctx.createLinearGradient(margin, margin, margin, margin + inner * 0.45);
+    glossGrad.addColorStop(0, 'rgba(255,255,255,0.18)');
+    glossGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glossGrad;
+    ctx.fillRect(margin + 3, margin + 3, inner - 6, inner * 0.4);
+
+    return c;
+  }
+
+  function createGhostSprite(color, size) {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const rgb = hexToRgb(color);
+    const margin = 1;
+    const inner = size - margin * 2;
+
+    // Semi-transparent fill
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = color;
+    ctx.fillRect(margin, margin, inner, inner);
+
+    // Border outline
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(margin + 0.75, margin + 0.75, inner - 1.5, inner - 1.5);
+
+    // Subtle inner glow
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(margin + 2, margin + 2, inner - 4, inner - 4);
+
+    ctx.globalAlpha = 1;
+    return c;
+  }
+
+  function createGridBackground(cols, rows, blockSize) {
+    const c = document.createElement('canvas');
+    c.width = cols * blockSize;
+    c.height = rows * blockSize;
+    const ctx = c.getContext('2d');
+
+    // Dark background
+    ctx.fillStyle = '#0f0f23';
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    // Subtle cell pattern - alternating darkness
+    for (let r = 0; r < rows; r++) {
+      for (let col = 0; col < cols; col++) {
+        if ((r + col) % 2 === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.008)';
+          ctx.fillRect(col * blockSize, r * blockSize, blockSize, blockSize);
+        }
+      }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = 1; x < cols; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * blockSize + 0.5, 0);
+      ctx.lineTo(x * blockSize + 0.5, rows * blockSize);
+      ctx.stroke();
+    }
+    for (let y = 1; y < rows; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * blockSize + 0.5);
+      ctx.lineTo(cols * blockSize, y * blockSize + 0.5);
+      ctx.stroke();
+    }
+
+    return c;
+  }
+
+  function createLockFlash(size) {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const cx = size / 2, cy = size / 2;
+
+    // Radial white glow
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.7);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    return c;
+  }
+
+  return {
+    ready: false,
+
+    init: function() {
+      // Generate block sprites for each tetromino type
+      const types = Object.keys(COLORS);
+      for (const type of types) {
+        sprites[type] = createBlockSprite(COLORS[type], BLOCK);
+        ghostSprites[type] = createGhostSprite(COLORS[type], BLOCK);
+      }
+      // Grid background
+      gridBg = createGridBackground(COLS, ROWS, BLOCK);
+      // Lock flash
+      lockFlash = createLockFlash(BLOCK);
+      this.ready = true;
+    },
+
+    getBlock: function(type) { return sprites[type] || null; },
+    getGhost: function(type) { return ghostSprites[type] || null; },
+    getGrid: function() { return gridBg; },
+    getLockFlash: function() { return lockFlash; },
+
+    // Draw a mini block at pixel coords for hold/next panels
+    drawMiniBlock: function(ctx, px, py, type, size) {
+      const sprite = sprites[type];
+      if (sprite) {
+        ctx.drawImage(sprite, 0, 0, BLOCK, BLOCK, px, py, size, size);
+      } else {
+        // fallback
+        ctx.fillStyle = COLORS[type];
+        ctx.fillRect(px + 1, py + 1, size - 2, size - 2);
+      }
+    }
+  };
+})();
+
 const SHAPES = {
   I: [[0,0],[1,0],[2,0],[3,0]],
   O: [[0,0],[1,0],[0,1],[1,1]],
@@ -607,18 +791,24 @@ const game = {
   },
 
   // Drawing
-  drawBlock(ctx, x, y, color, size, alpha) {
+  drawBlock(ctx, x, y, color, size, alpha, type) {
     const a = alpha || 1;
     ctx.globalAlpha = a;
+
+    if (GameSprites.ready && type && size === BLOCK) {
+      const sprite = GameSprites.getBlock(type);
+      if (sprite) {
+        ctx.drawImage(sprite, x * size, y * size);
+        ctx.globalAlpha = 1;
+        return;
+      }
+    }
+    // Fallback: plain colored block
     ctx.fillStyle = color;
     ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-
-    // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.fillRect(x * size + 1, y * size + 1, size - 2, 3);
     ctx.fillRect(x * size + 1, y * size + 1, 3, size - 2);
-
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.fillRect(x * size + 1, y * size + size - 4, size - 2, 3);
     ctx.fillRect(x * size + size - 4, y * size + 1, 3, size - 2);
@@ -626,35 +816,50 @@ const game = {
   },
 
   drawBoard() {
-    bCtx.fillStyle = '#0f0f23';
-    bCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
-
-    // Grid lines
-    bCtx.strokeStyle = 'rgba(255,255,255,0.03)';
-    bCtx.lineWidth = 1;
-    for (let x = 1; x < COLS; x++) {
-      bCtx.beginPath();
-      bCtx.moveTo(x * BLOCK, 0);
-      bCtx.lineTo(x * BLOCK, ROWS * BLOCK);
-      bCtx.stroke();
-    }
-    for (let y = 1; y < ROWS; y++) {
-      bCtx.beginPath();
-      bCtx.moveTo(0, y * BLOCK);
-      bCtx.lineTo(COLS * BLOCK, y * BLOCK);
-      bCtx.stroke();
+    // Grid background (sprite or fallback)
+    const gridSprite = GameSprites.ready && GameSprites.getGrid();
+    if (gridSprite) {
+      bCtx.drawImage(gridSprite, 0, 0);
+    } else {
+      bCtx.fillStyle = '#0f0f23';
+      bCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+      bCtx.strokeStyle = 'rgba(255,255,255,0.03)';
+      bCtx.lineWidth = 1;
+      for (let x = 1; x < COLS; x++) {
+        bCtx.beginPath();
+        bCtx.moveTo(x * BLOCK, 0);
+        bCtx.lineTo(x * BLOCK, ROWS * BLOCK);
+        bCtx.stroke();
+      }
+      for (let y = 1; y < ROWS; y++) {
+        bCtx.beginPath();
+        bCtx.moveTo(0, y * BLOCK);
+        bCtx.lineTo(COLS * BLOCK, y * BLOCK);
+        bCtx.stroke();
+      }
     }
 
     // Locked blocks
+    const lockFlashSprite = GameSprites.ready && GameSprites.getLockFlash();
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         if (this.board[r][c]) {
-          // Check if this row is being cleared
           if (this.clearingLines.includes(r)) {
+            // Line clear flash effect
             const flash = Math.sin(this.clearAnimFrame * 0.3) * 0.5 + 0.5;
-            this.drawBlock(bCtx, c, r, '#ffffff', BLOCK, flash);
+            this.drawBlock(bCtx, c, r, COLORS[this.board[r][c]], BLOCK, 1, this.board[r][c]);
+            if (lockFlashSprite) {
+              bCtx.globalAlpha = flash;
+              bCtx.drawImage(lockFlashSprite, c * BLOCK, r * BLOCK);
+              bCtx.globalAlpha = 1;
+            } else {
+              bCtx.globalAlpha = flash;
+              bCtx.fillStyle = '#ffffff';
+              bCtx.fillRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
+              bCtx.globalAlpha = 1;
+            }
           } else {
-            this.drawBlock(bCtx, c, r, COLORS[this.board[r][c]], BLOCK, 1);
+            this.drawBlock(bCtx, c, r, COLORS[this.board[r][c]], BLOCK, 1, this.board[r][c]);
           }
         }
       }
@@ -662,14 +867,19 @@ const game = {
 
     if (!this.current || this.gameOver) return;
 
-    // Ghost piece
+    // Ghost piece (use ghost sprites)
     const ghostY = this.getGhostY();
     if (ghostY !== this.currentY) {
+      const ghostSprite = GameSprites.ready && GameSprites.getGhost(this.currentType);
       for (const [bx, by] of this.current) {
         const x = this.currentX + bx;
         const y = ghostY + by;
         if (y >= 0) {
-          this.drawBlock(bCtx, x, y, COLORS[this.currentType], BLOCK, 0.2);
+          if (ghostSprite) {
+            bCtx.drawImage(ghostSprite, x * BLOCK, y * BLOCK);
+          } else {
+            this.drawBlock(bCtx, x, y, COLORS[this.currentType], BLOCK, 0.2);
+          }
         }
       }
     }
@@ -679,7 +889,7 @@ const game = {
       const x = this.currentX + bx;
       const y = this.currentY + by;
       if (y >= 0) {
-        this.drawBlock(bCtx, x, y, COLORS[this.currentType], BLOCK, 1);
+        this.drawBlock(bCtx, x, y, COLORS[this.currentType], BLOCK, 1, this.currentType);
       }
     }
   },
@@ -697,14 +907,18 @@ const game = {
     const oy = offsetY + (2 - h) * size / 2;
 
     for (const [bx, by] of shape) {
-      ctx.fillStyle = COLORS[type];
       const px = ox + (bx - minX) * size;
       const py = oy + (by - minY) * size;
-      ctx.fillRect(px + 1, py + 1, size - 2, size - 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.fillRect(px + 1, py + 1, size - 2, 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(px + 1, py + size - 3, size - 2, 2);
+      if (GameSprites.ready) {
+        GameSprites.drawMiniBlock(ctx, px, py, type, size);
+      } else {
+        ctx.fillStyle = COLORS[type];
+        ctx.fillRect(px + 1, py + 1, size - 2, size - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(px + 1, py + 1, size - 2, 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(px + 1, py + size - 3, size - 2, 2);
+      }
     }
   },
 
@@ -841,6 +1055,7 @@ const game = {
   }
 };
 
+GameSprites.init();
 game.init();
 </script>
 </body>

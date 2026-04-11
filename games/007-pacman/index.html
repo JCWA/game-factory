@@ -75,6 +75,364 @@ canvas { border-radius: 4px; }
 </div>
 
 <script>
+// ===== Canvas Sprite Assets =====
+const GameSprites = (function() {
+  const S = 24; // sprite size matches CELL
+  const sprites = {};
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  function drawPacmanFrames() {
+    // 8 frames: 4 directions x 2 states (open/closed)
+    const directions = [
+      { name: 'right', angle: 0 },
+      { name: 'left', angle: Math.PI },
+      { name: 'up', angle: -Math.PI / 2 },
+      { name: 'down', angle: Math.PI / 2 }
+    ];
+    const mouthAngles = [0.35, 0.02]; // open, closed
+
+    sprites.pacman = {};
+    directions.forEach(dir => {
+      sprites.pacman[dir.name] = mouthAngles.map(mouth => {
+        const c = createCanvas(S, S);
+        const g = c.getContext('2d');
+        const cx = S / 2, cy = S / 2, r = S / 2 - 2;
+
+        // body gradient
+        const grad = g.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, r);
+        grad.addColorStop(0, '#ffff66');
+        grad.addColorStop(0.7, '#ffdd00');
+        grad.addColorStop(1, '#cc9900');
+
+        g.fillStyle = grad;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.arc(cx, cy, r, dir.angle + mouth, dir.angle + Math.PI * 2 - mouth);
+        g.closePath();
+        g.fill();
+
+        // eye position (offset from center based on direction)
+        let eyeX = cx, eyeY = cy - 4;
+        if (dir.name === 'right') { eyeX = cx + 2; eyeY = cy - 4; }
+        else if (dir.name === 'left') { eyeX = cx - 2; eyeY = cy - 4; }
+        else if (dir.name === 'up') { eyeX = cx + 4; eyeY = cy - 2; }
+        else if (dir.name === 'down') { eyeX = cx + 4; eyeY = cy + 2; }
+
+        g.fillStyle = '#111';
+        g.beginPath();
+        g.arc(eyeX, eyeY, 1.5, 0, Math.PI * 2);
+        g.fill();
+
+        return c;
+      });
+    });
+  }
+
+  function drawGhostSprite(color, frightened) {
+    const c = createCanvas(S, S);
+    const g = c.getContext('2d');
+    const cx = S / 2, cy = S / 2, r = S / 2 - 2;
+
+    const bodyColor = frightened ? '#2121de' : color;
+
+    // body gradient
+    const grad = g.createRadialGradient(cx - 2, cy - 4, 1, cx, cy, r + 2);
+    if (frightened) {
+      grad.addColorStop(0, '#4444ff');
+      grad.addColorStop(1, '#1a1aaa');
+    } else {
+      grad.addColorStop(0, lightenColor(color, 40));
+      grad.addColorStop(1, darkenColor(color, 40));
+    }
+
+    // ghost body
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(cx, cy - 2, r, Math.PI, 0);
+    g.lineTo(cx + r, cy + r);
+    // wavy bottom
+    const waveCount = 4;
+    const waveW = (r * 2) / waveCount;
+    for (let i = 0; i < waveCount; i++) {
+      const x1 = cx + r - i * waveW;
+      const x2 = x1 - waveW;
+      const cpY = (i % 2 === 0) ? cy + r + 5 : cy + r - 3;
+      g.quadraticCurveTo((x1 + x2) / 2, cpY, x2, cy + r);
+    }
+    g.closePath();
+    g.fill();
+
+    // eyes
+    if (frightened) {
+      // scared face: small white eyes
+      g.fillStyle = '#fff';
+      g.beginPath();
+      g.arc(cx - 4, cy - 2, 2, 0, Math.PI * 2);
+      g.arc(cx + 4, cy - 2, 2, 0, Math.PI * 2);
+      g.fill();
+      // wavy mouth
+      g.strokeStyle = '#fff';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(cx - 5, cy + 4);
+      for (let i = 0; i < 5; i++) {
+        g.lineTo(cx - 5 + i * 2.5, cy + 4 + (i % 2 === 0 ? 0 : 2));
+      }
+      g.stroke();
+    } else {
+      // white of eyes
+      g.fillStyle = '#fff';
+      g.beginPath();
+      g.ellipse(cx - 4, cy - 3, 4, 4.5, 0, 0, Math.PI * 2);
+      g.ellipse(cx + 4, cy - 3, 4, 4.5, 0, 0, Math.PI * 2);
+      g.fill();
+      // pupils (centered; direction-based offset applied at draw time)
+      g.fillStyle = '#2222cc';
+      g.beginPath();
+      g.arc(cx - 4, cy - 3, 2, 0, Math.PI * 2);
+      g.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    return c;
+  }
+
+  function drawGhostEyesOverlay(dx, dy) {
+    // small canvas with just pupil offsets for directional drawing
+    const key = dx + ',' + dy;
+    if (sprites._eyeCache && sprites._eyeCache[key]) return sprites._eyeCache[key];
+    if (!sprites._eyeCache) sprites._eyeCache = {};
+
+    const c = createCanvas(S, S);
+    const g = c.getContext('2d');
+    const cx = S / 2;
+    const cy = S / 2;
+    const ox = dx * 2, oy = dy * 2;
+
+    // white of eyes
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.ellipse(cx - 4, cy - 3, 4, 4.5, 0, 0, Math.PI * 2);
+    g.ellipse(cx + 4, cy - 3, 4, 4.5, 0, 0, Math.PI * 2);
+    g.fill();
+    // pupils with direction offset
+    g.fillStyle = '#2222cc';
+    g.beginPath();
+    g.arc(cx - 4 + ox, cy - 3 + oy, 2, 0, Math.PI * 2);
+    g.arc(cx + 4 + ox, cy - 3 + oy, 2, 0, Math.PI * 2);
+    g.fill();
+
+    sprites._eyeCache[key] = c;
+    return c;
+  }
+
+  function drawDot() {
+    const c = createCanvas(S, S);
+    const g = c.getContext('2d');
+    const cx = S / 2, cy = S / 2;
+
+    // glow
+    const glow = g.createRadialGradient(cx, cy, 0, cx, cy, 5);
+    glow.addColorStop(0, 'rgba(255, 200, 180, 0.8)');
+    glow.addColorStop(1, 'rgba(255, 200, 180, 0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, S, S);
+
+    // dot
+    const dotGrad = g.createRadialGradient(cx - 0.5, cy - 0.5, 0, cx, cy, 2.5);
+    dotGrad.addColorStop(0, '#fff');
+    dotGrad.addColorStop(1, '#ffb8ae');
+    g.fillStyle = dotGrad;
+    g.beginPath();
+    g.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    g.fill();
+
+    return c;
+  }
+
+  function drawPowerPellet() {
+    // 2 frames for pulse animation
+    return [0, 1].map(frame => {
+      const c = createCanvas(S, S);
+      const g = c.getContext('2d');
+      const cx = S / 2, cy = S / 2;
+      const r = frame === 0 ? 6 : 5;
+
+      // outer glow
+      const glow = g.createRadialGradient(cx, cy, r - 2, cx, cy, r + 5);
+      glow.addColorStop(0, 'rgba(255, 220, 200, 0.6)');
+      glow.addColorStop(1, 'rgba(255, 200, 180, 0)');
+      g.fillStyle = glow;
+      g.beginPath();
+      g.arc(cx, cy, r + 5, 0, Math.PI * 2);
+      g.fill();
+
+      // pellet
+      const pelGrad = g.createRadialGradient(cx - 1, cy - 1, 0, cx, cy, r);
+      pelGrad.addColorStop(0, '#fff');
+      pelGrad.addColorStop(0.5, '#ffd8c8');
+      pelGrad.addColorStop(1, '#ffb8ae');
+      g.fillStyle = pelGrad;
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.fill();
+
+      return c;
+    });
+  }
+
+  function drawWall() {
+    const c = createCanvas(S, S);
+    const g = c.getContext('2d');
+
+    // base
+    const grad = g.createLinearGradient(0, 0, S, S);
+    grad.addColorStop(0, '#2222cc');
+    grad.addColorStop(0.5, '#1a1aff');
+    grad.addColorStop(1, '#1111aa');
+    g.fillStyle = grad;
+    g.fillRect(1, 1, S - 2, S - 2);
+
+    // top/left bevel highlight
+    g.strokeStyle = 'rgba(100, 100, 255, 0.6)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(2, S - 2);
+    g.lineTo(2, 2);
+    g.lineTo(S - 2, 2);
+    g.stroke();
+
+    // bottom/right bevel shadow
+    g.strokeStyle = 'rgba(0, 0, 80, 0.6)';
+    g.beginPath();
+    g.moveTo(S - 2, 2);
+    g.lineTo(S - 2, S - 2);
+    g.lineTo(2, S - 2);
+    g.stroke();
+
+    // inner border
+    g.strokeStyle = '#4444ff';
+    g.lineWidth = 0.5;
+    g.strokeRect(3, 3, S - 6, S - 6);
+
+    return c;
+  }
+
+  function drawFruit() {
+    const c = createCanvas(S, S);
+    const g = c.getContext('2d');
+    const cx = S / 2, cy = S / 2 + 2;
+
+    // cherry 1
+    const cGrad1 = g.createRadialGradient(cx - 4, cy + 1, 0, cx - 3, cy + 2, 5);
+    cGrad1.addColorStop(0, '#ff4444');
+    cGrad1.addColorStop(0.6, '#cc0000');
+    cGrad1.addColorStop(1, '#880000');
+    g.fillStyle = cGrad1;
+    g.beginPath();
+    g.arc(cx - 3, cy + 2, 5, 0, Math.PI * 2);
+    g.fill();
+    // highlight
+    g.fillStyle = 'rgba(255,255,255,0.4)';
+    g.beginPath();
+    g.arc(cx - 5, cy, 1.5, 0, Math.PI * 2);
+    g.fill();
+
+    // cherry 2
+    const cGrad2 = g.createRadialGradient(cx + 4, cy, 0, cx + 4, cy + 1, 4.5);
+    cGrad2.addColorStop(0, '#ff4444');
+    cGrad2.addColorStop(0.6, '#cc0000');
+    cGrad2.addColorStop(1, '#880000');
+    g.fillStyle = cGrad2;
+    g.beginPath();
+    g.arc(cx + 4, cy + 1, 4.5, 0, Math.PI * 2);
+    g.fill();
+    // highlight
+    g.fillStyle = 'rgba(255,255,255,0.4)';
+    g.beginPath();
+    g.arc(cx + 2, cy - 1, 1.2, 0, Math.PI * 2);
+    g.fill();
+
+    // stems
+    g.strokeStyle = '#44aa00';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(cx - 3, cy - 3);
+    g.quadraticCurveTo(cx - 1, cy - 8, cx + 1, cy - 7);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx + 4, cy - 3);
+    g.quadraticCurveTo(cx + 2, cy - 8, cx, cy - 7);
+    g.stroke();
+
+    // leaf
+    g.fillStyle = '#44cc00';
+    g.beginPath();
+    g.ellipse(cx + 2, cy - 8, 3, 1.5, 0.3, 0, Math.PI * 2);
+    g.fill();
+
+    return c;
+  }
+
+  // Color helpers
+  function lightenColor(hex, amount) {
+    const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + amount);
+    const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + amount);
+    const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + amount);
+    return `rgb(${r},${g},${b})`;
+  }
+  function darkenColor(hex, amount) {
+    const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount);
+    const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amount);
+    const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amount);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  return {
+    ready: false,
+    init: function() {
+      drawPacmanFrames();
+      sprites.ghosts = {};
+      ['#ff0000', '#ffb8ff', '#00ffff', '#ffb852'].forEach(color => {
+        sprites.ghosts[color] = drawGhostSprite(color, false);
+      });
+      sprites.scaredGhost = drawGhostSprite(null, true);
+      sprites.dot = drawDot();
+      sprites.powerPellet = drawPowerPellet();
+      sprites.wall = drawWall();
+      sprites.fruit = drawFruit();
+      this.ready = true;
+    },
+    getPacman: function(dx, dy, mouthOpen) {
+      let dir = 'right';
+      if (dx === -1) dir = 'left';
+      else if (dy === -1) dir = 'up';
+      else if (dy === 1) dir = 'down';
+      const frame = mouthOpen ? 0 : 1;
+      return sprites.pacman[dir][frame];
+    },
+    getGhost: function(color, frightened) {
+      if (frightened) return sprites.scaredGhost;
+      return sprites.ghosts[color];
+    },
+    getGhostEyes: function(dx, dy) {
+      return drawGhostEyesOverlay(dx, dy);
+    },
+    getDot: function() { return sprites.dot; },
+    getPowerPellet: function() {
+      const frame = Math.floor(Date.now() / 300) % 2;
+      return sprites.powerPellet[frame];
+    },
+    getWall: function() { return sprites.wall; },
+    getFruit: function() { return sprites.fruit; }
+  };
+})();
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score-display');
@@ -171,22 +529,34 @@ function draw() {
     for (let c = 0; c < COLS; c++) {
       const x = c * CELL, y = r * CELL;
       if (map[r][c] === 1) {
-        ctx.fillStyle = '#1a1aff';
-        ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
-        ctx.strokeStyle = '#4444ff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4);
+        if (GameSprites.ready) {
+          ctx.drawImage(GameSprites.getWall(), x, y);
+        } else {
+          ctx.fillStyle = '#1a1aff';
+          ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+          ctx.strokeStyle = '#4444ff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4);
+        }
       } else if (map[r][c] === 2) {
-        ctx.fillStyle = '#ffb8ae';
-        ctx.beginPath();
-        ctx.arc(x + CELL/2, y + CELL/2, 2, 0, Math.PI * 2);
-        ctx.fill();
+        if (GameSprites.ready) {
+          ctx.drawImage(GameSprites.getDot(), x, y);
+        } else {
+          ctx.fillStyle = '#ffb8ae';
+          ctx.beginPath();
+          ctx.arc(x + CELL/2, y + CELL/2, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (map[r][c] === 3) {
-        const pulse = 0.7 + Math.sin(Date.now() / 200) * 0.3;
-        ctx.fillStyle = `rgba(255, 184, 174, ${pulse})`;
-        ctx.beginPath();
-        ctx.arc(x + CELL/2, y + CELL/2, 5, 0, Math.PI * 2);
-        ctx.fill();
+        if (GameSprites.ready) {
+          ctx.drawImage(GameSprites.getPowerPellet(), x, y);
+        } else {
+          const pulse = 0.7 + Math.sin(Date.now() / 200) * 0.3;
+          ctx.fillStyle = `rgba(255, 184, 174, ${pulse})`;
+          ctx.beginPath();
+          ctx.arc(x + CELL/2, y + CELL/2, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }
@@ -199,66 +569,76 @@ function draw() {
 }
 
 function drawPacman() {
-  const cx = pacman.x * CELL + CELL/2;
-  const cy = pacman.y * CELL + CELL/2;
-  const r = CELL/2 - 2;
+  const px = pacman.x * CELL;
+  const py = pacman.y * CELL;
 
-  // 입 방향
-  let angle = 0;
-  if (pacman.dx === 1) angle = 0;
-  else if (pacman.dx === -1) angle = Math.PI;
-  else if (pacman.dy === -1) angle = -Math.PI/2;
-  else if (pacman.dy === 1) angle = Math.PI/2;
-
-  const mouth = mouthAngle * 0.4;
-
-  ctx.fillStyle = '#ffff00';
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.arc(cx, cy, r, angle + mouth, angle + Math.PI * 2 - mouth);
-  ctx.closePath();
-  ctx.fill();
+  if (GameSprites.ready) {
+    const mouthOpen = mouthAngle > 0.5;
+    ctx.drawImage(GameSprites.getPacman(pacman.dx, pacman.dy, mouthOpen), px, py);
+  } else {
+    const cx = px + CELL/2;
+    const cy = py + CELL/2;
+    const r = CELL/2 - 2;
+    let angle = 0;
+    if (pacman.dx === 1) angle = 0;
+    else if (pacman.dx === -1) angle = Math.PI;
+    else if (pacman.dy === -1) angle = -Math.PI/2;
+    else if (pacman.dy === 1) angle = Math.PI/2;
+    const mouth = mouthAngle * 0.4;
+    ctx.fillStyle = '#ffff00';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle + mouth, angle + Math.PI * 2 - mouth);
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 function drawGhost(g) {
-  const cx = g.x * CELL + CELL/2;
-  const cy = g.y * CELL + CELL/2;
-  const r = CELL/2 - 2;
-
   if (g.eaten) return;
 
-  ctx.fillStyle = g.frightened ? '#2121de' : g.color;
+  const gx = g.x * CELL;
+  const gy = g.y * CELL;
 
-  // 몸통
-  ctx.beginPath();
-  ctx.arc(cx, cy - 2, r, Math.PI, 0);
-  ctx.lineTo(cx + r, cy + r);
-  // 물결 아래
-  for (let i = 0; i < 3; i++) {
-    const wx = cx + r - (i + 1) * (r * 2 / 3);
-    ctx.quadraticCurveTo(cx + r - i * (r * 2/3) - r/3, cy + r + 4, wx, cy + r);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // 눈
-  if (!g.frightened) {
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(cx - 4, cy - 3, 4, 0, Math.PI * 2);
-    ctx.arc(cx + 4, cy - 3, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#00f';
-    ctx.beginPath();
-    ctx.arc(cx - 4 + g.dx * 2, cy - 3 + g.dy * 2, 2, 0, Math.PI * 2);
-    ctx.arc(cx + 4 + g.dx * 2, cy - 3 + g.dy * 2, 2, 0, Math.PI * 2);
-    ctx.fill();
+  if (GameSprites.ready) {
+    // draw base ghost body
+    ctx.drawImage(GameSprites.getGhost(g.color, g.frightened), gx, gy);
+    // overlay directional eyes for non-frightened ghosts
+    if (!g.frightened) {
+      ctx.drawImage(GameSprites.getGhostEyes(g.dx, g.dy), gx, gy);
+    }
   } else {
-    ctx.fillStyle = '#fff';
+    const cx = gx + CELL/2;
+    const cy = gy + CELL/2;
+    const r = CELL/2 - 2;
+    ctx.fillStyle = g.frightened ? '#2121de' : g.color;
     ctx.beginPath();
-    ctx.arc(cx - 4, cy - 2, 2, 0, Math.PI * 2);
-    ctx.arc(cx + 4, cy - 2, 2, 0, Math.PI * 2);
+    ctx.arc(cx, cy - 2, r, Math.PI, 0);
+    ctx.lineTo(cx + r, cy + r);
+    for (let i = 0; i < 3; i++) {
+      const wx = cx + r - (i + 1) * (r * 2 / 3);
+      ctx.quadraticCurveTo(cx + r - i * (r * 2/3) - r/3, cy + r + 4, wx, cy + r);
+    }
+    ctx.closePath();
     ctx.fill();
+    if (!g.frightened) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 3, 4, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 3, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#00f';
+      ctx.beginPath();
+      ctx.arc(cx - 4 + g.dx * 2, cy - 3 + g.dy * 2, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 4 + g.dx * 2, cy - 3 + g.dy * 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 2, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
@@ -498,7 +878,8 @@ document.addEventListener('touchend', (e) => {
 
 startBtn.addEventListener('click', startGame);
 
-// 초기 렌더
+// 스프라이트 초기화 및 초기 렌더
+GameSprites.init();
 init();
 draw();
 </script>
