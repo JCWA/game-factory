@@ -140,17 +140,70 @@ body {
 
 .tile.merged { z-index: 2; }
 
-.tile[data-value="2"]    { background: #eee4da; color: #776e65; }
-.tile[data-value="4"]    { background: #ede0c8; color: #776e65; }
-.tile[data-value="8"]    { background: #f2b179; color: #f9f6f2; }
-.tile[data-value="16"]   { background: #f59563; color: #f9f6f2; }
-.tile[data-value="32"]   { background: #f67c5f; color: #f9f6f2; }
-.tile[data-value="64"]   { background: #f65e3b; color: #f9f6f2; }
-.tile[data-value="128"]  { background: #edcf72; color: #f9f6f2; }
-.tile[data-value="256"]  { background: #edcc61; color: #f9f6f2; }
-.tile[data-value="512"]  { background: #edc850; color: #f9f6f2; }
-.tile[data-value="1024"] { background: #edc53f; color: #f9f6f2; }
-.tile[data-value="2048"] { background: #edc22e; color: #f9f6f2; }
+.tile[data-value="2"] {
+  background: linear-gradient(145deg, #f2e8dc, #eee4da, #e8ddd0);
+  color: #776e65;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.05);
+}
+.tile[data-value="4"] {
+  background: linear-gradient(145deg, #f0e4cc, #ede0c8, #e6d8bb);
+  color: #776e65;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.05);
+}
+.tile[data-value="8"] {
+  background: linear-gradient(145deg, #f7c28e, #f2b179, #e8a065);
+  color: #f9f6f2;
+  box-shadow: 0 3px 6px rgba(242,177,121,0.35), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.tile[data-value="16"] {
+  background: linear-gradient(145deg, #f9a87a, #f59563, #e88450);
+  color: #f9f6f2;
+  box-shadow: 0 3px 8px rgba(245,149,99,0.4), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.tile[data-value="32"] {
+  background: linear-gradient(145deg, #f99478, #f67c5f, #e56a4c);
+  color: #f9f6f2;
+  box-shadow: 0 4px 10px rgba(246,124,95,0.45), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.tile[data-value="64"] {
+  background: linear-gradient(145deg, #f97a52, #f65e3b, #e04a28);
+  color: #f9f6f2;
+  box-shadow: 0 4px 12px rgba(246,94,59,0.5), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.tile[data-value="128"] {
+  background: linear-gradient(145deg, #f2da88, #edcf72, #e0c15e);
+  color: #f9f6f2;
+  box-shadow: 0 4px 14px rgba(237,207,114,0.5), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.tile[data-value="256"] {
+  background: linear-gradient(145deg, #f2d97a, #edcc61, #e0be4e);
+  color: #f9f6f2;
+  box-shadow: 0 5px 16px rgba(237,204,97,0.5), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.tile[data-value="512"] {
+  background: linear-gradient(145deg, #f2d66a, #edc850, #ddb83c);
+  color: #f9f6f2;
+  box-shadow: 0 5px 18px rgba(237,200,80,0.55), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.tile[data-value="1024"] {
+  background: linear-gradient(145deg, #f2d35a, #edc53f, #ddb52b);
+  color: #f9f6f2;
+  box-shadow: 0 6px 20px rgba(237,197,63,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.tile[data-value="2048"] {
+  background: linear-gradient(145deg, #f5d444, #edc22e, #ddb21a);
+  color: #f9f6f2;
+  box-shadow: 0 6px 24px rgba(237,194,46,0.7), 0 0 30px rgba(237,194,46,0.3), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
 
 @keyframes pop {
   0%   { transform: scale(0); }
@@ -499,6 +552,49 @@ window.addEventListener('resize', () => {
     }
   }
 });
+
+// ===== GameSprites =====
+const GameSprites = (function() {
+  function init() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .tile::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 45%;
+        background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%);
+        border-radius: 6px 6px 0 0;
+        pointer-events: none;
+      }
+      .cell {
+        background: linear-gradient(145deg, #d4c8b8, #cdc1b4, #c4b8a8);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.08), inset 0 -1px 0 rgba(255,255,255,0.15);
+      }
+      #board {
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+      }
+      .score-box {
+        background: linear-gradient(145deg, #c4b5a5, #bbada0, #b0a090);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+      }
+      .btn {
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        background: linear-gradient(145deg, #9f8b77, #8f7a66, #806b57);
+      }
+      .btn:hover {
+        background: linear-gradient(145deg, #af9b87, #9f8b77, #907b67);
+      }
+      .tile {
+        position: absolute;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  return { init: init };
+})();
+
+GameSprites.init();
 
 // 시작
 initGame();

@@ -178,6 +178,420 @@ input[type=color]{width:28px;height:28px;border:none;background:none;cursor:poin
 </div>
 
 <script>
+// ========== GAME SPRITES ==========
+const GameSprites = (function() {
+  const cache = {};
+  const SIZE = 24;
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w || SIZE;
+    c.height = h || SIZE;
+    return c;
+  }
+
+  function drawPencil(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.5, s * 0.5);
+    ctx.scale(s / 24, s / 24);
+    // pencil body
+    ctx.beginPath();
+    ctx.moveTo(4, 20);
+    ctx.lineTo(8, 4);
+    ctx.lineTo(16, 4);
+    ctx.lineTo(20, 20);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(4, 4, 20, 4);
+    grad.addColorStop(0, '#f9e2af');
+    grad.addColorStop(1, '#fab387');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // tip
+    ctx.beginPath();
+    ctx.moveTo(10, 20);
+    ctx.lineTo(12, 24);
+    ctx.lineTo(14, 20);
+    ctx.closePath();
+    ctx.fillStyle = '#45475a';
+    ctx.fill();
+    // eraser band
+    ctx.fillStyle = '#f5c2e7';
+    ctx.fillRect(8, 4, 8, 3);
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(8, 4, 8, 3);
+    ctx.restore();
+  }
+
+  function drawEraser(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.15);
+    ctx.scale(s / 24, s / 24);
+    // eraser body
+    ctx.beginPath();
+    const r = 3;
+    ctx.moveTo(2 + r, 6);
+    ctx.lineTo(22 - r, 6);
+    ctx.quadraticCurveTo(22, 6, 22, 6 + r);
+    ctx.lineTo(22, 18 - r);
+    ctx.quadraticCurveTo(22, 18, 22 - r, 18);
+    ctx.lineTo(2 + r, 18);
+    ctx.quadraticCurveTo(2, 18, 2, 18 - r);
+    ctx.lineTo(2, 6 + r);
+    ctx.quadraticCurveTo(2, 6, 2 + r, 6);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(2, 6, 2, 18);
+    grad.addColorStop(0, '#f5c2e7');
+    grad.addColorStop(1, '#cba6f7');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // band
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(2, 13, 20, 5);
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(2, 13);
+    ctx.lineTo(22, 13);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawFillBucket(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    // bucket body
+    ctx.beginPath();
+    ctx.moveTo(6, 8);
+    ctx.lineTo(18, 8);
+    ctx.lineTo(20, 20);
+    ctx.lineTo(4, 20);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(4, 8, 4, 20);
+    grad.addColorStop(0, '#89b4fa');
+    grad.addColorStop(1, '#74c7ec');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // handle
+    ctx.beginPath();
+    ctx.arc(12, 6, 4, Math.PI, 0);
+    ctx.strokeStyle = '#a6adc8';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // paint drop
+    ctx.beginPath();
+    ctx.moveTo(19, 16);
+    ctx.quadraticCurveTo(23, 20, 19, 22);
+    ctx.quadraticCurveTo(15, 20, 19, 16);
+    ctx.fillStyle = '#89b4fa';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawLine(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    ctx.beginPath();
+    ctx.moveTo(4, 20);
+    ctx.lineTo(20, 4);
+    ctx.strokeStyle = '#a6e3a1';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    // endpoints
+    ctx.fillStyle = '#f9e2af';
+    ctx.beginPath();
+    ctx.arc(4, 20, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(20, 4, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRect(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    ctx.beginPath();
+    ctx.rect(3, 5, 18, 14);
+    const grad = ctx.createLinearGradient(3, 5, 21, 19);
+    grad.addColorStop(0, 'rgba(137,180,250,0.15)');
+    grad.addColorStop(1, 'rgba(137,180,250,0.05)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#89b4fa';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // corner dots
+    ctx.fillStyle = '#f9e2af';
+    [[3,5],[21,5],[21,19],[3,19]].forEach(([x,y]) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function drawCircle(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    ctx.beginPath();
+    ctx.ellipse(12, 12, 9, 8, 0, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(10, 10, 1, 12, 12, 10);
+    grad.addColorStop(0, 'rgba(203,166,247,0.15)');
+    grad.addColorStop(1, 'rgba(203,166,247,0.05)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#cba6f7';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEyedropper(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    // dropper body
+    ctx.beginPath();
+    ctx.moveTo(16, 3);
+    ctx.lineTo(20, 7);
+    ctx.lineTo(10, 17);
+    ctx.lineTo(6, 13);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(6, 3, 20, 17);
+    grad.addColorStop(0, '#cdd6f4');
+    grad.addColorStop(1, '#a6adc8');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // tip
+    ctx.beginPath();
+    ctx.moveTo(6, 13);
+    ctx.lineTo(10, 17);
+    ctx.lineTo(5, 21);
+    ctx.lineTo(3, 19);
+    ctx.closePath();
+    ctx.fillStyle = '#94e2d5';
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // top cap
+    ctx.beginPath();
+    ctx.arc(18, 5, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#f38ba8';
+    ctx.fill();
+    ctx.strokeStyle = '#585b70';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawMove(ctx, s) {
+    ctx.save();
+    ctx.translate(s * 0.1, s * 0.1);
+    ctx.scale(s / 24, s / 24);
+    ctx.strokeStyle = '#a6adc8';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // cross
+    ctx.beginPath();
+    ctx.moveTo(12, 3); ctx.lineTo(12, 21);
+    ctx.moveTo(3, 12); ctx.lineTo(21, 12);
+    ctx.stroke();
+    // arrows
+    ctx.fillStyle = '#a6adc8';
+    // up
+    ctx.beginPath(); ctx.moveTo(12, 2); ctx.lineTo(9, 6); ctx.lineTo(15, 6); ctx.closePath(); ctx.fill();
+    // down
+    ctx.beginPath(); ctx.moveTo(12, 22); ctx.lineTo(9, 18); ctx.lineTo(15, 18); ctx.closePath(); ctx.fill();
+    // left
+    ctx.beginPath(); ctx.moveTo(2, 12); ctx.lineTo(6, 9); ctx.lineTo(6, 15); ctx.closePath(); ctx.fill();
+    // right
+    ctx.beginPath(); ctx.moveTo(22, 12); ctx.lineTo(18, 9); ctx.lineTo(18, 15); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  const TOOL_DRAWERS = {
+    pencil: drawPencil,
+    eraser: drawEraser,
+    fill: drawFillBucket,
+    line: drawLine,
+    rect: drawRect,
+    circle: drawCircle,
+    eyedropper: drawEyedropper,
+    move: drawMove
+  };
+
+  function getToolIcon(toolName, size) {
+    const key = toolName + '_' + size;
+    if (cache[key]) return cache[key];
+    const c = createCanvas(size, size);
+    const ctx = c.getContext('2d');
+    if (TOOL_DRAWERS[toolName]) {
+      TOOL_DRAWERS[toolName](ctx, size);
+    }
+    cache[key] = c;
+    return c;
+  }
+
+  // Store shortcut keys so they survive re-application
+  const shortcutMap = {};
+
+  function applyToolIcons() {
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+      const tool = btn.dataset.tool;
+      // Save shortcut text on first run
+      const shortcutEl = btn.querySelector('.shortcut');
+      if (shortcutEl) shortcutMap[tool] = shortcutEl.textContent;
+      // Check if already has a canvas icon
+      if (btn.querySelector('canvas')) return;
+      const size = btn.offsetWidth <= 32 ? 22 : 26;
+      const icon = getToolIcon(tool, size);
+      btn.textContent = '';
+      const iconEl = icon.cloneNode(true);
+      iconEl.style.display = 'block';
+      iconEl.style.imageRendering = 'auto';
+      btn.appendChild(iconEl);
+      if (shortcutMap[tool]) {
+        const span = document.createElement('span');
+        span.className = 'shortcut';
+        span.textContent = shortcutMap[tool];
+        btn.appendChild(span);
+      }
+    });
+  }
+
+  function enhancePaletteSwatches() {
+    // Add CSS for 3D swatch effect
+    const style = document.createElement('style');
+    style.textContent = `
+      .pal-color {
+        position: relative;
+        box-shadow: inset 1px 1px 2px rgba(255,255,255,0.25), inset -1px -1px 2px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.3);
+        transition: transform 0.1s, box-shadow 0.1s;
+      }
+      .pal-color:hover {
+        transform: scale(1.15);
+        box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.4);
+      }
+      .pal-color.active {
+        transform: scale(1.15);
+        box-shadow: inset 1px 1px 2px rgba(255,255,255,0.3), inset -1px -1px 2px rgba(0,0,0,0.35), 0 0 6px var(--accent), 0 0 12px rgba(203,166,247,0.3);
+      }
+      #toolbar {
+        background: linear-gradient(180deg, #353750 0%, #313244 40%, #2d2d3f 100%);
+      }
+      #right-panel {
+        background: linear-gradient(180deg, #353750 0%, #313244 50%, #2d2d3f 100%);
+      }
+      #header {
+        background: linear-gradient(90deg, #313244 0%, #3b3b55 50%, #313244 100%);
+      }
+      #palette-bar {
+        background: linear-gradient(0deg, #2d2d3f 0%, #313244 100%);
+      }
+      #frame-bar {
+        background: linear-gradient(0deg, #2a2a3c 0%, #313244 100%);
+      }
+      #current-color-display {
+        box-shadow: inset 1px 1px 3px rgba(255,255,255,0.2), inset -1px -1px 3px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.4);
+        border-radius: 6px;
+      }
+      .tool-btn {
+        transition: background 0.15s, transform 0.1s;
+      }
+      .tool-btn:hover {
+        transform: scale(1.08);
+      }
+      .tool-btn.active {
+        box-shadow: 0 0 8px rgba(203,166,247,0.4);
+      }
+      .panel-title {
+        background: linear-gradient(90deg, rgba(203,166,247,0.1) 0%, transparent 100%);
+        padding: 3px 6px;
+        border-radius: 3px;
+        border-left: 2px solid var(--accent);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function enhanceGrid(ovCtx, zoom, width, height) {
+    if (zoom < 4) return;
+    const z = zoom, w = width, h = height;
+    ovCtx.clearRect(0, 0, w * z, h * z);
+    // minor grid lines
+    ovCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ovCtx.lineWidth = 0.5;
+    for (let x = 0; x <= w; x++) {
+      ovCtx.beginPath();
+      ovCtx.moveTo(x * z, 0);
+      ovCtx.lineTo(x * z, h * z);
+      ovCtx.stroke();
+    }
+    for (let y = 0; y <= h; y++) {
+      ovCtx.beginPath();
+      ovCtx.moveTo(0, y * z);
+      ovCtx.lineTo(w * z, y * z);
+      ovCtx.stroke();
+    }
+    // major grid lines every 8 pixels
+    if (zoom >= 6 && w >= 16) {
+      ovCtx.strokeStyle = 'rgba(203,166,247,0.12)';
+      ovCtx.lineWidth = 1;
+      for (let x = 0; x <= w; x += 8) {
+        ovCtx.beginPath();
+        ovCtx.moveTo(x * z, 0);
+        ovCtx.lineTo(x * z, h * z);
+        ovCtx.stroke();
+      }
+      for (let y = 0; y <= h; y += 8) {
+        ovCtx.beginPath();
+        ovCtx.moveTo(0, y * z);
+        ovCtx.lineTo(w * z, y * z);
+        ovCtx.stroke();
+      }
+    }
+    // canvas border
+    ovCtx.strokeStyle = 'rgba(203,166,247,0.25)';
+    ovCtx.lineWidth = 1.5;
+    ovCtx.strokeRect(0, 0, w * z, h * z);
+  }
+
+  function init() {
+    enhancePaletteSwatches();
+    // Defer icon application to ensure buttons are laid out
+    requestAnimationFrame(() => {
+      applyToolIcons();
+    });
+  }
+
+  return {
+    init: init,
+    applyToolIcons: applyToolIcons,
+    enhanceGrid: enhanceGrid,
+    getToolIcon: getToolIcon
+  };
+})();
+
 // ========== STATE ==========
 const DEFAULT_PALETTE = [
   null, // transparent
@@ -311,13 +725,7 @@ function render() {
 }
 
 function drawGrid() {
-  if (state.zoom < 4) return;
-  const z = state.zoom, w = state.width, h = state.height;
-  ovCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  ovCtx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ovCtx.lineWidth = 0.5;
-  for (let x = 0; x <= w; x++) { ovCtx.beginPath(); ovCtx.moveTo(x*z, 0); ovCtx.lineTo(x*z, h*z); ovCtx.stroke(); }
-  for (let y = 0; y <= h; y++) { ovCtx.beginPath(); ovCtx.moveTo(0, y*z); ovCtx.lineTo(w*z, y*z); ovCtx.stroke(); }
+  GameSprites.enhanceGrid(ovCtx, state.zoom, state.width, state.height);
 }
 
 function renderPreview() {
@@ -988,6 +1396,7 @@ function updateUI() {
 // ========== INIT ==========
 function boot() {
   checkMobile();
+  GameSprites.init();
   if (!loadProject()) {
     initProject(32, 32);
   } else {

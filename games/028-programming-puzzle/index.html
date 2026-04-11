@@ -210,6 +210,297 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;font-size:14p
 <div id="dragGhost" style="position:fixed;pointer-events:none;z-index:200;display:none;opacity:0.8"></div>
 
 <script>
+// ============== SPRITE ASSETS ==============
+const GameSprites = (function(){
+  const SIZE = 64;
+  const sprites = {};
+  let ready = false;
+
+  function createCanvas(){
+    const c = document.createElement('canvas');
+    c.width = SIZE; c.height = SIZE;
+    return c;
+  }
+
+  function makeFloor(){
+    const c = createCanvas(), x = c.getContext('2d');
+    // base
+    const g = x.createLinearGradient(0,0,SIZE,SIZE);
+    g.addColorStop(0,'#f7fafc'); g.addColorStop(1,'#edf2f7');
+    x.fillStyle = g; x.fillRect(0,0,SIZE,SIZE);
+    // subtle grid pattern
+    x.strokeStyle = 'rgba(203,213,224,0.5)'; x.lineWidth = 1;
+    x.strokeRect(0.5,0.5,SIZE-1,SIZE-1);
+    // inner highlight
+    x.fillStyle = 'rgba(255,255,255,0.4)';
+    x.fillRect(2,2,SIZE-4,2);
+    x.fillRect(2,2,2,SIZE-4);
+    return c;
+  }
+
+  function makeWall(){
+    const c = createCanvas(), x = c.getContext('2d');
+    // base brick gradient
+    const g = x.createLinearGradient(0,0,0,SIZE);
+    g.addColorStop(0,'#5a6778'); g.addColorStop(0.5,'#4a5568'); g.addColorStop(1,'#3d4a5c');
+    x.fillStyle = g; x.fillRect(0,0,SIZE,SIZE);
+    // brick lines
+    x.strokeStyle = 'rgba(0,0,0,0.25)'; x.lineWidth = 1;
+    for(let row=0;row<4;row++){
+      const yy = row * (SIZE/4);
+      x.strokeRect(0, yy, SIZE, SIZE/4);
+      const off = row % 2 === 0 ? 0 : SIZE/2;
+      x.beginPath(); x.moveTo(off + SIZE/2, yy); x.lineTo(off + SIZE/2, yy + SIZE/4); x.stroke();
+      if(row % 2 === 1){ x.beginPath(); x.moveTo(0, yy); x.lineTo(0, yy + SIZE/4); x.stroke(); }
+    }
+    // top bevel highlight
+    x.fillStyle = 'rgba(255,255,255,0.1)';
+    x.fillRect(0,0,SIZE,2);
+    // bottom shadow
+    x.fillStyle = 'rgba(0,0,0,0.2)';
+    x.fillRect(0,SIZE-2,SIZE,2);
+    return c;
+  }
+
+  function makeHole(){
+    const c = createCanvas(), x = c.getContext('2d');
+    // dark pit with radial gradient
+    const g = x.createRadialGradient(SIZE/2,SIZE/2,2,SIZE/2,SIZE/2,SIZE/2);
+    g.addColorStop(0,'#0d1117'); g.addColorStop(0.7,'#1a202c'); g.addColorStop(1,'#2d3748');
+    x.fillStyle = g; x.fillRect(0,0,SIZE,SIZE);
+    // inner ring
+    x.strokeStyle = 'rgba(255,255,255,0.08)'; x.lineWidth = 2;
+    x.beginPath(); x.arc(SIZE/2,SIZE/2,SIZE*0.35,0,Math.PI*2); x.stroke();
+    // deep center
+    x.fillStyle = 'rgba(0,0,0,0.4)';
+    x.beginPath(); x.arc(SIZE/2,SIZE/2,SIZE*0.2,0,Math.PI*2); x.fill();
+    // border
+    x.strokeStyle = 'rgba(0,0,0,0.4)'; x.lineWidth = 1;
+    x.strokeRect(0.5,0.5,SIZE-1,SIZE-1);
+    return c;
+  }
+
+  function makeGoal(){
+    const c = createCanvas(), x = c.getContext('2d');
+    const cx = SIZE/2, cy = SIZE/2;
+    // glow
+    const glow = x.createRadialGradient(cx,cy,4,cx,cy,SIZE*0.45);
+    glow.addColorStop(0,'rgba(236,201,75,0.5)'); glow.addColorStop(1,'rgba(236,201,75,0)');
+    x.fillStyle = glow; x.fillRect(0,0,SIZE,SIZE);
+    // star shape
+    x.fillStyle = '#ecc94b';
+    x.shadowColor = 'rgba(236,201,75,0.8)'; x.shadowBlur = 8;
+    drawStar(x, cx, cy, 5, SIZE*0.3, SIZE*0.14);
+    x.shadowBlur = 0;
+    // highlight on star
+    const hg = x.createLinearGradient(cx-SIZE*0.2,cy-SIZE*0.25,cx+SIZE*0.1,cy);
+    hg.addColorStop(0,'rgba(255,255,255,0.6)'); hg.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle = hg;
+    drawStar(x, cx, cy, 5, SIZE*0.28, SIZE*0.12);
+    return c;
+  }
+
+  function makeGem(){
+    const c = createCanvas(), x = c.getContext('2d');
+    const cx = SIZE/2, cy = SIZE/2;
+    // glow
+    const glow = x.createRadialGradient(cx,cy,2,cx,cy,SIZE*0.4);
+    glow.addColorStop(0,'rgba(66,153,225,0.4)'); glow.addColorStop(1,'rgba(66,153,225,0)');
+    x.fillStyle = glow; x.fillRect(0,0,SIZE,SIZE);
+    // diamond shape
+    const s = SIZE * 0.32;
+    x.beginPath();
+    x.moveTo(cx, cy - s);       // top
+    x.lineTo(cx + s*0.8, cy);   // right
+    x.lineTo(cx, cy + s*0.7);   // bottom
+    x.lineTo(cx - s*0.8, cy);   // left
+    x.closePath();
+    const dg = x.createLinearGradient(cx-s, cy-s, cx+s, cy+s);
+    dg.addColorStop(0,'#63b3ed'); dg.addColorStop(0.3,'#4299e1'); dg.addColorStop(0.6,'#3182ce'); dg.addColorStop(1,'#2b6cb0');
+    x.fillStyle = dg;
+    x.shadowColor = 'rgba(66,153,225,0.6)'; x.shadowBlur = 6;
+    x.fill();
+    x.shadowBlur = 0;
+    // facets
+    x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(cx, cy-s); x.lineTo(cx, cy+s*0.7); x.stroke();
+    x.beginPath(); x.moveTo(cx-s*0.8, cy); x.lineTo(cx+s*0.8, cy); x.stroke();
+    // top highlight
+    x.beginPath();
+    x.moveTo(cx, cy-s);
+    x.lineTo(cx+s*0.35, cy-s*0.3);
+    x.lineTo(cx-s*0.15, cy-s*0.15);
+    x.closePath();
+    x.fillStyle = 'rgba(255,255,255,0.45)'; x.fill();
+    // sparkle
+    drawSparkle(x, cx+s*0.4, cy-s*0.5, 4);
+    return c;
+  }
+
+  function makeTeleporter(){
+    const c = createCanvas(), x = c.getContext('2d');
+    const cx = SIZE/2, cy = SIZE/2;
+    // bg glow
+    const bg = x.createRadialGradient(cx,cy,2,cx,cy,SIZE*0.45);
+    bg.addColorStop(0,'rgba(159,122,234,0.5)'); bg.addColorStop(1,'rgba(159,122,234,0.05)');
+    x.fillStyle = bg; x.fillRect(0,0,SIZE,SIZE);
+    // spiral rings
+    for(let i=3;i>=0;i--){
+      const r = SIZE*0.12 + i*SIZE*0.07;
+      const alpha = 0.3 + (3-i)*0.15;
+      x.strokeStyle = `rgba(159,122,234,${alpha})`; x.lineWidth = 2.5;
+      x.beginPath(); x.arc(cx, cy, r, i*0.5, i*0.5+Math.PI*1.5); x.stroke();
+    }
+    // center dot
+    const cg = x.createRadialGradient(cx,cy,0,cx,cy,SIZE*0.08);
+    cg.addColorStop(0,'#e9d8fd'); cg.addColorStop(1,'#9f7aea');
+    x.fillStyle = cg;
+    x.beginPath(); x.arc(cx,cy,SIZE*0.08,0,Math.PI*2); x.fill();
+    return c;
+  }
+
+  function makeIce(){
+    const c = createCanvas(), x = c.getContext('2d');
+    // transparent ice overlay
+    const g = x.createLinearGradient(0,0,SIZE,SIZE);
+    g.addColorStop(0,'rgba(190,227,248,0.5)'); g.addColorStop(0.5,'rgba(144,205,244,0.35)'); g.addColorStop(1,'rgba(190,227,248,0.45)');
+    x.fillStyle = g; x.fillRect(1,1,SIZE-2,SIZE-2);
+    // cracks
+    x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(SIZE*0.2,SIZE*0.3); x.lineTo(SIZE*0.5,SIZE*0.45); x.lineTo(SIZE*0.7,SIZE*0.35); x.stroke();
+    x.beginPath(); x.moveTo(SIZE*0.4,SIZE*0.6); x.lineTo(SIZE*0.6,SIZE*0.7); x.stroke();
+    // shine spots
+    x.fillStyle = 'rgba(255,255,255,0.5)';
+    x.beginPath(); x.arc(SIZE*0.25,SIZE*0.2,3,0,Math.PI*2); x.fill();
+    x.beginPath(); x.arc(SIZE*0.7,SIZE*0.65,2,0,Math.PI*2); x.fill();
+    return c;
+  }
+
+  function makeRobot(){
+    // 4 directions: 0=up,1=right,2=down,3=left
+    const canvases = [];
+    for(let dir=0;dir<4;dir++){
+      const c = createCanvas(), x = c.getContext('2d');
+      const cx = SIZE/2, cy = SIZE/2, s = SIZE*0.35;
+      x.save(); x.translate(cx,cy);
+      x.rotate([0,Math.PI/2,Math.PI,Math.PI*1.5][dir]);
+      // body shadow
+      x.fillStyle = 'rgba(0,0,0,0.15)';
+      x.beginPath(); x.moveTo(2,-s+3); x.lineTo(s+2,s+3); x.lineTo(-s+2,s+3); x.closePath(); x.fill();
+      // body gradient
+      const bg = x.createLinearGradient(-s,-s,s,s);
+      bg.addColorStop(0,'#4299e1'); bg.addColorStop(0.5,'#2b6cb0'); bg.addColorStop(1,'#2c5282');
+      x.fillStyle = bg;
+      x.beginPath(); x.moveTo(0,-s); x.lineTo(s,s); x.lineTo(-s,s); x.closePath(); x.fill();
+      // body outline
+      x.strokeStyle = 'rgba(0,0,0,0.2)'; x.lineWidth = 1.5;
+      x.beginPath(); x.moveTo(0,-s); x.lineTo(s,s); x.lineTo(-s,s); x.closePath(); x.stroke();
+      // left body highlight
+      x.fillStyle = 'rgba(255,255,255,0.15)';
+      x.beginPath(); x.moveTo(0,-s); x.lineTo(-s,s); x.lineTo(0,s*0.3); x.closePath(); x.fill();
+      // visor/eye
+      const eg = x.createRadialGradient(0,-s*0.2,1,0,-s*0.2,s*0.28);
+      eg.addColorStop(0,'#ffffff'); eg.addColorStop(0.5,'#bee3f8'); eg.addColorStop(1,'#90cdf4');
+      x.fillStyle = eg;
+      x.beginPath(); x.arc(0,-s*0.2,s*0.27,0,Math.PI*2); x.fill();
+      x.strokeStyle = 'rgba(0,0,0,0.15)'; x.lineWidth = 1;
+      x.beginPath(); x.arc(0,-s*0.2,s*0.27,0,Math.PI*2); x.stroke();
+      // pupil
+      x.fillStyle = '#1a365d';
+      x.beginPath(); x.arc(0,-s*0.22,s*0.1,0,Math.PI*2); x.fill();
+      // eye shine
+      x.fillStyle = 'rgba(255,255,255,0.8)';
+      x.beginPath(); x.arc(-s*0.06,-s*0.28,s*0.05,0,Math.PI*2); x.fill();
+      // antenna
+      x.strokeStyle = '#90cdf4'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(0,-s); x.lineTo(0,-s-6); x.stroke();
+      x.fillStyle = '#63b3ed';
+      x.beginPath(); x.arc(0,-s-7,3,0,Math.PI*2); x.fill();
+      x.restore();
+      canvases.push(c);
+    }
+    return canvases;
+  }
+
+  function makePaintOverlay(color){
+    const c = createCanvas(), x = c.getContext('2d');
+    // paint splatter effect
+    x.fillStyle = color; x.globalAlpha = 0.35;
+    x.fillRect(2,2,SIZE-4,SIZE-4);
+    x.globalAlpha = 0.15;
+    // splatter dots
+    for(let i=0;i<6;i++){
+      const px = 8+Math.random()*(SIZE-16);
+      const py = 8+Math.random()*(SIZE-16);
+      const r = 2+Math.random()*4;
+      x.beginPath(); x.arc(px,py,r,0,Math.PI*2); x.fill();
+    }
+    x.globalAlpha = 1;
+    return c;
+  }
+
+  function makePaintTarget(color){
+    const c = createCanvas(), x = c.getContext('2d');
+    x.strokeStyle = color; x.lineWidth = 2.5; x.setLineDash([4,4]);
+    x.strokeRect(4,4,SIZE-8,SIZE-8);
+    x.setLineDash([]);
+    // corner marks
+    x.fillStyle = color; x.globalAlpha = 0.5;
+    const m = 4;
+    [[m,m],[SIZE-m-6,m],[m,SIZE-m-6],[SIZE-m-6,SIZE-m-6]].forEach(([px,py])=>{
+      x.fillRect(px,py,6,6);
+    });
+    x.globalAlpha = 1;
+    return c;
+  }
+
+  // Helpers
+  function drawStar(x, cx, cy, spikes, outerR, innerR){
+    let rot = -Math.PI/2;
+    const step = Math.PI/spikes;
+    x.beginPath();
+    for(let i=0;i<spikes*2;i++){
+      const r = i%2===0 ? outerR : innerR;
+      const a = rot + i*step;
+      if(i===0) x.moveTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r);
+      else x.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r);
+    }
+    x.closePath(); x.fill();
+  }
+
+  function drawSparkle(x, px, py, size){
+    x.fillStyle = 'rgba(255,255,255,0.9)';
+    x.beginPath();
+    x.moveTo(px,py-size); x.lineTo(px+1,py-1); x.lineTo(px+size,py);
+    x.lineTo(px+1,py+1); x.lineTo(px,py+size); x.lineTo(px-1,py+1);
+    x.lineTo(px-size,py); x.lineTo(px-1,py-1);
+    x.closePath(); x.fill();
+  }
+
+  function init(){
+    sprites.floor = makeFloor();
+    sprites.wall = makeWall();
+    sprites.hole = makeHole();
+    sprites.goal = makeGoal();
+    sprites.gem = makeGem();
+    sprites.teleporter = makeTeleporter();
+    sprites.ice = makeIce();
+    sprites.robot = makeRobot(); // array of 4 canvases
+    sprites.paintOverlay = {};
+    sprites.paintTarget = {};
+    ['red','blue','green','yellow','orange','purple'].forEach(color=>{
+      sprites.paintOverlay[color] = makePaintOverlay(color);
+      sprites.paintTarget[color] = makePaintTarget(color);
+    });
+    ready = true;
+  }
+
+  function get(name){ return ready ? sprites[name] : null; }
+  function isReady(){ return ready; }
+
+  return { init, get, isReady };
+})();
+
 // ============== GAME DATA ==============
 const LEVELS = [
 {id:1,name:'첫 걸음',w:3,h:1,desc:'2칸 전진하여 목표에 도달하세요',
@@ -884,45 +1175,88 @@ function renderGrid(){
   cellSize=Math.max(cellSize,24);
   canvas.width=lv.w*cellSize;canvas.height=lv.h*cellSize;
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  const useSprites = GameSprites.isReady();
   // draw tiles
   for(let y=0;y<lv.h;y++)for(let x=0;x<lv.w;x++){
     const tile=grid[y][x];
     const px=x*cellSize,py=y*cellSize;
     // bg
-    if(tile.type==='wall'){ctx.fillStyle='#4a5568'}
-    else if(tile.type==='hole'){ctx.fillStyle='#1a202c'}
-    else{ctx.fillStyle='#ffffff'}
-    ctx.fillRect(px,py,cellSize,cellSize);
-    ctx.strokeStyle='#e2e8f0';ctx.strokeRect(px,py,cellSize,cellSize);
+    if(useSprites){
+      const tileSprite = tile.type==='wall' ? GameSprites.get('wall') : tile.type==='hole' ? GameSprites.get('hole') : GameSprites.get('floor');
+      if(tileSprite){ctx.drawImage(tileSprite,px,py,cellSize,cellSize)}
+      else{ctx.fillStyle='#ffffff';ctx.fillRect(px,py,cellSize,cellSize)}
+    } else {
+      if(tile.type==='wall'){ctx.fillStyle='#4a5568'}
+      else if(tile.type==='hole'){ctx.fillStyle='#1a202c'}
+      else{ctx.fillStyle='#ffffff'}
+      ctx.fillRect(px,py,cellSize,cellSize);
+      ctx.strokeStyle='#e2e8f0';ctx.strokeRect(px,py,cellSize,cellSize);
+    }
     // paint
     if(tile.paint){
-      ctx.fillStyle=tile.paint;ctx.globalAlpha=0.3;
-      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+      if(useSprites){
+        const po = GameSprites.get('paintOverlay');
+        if(po && po[tile.paint]){ctx.drawImage(po[tile.paint],px,py,cellSize,cellSize)}
+        else{ctx.fillStyle=tile.paint;ctx.globalAlpha=0.3;ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1}
+      } else {
+        ctx.fillStyle=tile.paint;ctx.globalAlpha=0.3;
+        ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+      }
     }
     // paint target indicator
     if(tile.paintTarget&&tile.paint!==tile.paintTarget){
-      ctx.strokeStyle=tile.paintTarget;ctx.lineWidth=2;ctx.setLineDash([3,3]);
-      ctx.strokeRect(px+3,py+3,cellSize-6,cellSize-6);
-      ctx.setLineDash([]);ctx.lineWidth=1;
+      if(useSprites){
+        const pt = GameSprites.get('paintTarget');
+        if(pt && pt[tile.paintTarget]){ctx.drawImage(pt[tile.paintTarget],px,py,cellSize,cellSize)}
+        else{ctx.strokeStyle=tile.paintTarget;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.strokeRect(px+3,py+3,cellSize-6,cellSize-6);ctx.setLineDash([]);ctx.lineWidth=1}
+      } else {
+        ctx.strokeStyle=tile.paintTarget;ctx.lineWidth=2;ctx.setLineDash([3,3]);
+        ctx.strokeRect(px+3,py+3,cellSize-6,cellSize-6);
+        ctx.setLineDash([]);ctx.lineWidth=1;
+      }
     }
     // ice
     if(tile.ice){
-      ctx.fillStyle='#bee3f8';ctx.globalAlpha=0.4;
-      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+      if(useSprites){
+        const iceS = GameSprites.get('ice');
+        if(iceS){ctx.drawImage(iceS,px,py,cellSize,cellSize)}
+        else{ctx.fillStyle='#bee3f8';ctx.globalAlpha=0.4;ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1}
+      } else {
+        ctx.fillStyle='#bee3f8';ctx.globalAlpha=0.4;
+        ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+      }
     }
     // teleporter
     if(tile.teleporter){
-      ctx.fillStyle='#9f7aea';ctx.globalAlpha=0.4;
-      ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
-      drawEmoji(ctx,'🌀',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+      if(useSprites){
+        const ts = GameSprites.get('teleporter');
+        if(ts){ctx.drawImage(ts,px,py,cellSize,cellSize)}
+        else{ctx.fillStyle='#9f7aea';ctx.globalAlpha=0.4;ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;drawEmoji(ctx,'🌀',px+cellSize/2,py+cellSize/2,cellSize*0.5)}
+      } else {
+        ctx.fillStyle='#9f7aea';ctx.globalAlpha=0.4;
+        ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);ctx.globalAlpha=1;
+        drawEmoji(ctx,'🌀',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+      }
     }
     // goal
     if(tile.isGoal){
-      drawEmoji(ctx,'⭐',px+cellSize/2,py+cellSize/2,cellSize*0.6);
+      if(useSprites){
+        const gs = GameSprites.get('goal');
+        if(gs){ctx.drawImage(gs,px,py,cellSize,cellSize)}
+        else{drawEmoji(ctx,'⭐',px+cellSize/2,py+cellSize/2,cellSize*0.6)}
+      } else {
+        drawEmoji(ctx,'⭐',px+cellSize/2,py+cellSize/2,cellSize*0.6);
+      }
     }
     // item
     if(tile.item){
-      drawEmoji(ctx,'💎',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+      if(useSprites){
+        const is = GameSprites.get('gem');
+        if(is){ctx.drawImage(is,px,py,cellSize,cellSize)}
+        else{drawEmoji(ctx,'💎',px+cellSize/2,py+cellSize/2,cellSize*0.5)}
+      } else {
+        drawEmoji(ctx,'💎',px+cellSize/2,py+cellSize/2,cellSize*0.5);
+      }
     }
   }
   // robot
@@ -935,7 +1269,13 @@ function drawEmoji(ctx,emoji,cx,cy,size){
 }
 
 function drawRobot(x,y,dir){
-  const cx=x*cellSize+cellSize/2;const cy=y*cellSize+cellSize/2;
+  const px=x*cellSize,py=y*cellSize;
+  if(GameSprites.isReady()){
+    const rs = GameSprites.get('robot');
+    if(rs && rs[dir]){ctx.drawImage(rs[dir],px,py,cellSize,cellSize);return}
+  }
+  // fallback
+  const cx=px+cellSize/2;const cy=py+cellSize/2;
   const s=cellSize*0.35;
   ctx.save();ctx.translate(cx,cy);
   ctx.rotate([0,Math.PI/2,Math.PI,Math.PI*1.5][dir]);
@@ -1359,6 +1699,7 @@ window.addEventListener('resize',onResize);
 
 // ============== INIT ==============
 function init(){
+  GameSprites.init();
   loadSave();
   if(save.unlockedLevel>1){
     document.getElementById('continueBtn').style.display='inline-block';

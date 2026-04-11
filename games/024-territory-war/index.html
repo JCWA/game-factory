@@ -222,6 +222,405 @@ canvas { display: block; }
 <div id="tooltip"></div>
 
 <script>
+// ==================== SPRITE SYSTEM ====================
+const GameSprites = (function() {
+  const cache = {};
+  const SPRITE_SIZE = 64;
+  const S = SPRITE_SIZE;
+  const H = S / 2;
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w || S;
+    c.height = h || S;
+    return c;
+  }
+
+  function drawTree(c, x, y, scale) {
+    // Trunk
+    c.fillStyle = '#5a3a1a';
+    c.fillRect(x - 2 * scale, y, 4 * scale, 8 * scale);
+    // Foliage layers (dark to light, bottom to top)
+    const layers = [
+      { yOff: -4, w: 14, h: 10, color: '#1a5a1a' },
+      { yOff: -10, w: 11, h: 9, color: '#2a7a2a' },
+      { yOff: -15, w: 7, h: 7, color: '#3a9a3a' },
+    ];
+    for (const l of layers) {
+      c.beginPath();
+      c.moveTo(x, (y + l.yOff - l.h) * 1); // tip
+      c.lineTo(x - l.w * scale / 2, (y + l.yOff) * 1);
+      c.lineTo(x + l.w * scale / 2, (y + l.yOff) * 1);
+      c.closePath();
+      c.fillStyle = l.color;
+      c.fill();
+    }
+    // Highlight
+    c.beginPath();
+    c.moveTo(x, y - 15 * scale - 7 * scale);
+    c.lineTo(x + 2 * scale, y - 15 * scale);
+    c.lineTo(x, y - 12 * scale);
+    c.closePath();
+    c.fillStyle = 'rgba(255,255,255,0.15)';
+    c.fill();
+  }
+
+  function drawMountain(c, x, y, scale) {
+    // Back peak
+    c.beginPath();
+    c.moveTo(x + 6 * scale, y - 16 * scale);
+    c.lineTo(x - 4 * scale, y + 8 * scale);
+    c.lineTo(x + 16 * scale, y + 8 * scale);
+    c.closePath();
+    c.fillStyle = '#5a5a5a';
+    c.fill();
+    // Front peak
+    c.beginPath();
+    c.moveTo(x - 2 * scale, y - 20 * scale);
+    c.lineTo(x - 14 * scale, y + 8 * scale);
+    c.lineTo(x + 10 * scale, y + 8 * scale);
+    c.closePath();
+    const mGrad = c.createLinearGradient(x, y - 20 * scale, x, y + 8 * scale);
+    mGrad.addColorStop(0, '#8a8a8a');
+    mGrad.addColorStop(0.4, '#6a6a6a');
+    mGrad.addColorStop(1, '#4a4a4a');
+    c.fillStyle = mGrad;
+    c.fill();
+    // Snow cap
+    c.beginPath();
+    c.moveTo(x - 2 * scale, y - 20 * scale);
+    c.lineTo(x - 6 * scale, y - 14 * scale);
+    c.lineTo(x - 1 * scale, y - 13 * scale);
+    c.lineTo(x + 3 * scale, y - 14 * scale);
+    c.closePath();
+    c.fillStyle = '#e8e8f0';
+    c.fill();
+  }
+
+  function drawHouse(c, x, y, scale, color) {
+    // Wall
+    c.fillStyle = color || '#d4b86a';
+    c.fillRect(x - 5 * scale, y - 4 * scale, 10 * scale, 10 * scale);
+    // Roof
+    c.beginPath();
+    c.moveTo(x, y - 10 * scale);
+    c.lineTo(x - 7 * scale, y - 4 * scale);
+    c.lineTo(x + 7 * scale, y - 4 * scale);
+    c.closePath();
+    c.fillStyle = '#a03030';
+    c.fill();
+    // Door
+    c.fillStyle = '#5a3a1a';
+    c.fillRect(x - 2 * scale, y + 1 * scale, 4 * scale, 5 * scale);
+    // Window
+    c.fillStyle = '#ffffaa';
+    c.fillRect(x + 2 * scale, y - 2 * scale, 2.5 * scale, 2.5 * scale);
+  }
+
+  function drawCastle(c, x, y, scale) {
+    // Main body
+    const bGrad = c.createLinearGradient(x - 10 * scale, y, x + 10 * scale, y);
+    bGrad.addColorStop(0, '#7a7a8a');
+    bGrad.addColorStop(0.5, '#9a9aaa');
+    bGrad.addColorStop(1, '#7a7a8a');
+    c.fillStyle = bGrad;
+    c.fillRect(x - 10 * scale, y - 6 * scale, 20 * scale, 14 * scale);
+    // Towers
+    for (const tx of [-10, 6]) {
+      c.fillStyle = '#6a6a7a';
+      c.fillRect(x + tx * scale, y - 14 * scale, 5 * scale, 22 * scale);
+      // Battlements
+      for (let i = 0; i < 3; i++) {
+        c.fillStyle = '#8a8a9a';
+        c.fillRect(x + (tx + i * 2) * scale, y - 16 * scale, 1.5 * scale, 2 * scale);
+      }
+    }
+    // Center battlement
+    for (let i = 0; i < 5; i++) {
+      c.fillStyle = '#8a8a9a';
+      c.fillRect(x + (-6 + i * 3) * scale, y - 8 * scale, 2 * scale, 2 * scale);
+    }
+    // Gate
+    c.beginPath();
+    c.arc(x, y + 1 * scale, 4 * scale, Math.PI, 0);
+    c.fillStyle = '#2a2a3a';
+    c.fill();
+    c.fillRect(x - 4 * scale, y + 1 * scale, 8 * scale, 7 * scale);
+    // Gate bars
+    c.strokeStyle = '#555';
+    c.lineWidth = scale * 0.7;
+    for (let i = -3; i <= 3; i += 2) {
+      c.beginPath();
+      c.moveTo(x + i * scale, y - 3 * scale);
+      c.lineTo(x + i * scale, y + 8 * scale);
+      c.stroke();
+    }
+  }
+
+  // ---- UNIT SPRITES ----
+  function drawMilitia(c, x, y, scale, teamColor) {
+    // Body
+    const bGrad = c.createRadialGradient(x, y + 2 * scale, 0, x, y + 2 * scale, 8 * scale);
+    bGrad.addColorStop(0, teamColor === 'blue' ? '#6090cc' : '#cc6060');
+    bGrad.addColorStop(1, teamColor === 'blue' ? '#2a4a7a' : '#7a2a2a');
+    c.fillStyle = bGrad;
+    c.beginPath();
+    c.arc(x, y + 4 * scale, 7 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Head
+    c.fillStyle = teamColor === 'blue' ? '#a0c0e0' : '#e0a0a0';
+    c.beginPath();
+    c.arc(x, y - 6 * scale, 5 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Sword
+    c.strokeStyle = '#c0c0d0';
+    c.lineWidth = 2 * scale;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(x + 6 * scale, y - 2 * scale);
+    c.lineTo(x + 12 * scale, y - 12 * scale);
+    c.stroke();
+    // Guard
+    c.strokeStyle = '#8a6a2a';
+    c.lineWidth = 2.5 * scale;
+    c.beginPath();
+    c.moveTo(x + 4 * scale, y - 2 * scale);
+    c.lineTo(x + 8 * scale, y - 2 * scale);
+    c.stroke();
+  }
+
+  function drawWarrior(c, x, y, scale, teamColor) {
+    // Body (armor)
+    const aGrad = c.createRadialGradient(x, y + 2 * scale, 0, x, y + 2 * scale, 9 * scale);
+    aGrad.addColorStop(0, teamColor === 'blue' ? '#5888bb' : '#bb5858');
+    aGrad.addColorStop(1, teamColor === 'blue' ? '#1a3a6a' : '#6a1a1a');
+    c.fillStyle = aGrad;
+    c.beginPath();
+    c.arc(x, y + 4 * scale, 8 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Helm
+    const hGrad = c.createLinearGradient(x - 5 * scale, y - 10 * scale, x + 5 * scale, y - 2 * scale);
+    hGrad.addColorStop(0, '#8a8a9a');
+    hGrad.addColorStop(0.5, '#c0c0d0');
+    hGrad.addColorStop(1, '#7a7a8a');
+    c.fillStyle = hGrad;
+    c.beginPath();
+    c.arc(x, y - 5 * scale, 6 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Visor slit
+    c.fillStyle = '#1a1a2a';
+    c.fillRect(x - 4 * scale, y - 5 * scale, 8 * scale, 1.5 * scale);
+    // Crossed swords
+    c.strokeStyle = '#d0d0e0';
+    c.lineWidth = 2 * scale;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(x - 10 * scale, y - 12 * scale);
+    c.lineTo(x + 2 * scale, y);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x + 10 * scale, y - 12 * scale);
+    c.lineTo(x - 2 * scale, y);
+    c.stroke();
+    // Guards
+    c.strokeStyle = '#aa8822';
+    c.lineWidth = 2.5 * scale;
+    c.beginPath();
+    c.moveTo(x - 3 * scale, y - 1 * scale);
+    c.lineTo(x + 3 * scale, y - 1 * scale);
+    c.stroke();
+  }
+
+  function drawArcher(c, x, y, scale, teamColor) {
+    // Body
+    const bGrad = c.createRadialGradient(x, y + 3 * scale, 0, x, y + 3 * scale, 8 * scale);
+    bGrad.addColorStop(0, teamColor === 'blue' ? '#4a8a5a' : '#8a5a4a');
+    bGrad.addColorStop(1, teamColor === 'blue' ? '#2a5a3a' : '#5a3a2a');
+    c.fillStyle = bGrad;
+    c.beginPath();
+    c.arc(x, y + 4 * scale, 7 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Hood / head
+    c.fillStyle = teamColor === 'blue' ? '#3a7a4a' : '#7a4a3a';
+    c.beginPath();
+    c.arc(x, y - 5 * scale, 5.5 * scale, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#e8d0b0';
+    c.beginPath();
+    c.arc(x, y - 4 * scale, 3.5 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Bow
+    c.strokeStyle = '#8a5a2a';
+    c.lineWidth = 2 * scale;
+    c.beginPath();
+    c.arc(x - 8 * scale, y, 10 * scale, -Math.PI * 0.4, Math.PI * 0.4);
+    c.stroke();
+    // Bowstring
+    c.strokeStyle = '#ccc';
+    c.lineWidth = 0.8 * scale;
+    c.beginPath();
+    const bTopX = x - 8 * scale + 10 * scale * Math.cos(-Math.PI * 0.4);
+    const bTopY = y + 10 * scale * Math.sin(-Math.PI * 0.4);
+    const bBotX = x - 8 * scale + 10 * scale * Math.cos(Math.PI * 0.4);
+    const bBotY = y + 10 * scale * Math.sin(Math.PI * 0.4);
+    c.moveTo(bTopX, bTopY);
+    c.lineTo(x - 2 * scale, y);
+    c.lineTo(bBotX, bBotY);
+    c.stroke();
+    // Arrow
+    c.strokeStyle = '#8a6a3a';
+    c.lineWidth = 1.2 * scale;
+    c.beginPath();
+    c.moveTo(x - 2 * scale, y);
+    c.lineTo(x + 14 * scale, y - 3 * scale);
+    c.stroke();
+    // Arrowhead
+    c.fillStyle = '#aaa';
+    c.beginPath();
+    c.moveTo(x + 14 * scale, y - 3 * scale);
+    c.lineTo(x + 11 * scale, y - 5 * scale);
+    c.lineTo(x + 11 * scale, y - 1 * scale);
+    c.closePath();
+    c.fill();
+  }
+
+  function drawKnight(c, x, y, scale, teamColor) {
+    // Horse body
+    const hGrad = c.createRadialGradient(x, y + 4 * scale, 0, x, y + 4 * scale, 12 * scale);
+    hGrad.addColorStop(0, '#8a7050');
+    hGrad.addColorStop(1, '#4a3a20');
+    c.fillStyle = hGrad;
+    c.beginPath();
+    c.ellipse(x, y + 5 * scale, 11 * scale, 7 * scale, 0, 0, Math.PI * 2);
+    c.fill();
+    // Horse head
+    c.fillStyle = '#6a5a3a';
+    c.beginPath();
+    c.ellipse(x + 9 * scale, y - 6 * scale, 4 * scale, 7 * scale, -0.4, 0, Math.PI * 2);
+    c.fill();
+    // Horse eye
+    c.fillStyle = '#111';
+    c.beginPath();
+    c.arc(x + 10 * scale, y - 8 * scale, 1.2 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Horse ear
+    c.fillStyle = '#5a4a2a';
+    c.beginPath();
+    c.moveTo(x + 8 * scale, y - 12 * scale);
+    c.lineTo(x + 6 * scale, y - 16 * scale);
+    c.lineTo(x + 10 * scale, y - 13 * scale);
+    c.closePath();
+    c.fill();
+    // Rider body
+    c.fillStyle = teamColor === 'blue' ? '#3a5a9a' : '#9a3a3a';
+    c.beginPath();
+    c.arc(x - 2 * scale, y - 4 * scale, 6 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Rider helm
+    const rGrad = c.createLinearGradient(x - 6 * scale, y - 14 * scale, x + 2 * scale, y - 8 * scale);
+    rGrad.addColorStop(0, '#c0c0d0');
+    rGrad.addColorStop(1, '#8a8a9a');
+    c.fillStyle = rGrad;
+    c.beginPath();
+    c.arc(x - 2 * scale, y - 12 * scale, 4 * scale, 0, Math.PI * 2);
+    c.fill();
+    // Plume
+    c.fillStyle = teamColor === 'blue' ? '#4a8aff' : '#ff4a4a';
+    c.beginPath();
+    c.moveTo(x - 2 * scale, y - 16 * scale);
+    c.quadraticCurveTo(x - 8 * scale, y - 20 * scale, x - 10 * scale, y - 14 * scale);
+    c.lineTo(x - 4 * scale, y - 14 * scale);
+    c.closePath();
+    c.fill();
+    // Lance
+    c.strokeStyle = '#b0a070';
+    c.lineWidth = 2 * scale;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(x + 2 * scale, y - 2 * scale);
+    c.lineTo(x + 14 * scale, y - 16 * scale);
+    c.stroke();
+    // Lance tip
+    c.fillStyle = '#d0d0e0';
+    c.beginPath();
+    c.moveTo(x + 14 * scale, y - 16 * scale);
+    c.lineTo(x + 12 * scale, y - 18 * scale);
+    c.lineTo(x + 16 * scale, y - 18 * scale);
+    c.closePath();
+    c.fill();
+    // Horse legs
+    c.strokeStyle = '#4a3a20';
+    c.lineWidth = 2 * scale;
+    for (const lx of [-6, -2, 4, 8]) {
+      c.beginPath();
+      c.moveTo(x + lx * scale, y + 10 * scale);
+      c.lineTo(x + (lx + (lx < 0 ? -1 : 1)) * scale, y + 15 * scale);
+      c.stroke();
+    }
+  }
+
+  // ---- GENERATE SPRITES ----
+  function generateTileSprite(type) {
+    const c = createCanvas(S, S);
+    const ctx = c.getContext('2d');
+    const cx = H, cy = H;
+    const sc = S / 64;
+
+    if (type === 'forest') {
+      drawTree(ctx, cx - 8 * sc, cy + 6 * sc, sc * 0.9);
+      drawTree(ctx, cx + 8 * sc, cy + 4 * sc, sc * 0.8);
+      drawTree(ctx, cx, cy - 2 * sc, sc * 1.0);
+    } else if (type === 'mountain') {
+      drawMountain(ctx, cx, cy + 4 * sc, sc);
+    } else if (type === 'village') {
+      drawHouse(ctx, cx - 10 * sc, cy + 4 * sc, sc * 0.8, '#d4b86a');
+      drawHouse(ctx, cx + 8 * sc, cy + 6 * sc, sc * 0.7, '#c8a858');
+      drawHouse(ctx, cx, cy - 2 * sc, sc * 0.9, '#dcc070');
+    } else if (type === 'base') {
+      drawCastle(ctx, cx, cy, sc);
+    }
+    return c;
+  }
+
+  function generateUnitSprite(unitType, team) {
+    const c = createCanvas(S, S);
+    const ctx = c.getContext('2d');
+    const cx = H, cy = H;
+    const sc = S / 64;
+    const tc = team === TEAM.PLAYER ? 'blue' : 'red';
+
+    if (unitType === 'militia') drawMilitia(ctx, cx, cy, sc, tc);
+    else if (unitType === 'warrior') drawWarrior(ctx, cx, cy, sc, tc);
+    else if (unitType === 'archer') drawArcher(ctx, cx, cy, sc, tc);
+    else if (unitType === 'knight') drawKnight(ctx, cx, cy, sc, tc);
+
+    return c;
+  }
+
+  function init() {
+    // Tile decoration sprites
+    for (const type of ['forest', 'mountain', 'village', 'base']) {
+      cache['tile_' + type] = generateTileSprite(type);
+    }
+    // Unit sprites for each type and team
+    for (const unitType of ['militia', 'warrior', 'archer', 'knight']) {
+      for (const team of [1, 2]) { // TEAM.PLAYER=1, TEAM.AI=2
+        cache['unit_' + unitType + '_' + team] = generateUnitSprite(unitType, team);
+      }
+    }
+  }
+
+  function getTile(type) {
+    return cache['tile_' + type] || null;
+  }
+
+  function getUnit(unitType, team) {
+    return cache['unit_' + unitType + '_' + team] || null;
+  }
+
+  return { init, getTile, getUnit };
+})();
+
 // ==================== CONSTANTS ====================
 const TILE = { PLAIN: 'plain', FOREST: 'forest', MOUNTAIN: 'mountain', VILLAGE: 'village', BASE: 'base' };
 const TEAM = { NONE: 0, PLAYER: 1, AI: 2 };
@@ -241,6 +640,22 @@ const TILE_COLORS = {
 };
 const MAX_POWER = 8;
 const MAX_TURNS = 30;
+
+// ==================== COLOR UTILS ====================
+function lightenColor(hex, amount) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, (num >> 16) + amount);
+  const g = Math.min(255, ((num >> 8) & 0xFF) + amount);
+  const b = Math.min(255, (num & 0xFF) + amount);
+  return `rgb(${r},${g},${b})`;
+}
+function darkenColor(hex, amount) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.max(0, (num >> 16) - amount);
+  const g = Math.max(0, ((num >> 8) & 0xFF) - amount);
+  const b = Math.max(0, (num & 0xFF) - amount);
+  return `rgb(${r},${g},${b})`;
+}
 
 // ==================== GAME STATE ====================
 let G = {}; // game state
@@ -859,57 +1274,98 @@ function drawHex(q, r) {
   }
   ctx.closePath();
 
-  // Fill color
+  // Fill color with gradient
   const baseColor = TILE_COLORS[tile.type]?.[tile.team] || TILE_COLORS.plain[TEAM.NONE];
-  ctx.fillStyle = baseColor;
+  const tileGrad = ctx.createRadialGradient(x - hexSize * 0.2, y - hexSize * 0.3, 0, x, y, hexSize);
+  tileGrad.addColorStop(0, lightenColor(baseColor, 25));
+  tileGrad.addColorStop(0.7, baseColor);
+  tileGrad.addColorStop(1, darkenColor(baseColor, 20));
+  ctx.fillStyle = tileGrad;
   ctx.fill();
 
-  // Border
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 1;
+  // Border with subtle shadow
+  ctx.strokeStyle = darkenColor(baseColor, 40);
+  ctx.lineWidth = 1.2;
   ctx.stroke();
 
-  // Tile icons
-  const fontSize = Math.max(10, hexSize * 0.5);
-  ctx.font = `${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  if (tile.type === TILE.FOREST) {
-    ctx.fillStyle = '#1a4a1a';
-    ctx.font = `${hexSize * 0.6}px sans-serif`;
-    ctx.fillText('🌲', x, y - hexSize * 0.15);
-  } else if (tile.type === TILE.MOUNTAIN) {
-    ctx.fillStyle = '#444';
-    ctx.font = `${hexSize * 0.6}px sans-serif`;
-    ctx.fillText('⛰️', x, y - hexSize * 0.1);
-  } else if (tile.type === TILE.VILLAGE) {
-    ctx.font = `${hexSize * 0.45}px sans-serif`;
-    ctx.fillText('🏘️', x, y - hexSize * 0.3);
-  } else if (tile.type === TILE.BASE) {
-    ctx.font = `${hexSize * 0.5}px sans-serif`;
-    ctx.fillText('🏰', x, y - hexSize * 0.3);
+  // Tile decoration sprite
+  const tileSprite = GameSprites.getTile(tile.type);
+  if (tileSprite) {
+    const spriteDrawSize = hexSize * 1.4;
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 180 * (60 * i - 30);
+      const hx = x + s * Math.cos(angle);
+      const hy = y + s * Math.sin(angle);
+      if (i === 0) ctx.moveTo(hx, hy);
+      else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(tileSprite, x - spriteDrawSize / 2, y - spriteDrawSize / 2, spriteDrawSize, spriteDrawSize);
+    ctx.restore();
+  } else if (tile.type !== TILE.PLAIN) {
+    // Emoji fallback for unknown tile types
+    const fontSize = Math.max(10, hexSize * 0.5);
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (tile.type === TILE.FOREST) {
+      ctx.fillText('🌲', x, y - hexSize * 0.15);
+    } else if (tile.type === TILE.MOUNTAIN) {
+      ctx.fillText('⛰️', x, y - hexSize * 0.1);
+    } else if (tile.type === TILE.VILLAGE) {
+      ctx.fillText('🏘️', x, y - hexSize * 0.3);
+    } else if (tile.type === TILE.BASE) {
+      ctx.fillText('🏰', x, y - hexSize * 0.3);
+    }
   }
 
   // Unit
   if (tile.unit) {
     const uInfo = UNIT_TYPES[tile.unit.type];
-    // Unit icon
-    ctx.font = `${hexSize * 0.55}px sans-serif`;
-    ctx.fillText(uInfo.icon, x, y + (tile.type !== TILE.PLAIN ? hexSize * 0.15 : -hexSize * 0.1));
+    const unitSprite = GameSprites.getUnit(tile.unit.type, tile.unit.team);
 
-    // Power number
-    const py = y + hexSize * 0.35;
-    ctx.font = `bold ${Math.max(10, hexSize * 0.4)}px sans-serif`;
-    ctx.fillStyle = tile.unit.team === TEAM.PLAYER ? '#1a3a6a' : '#6a1a1a';
-    ctx.fillText(tile.unit.power, x, py);
+    if (unitSprite) {
+      const unitDrawSize = hexSize * 1.2;
+      const unitYOff = tile.type !== TILE.PLAIN ? hexSize * 0.05 : -hexSize * 0.05;
+      ctx.drawImage(unitSprite, x - unitDrawSize / 2, y - unitDrawSize / 2 + unitYOff, unitDrawSize, unitDrawSize);
+    } else {
+      // Emoji fallback
+      ctx.font = `${hexSize * 0.55}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(uInfo.icon, x, y + (tile.type !== TILE.PLAIN ? hexSize * 0.15 : -hexSize * 0.1));
+    }
 
-    // Team indicator ring
+    // Team indicator ring with glow
     ctx.beginPath();
     ctx.arc(x, y, hexSize * 0.6, 0, Math.PI * 2);
-    ctx.strokeStyle = tile.unit.team === TEAM.PLAYER ? 'rgba(70,140,255,0.6)' : 'rgba(255,70,70,0.6)';
-    ctx.lineWidth = 2;
+    const ringColor = tile.unit.team === TEAM.PLAYER ? 'rgba(70,140,255,0.6)' : 'rgba(255,70,70,0.6)';
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = tile.unit.team === TEAM.PLAYER ? '#4a8cff' : '#ff4a4a';
+    ctx.shadowBlur = 6;
     ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Power number with background pill
+    const py = y + hexSize * 0.38;
+    const powerText = String(tile.unit.power);
+    const pillW = hexSize * 0.32;
+    const pillH = hexSize * 0.28;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.arc(x - pillW, py, pillH, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.arc(x + pillW, py, pillH, Math.PI * 1.5, Math.PI * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = `bold ${Math.max(10, hexSize * 0.38)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = tile.unit.team === TEAM.PLAYER ? '#8ac4ff' : '#ff8a8a';
+    ctx.fillText(powerText, x, py);
 
     // Moved indicator
     if (tile.unit.moved && tile.unit.team === TEAM.PLAYER && isPlayerTurn) {
@@ -1167,6 +1623,7 @@ window.addEventListener('resize', resizeCanvas);
 
 // ==================== INIT ====================
 function init() {
+  GameSprites.init();
   resizeCanvas();
 
   // Check for save

@@ -120,6 +120,421 @@ header h1{font-size:1.1em;color:#4CAF50;}
 </div>
 
 <script>
+// ========== SPRITE SYSTEM ==========
+const GameSprites = (function(){
+  const sprites = {};
+  const RES = 2; // resolution multiplier for crisp sprites
+
+  function makeCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w * RES;
+    c.height = h * RES;
+    const ctx = c.getContext('2d');
+    ctx.scale(RES, RES);
+    return { canvas: c, ctx };
+  }
+
+  function buildGrassTiles() {
+    // Tile size matches CELL (10px)
+    const S = 10;
+
+    // Bare soil (density 0)
+    (function(){
+      const {canvas, ctx} = makeCanvas(S, S);
+      const g = ctx.createLinearGradient(0, 0, S, S);
+      g.addColorStop(0, '#9C7A5B');
+      g.addColorStop(0.5, '#8D6E63');
+      g.addColorStop(1, '#7B5E50');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+      // subtle texture dots
+      ctx.fillStyle = 'rgba(0,0,0,0.1)';
+      ctx.fillRect(2, 3, 1, 1);
+      ctx.fillRect(6, 7, 1, 1);
+      ctx.fillRect(8, 2, 1, 1);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(4, 5, 1, 1);
+      sprites.grass0 = canvas;
+    })();
+
+    // Light grass (density 1)
+    (function(){
+      const {canvas, ctx} = makeCanvas(S, S);
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, '#8BC78B');
+      g.addColorStop(1, '#6DAF6D');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+      // small grass blades
+      ctx.strokeStyle = '#5C9E5C';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath(); ctx.moveTo(3, 9); ctx.lineTo(3, 5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7, 9); ctx.lineTo(8, 6); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(0, 0, S, 2);
+      sprites.grass1 = canvas;
+    })();
+
+    // Medium grass (density 2)
+    (function(){
+      const {canvas, ctx} = makeCanvas(S, S);
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, '#5DBB5D');
+      g.addColorStop(1, '#429942');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+      // denser blades
+      ctx.strokeStyle = '#357A35';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(2, 9); ctx.lineTo(1, 4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(5, 9); ctx.lineTo(5, 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(8, 9); ctx.lineTo(9, 5); ctx.stroke();
+      // highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(0, 0, S, 3);
+      sprites.grass2 = canvas;
+    })();
+
+    // Dense grass (density 3)
+    (function(){
+      const {canvas, ctx} = makeCanvas(S, S);
+      const g = ctx.createRadialGradient(5, 5, 1, 5, 5, 7);
+      g.addColorStop(0, '#3FA13F');
+      g.addColorStop(1, '#276227');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+      // thick foliage
+      ctx.strokeStyle = '#1B4D1B';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(1, 9); ctx.lineTo(0, 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(3, 9); ctx.lineTo(4, 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(5, 9); ctx.lineTo(5, 1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7, 9); ctx.lineTo(6, 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9, 9); ctx.lineTo(9, 4); ctx.stroke();
+      // top highlight
+      ctx.fillStyle = 'rgba(180,255,180,0.1)';
+      ctx.fillRect(0, 0, S, 2);
+      // shadow at bottom
+      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      ctx.fillRect(0, 8, S, 2);
+      sprites.grass3 = canvas;
+    })();
+  }
+
+  function buildFenceTile() {
+    const S = 10;
+    const {canvas, ctx} = makeCanvas(S, S);
+    // stone base
+    const g = ctx.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, '#5D4037');
+    g.addColorStop(0.3, '#4E342E');
+    g.addColorStop(0.7, '#3E2723');
+    g.addColorStop(1, '#4E342E');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+    // brick rows with mortar
+    ctx.fillStyle = '#6D5047';
+    ctx.fillRect(1, 1, 4, 3);
+    ctx.fillRect(6, 1, 3, 3);
+    ctx.fillRect(0, 5, 3, 3);
+    ctx.fillRect(4, 5, 4, 3);
+    // highlight on bricks
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(1, 1, 4, 1);
+    ctx.fillRect(6, 1, 3, 1);
+    ctx.fillRect(0, 5, 3, 1);
+    ctx.fillRect(4, 5, 4, 1);
+    // shadow on bricks
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(1, 3, 4, 1);
+    ctx.fillRect(6, 3, 3, 1);
+    ctx.fillRect(0, 7, 3, 1);
+    ctx.fillRect(4, 7, 4, 1);
+    sprites.fence = canvas;
+  }
+
+  function buildRabbitSprite() {
+    const S = 10; // sprite size (drawn centered)
+    const {canvas, ctx} = makeCanvas(S, S);
+    const cx = 5, cy = 5;
+    // body shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(cx + 0.5, cy + 0.5, 3.2, 2.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // body
+    const bg = ctx.createRadialGradient(cx - 0.5, cy - 0.8, 0.5, cx, cy, 3);
+    bg.addColorStop(0, '#ffffff');
+    bg.addColorStop(0.6, '#f0f0f0');
+    bg.addColorStop(1, '#d0d0d0');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 3, 2.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // ears
+    ctx.fillStyle = '#f5f5f5';
+    ctx.beginPath();
+    ctx.ellipse(cx - 1.2, cy - 3.5, 0.8, 1.8, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + 1.2, cy - 3.5, 0.8, 1.8, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // inner ears
+    ctx.fillStyle = '#FFB0B0';
+    ctx.beginPath();
+    ctx.ellipse(cx - 1.2, cy - 3.5, 0.4, 1.2, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + 1.2, cy - 3.5, 0.4, 1.2, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // eye
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(cx - 0.8, cy - 0.5, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - 1, cy - 0.7, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // nose
+    ctx.fillStyle = '#FFB0B0';
+    ctx.beginPath();
+    ctx.arc(cx + 0.3, cy + 0.3, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    sprites.rabbit = canvas;
+  }
+
+  function buildRabbitTrail() {
+    const S = 6;
+    const {canvas, ctx} = makeCanvas(S, S);
+    const g = ctx.createRadialGradient(3, 3, 0, 3, 3, 3);
+    g.addColorStop(0, 'rgba(255,255,255,0.3)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(3, 3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    sprites.rabbitTrail = canvas;
+  }
+
+  function buildFoxSprite() {
+    const S = 14;
+    const {canvas, ctx} = makeCanvas(S, S);
+    const cx = 7, cy = 7;
+    // body shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(cx + 0.5, cy + 0.5, 4.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // body
+    const bg = ctx.createRadialGradient(cx - 1, cy - 1, 1, cx, cy, 4.5);
+    bg.addColorStop(0, '#FFB74D');
+    bg.addColorStop(0.5, '#FF9800');
+    bg.addColorStop(1, '#E65100');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 4.2, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // belly highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 1, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // ears (triangular)
+    ctx.fillStyle = '#FF9800';
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, cy - 2);
+    ctx.lineTo(cx - 1.5, cy - 5);
+    ctx.lineTo(cx - 0.5, cy - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx + 0.5, cy - 2);
+    ctx.lineTo(cx + 1.5, cy - 5);
+    ctx.lineTo(cx + 3, cy - 2);
+    ctx.closePath();
+    ctx.fill();
+    // inner ears
+    ctx.fillStyle = '#3E2723';
+    ctx.beginPath();
+    ctx.moveTo(cx - 2.5, cy - 2.2);
+    ctx.lineTo(cx - 1.5, cy - 4.2);
+    ctx.lineTo(cx - 0.8, cy - 2.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx + 0.8, cy - 2.2);
+    ctx.lineTo(cx + 1.5, cy - 4.2);
+    ctx.lineTo(cx + 2.5, cy - 2.2);
+    ctx.closePath();
+    ctx.fill();
+    // snout
+    ctx.fillStyle = '#FFE0B2';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 0.5, 1.5, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // eyes
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(cx - 1.5, cy - 0.5, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 1.5, cy - 0.5, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    // eye highlights
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - 1.7, cy - 0.7, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 1.3, cy - 0.7, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    // nose
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(cx, cy + 0.2, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // tail
+    ctx.strokeStyle = '#FF9800';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx + 3.5, cy + 1);
+    ctx.quadraticCurveTo(cx + 5.5, cy - 1, cx + 5, cy - 3);
+    ctx.stroke();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx + 5, cy - 3);
+    ctx.lineTo(cx + 4.8, cy - 2);
+    ctx.stroke();
+    sprites.fox = canvas;
+  }
+
+  function buildFoxTrail() {
+    const S = 8;
+    const {canvas, ctx} = makeCanvas(S, S);
+    const g = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
+    g.addColorStop(0, 'rgba(255,152,0,0.3)');
+    g.addColorStop(1, 'rgba(255,152,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(4, 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+    sprites.foxTrail = canvas;
+  }
+
+  function buildParticles() {
+    // Heart particle
+    (function(){
+      const S = 12;
+      const {canvas, ctx} = makeCanvas(S, S);
+      ctx.fillStyle = '#ff4081';
+      ctx.shadowColor = '#ff4081';
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      const hx = 6, hy = 4;
+      ctx.moveTo(hx, hy + 2);
+      ctx.bezierCurveTo(hx, hy, hx - 3, hy, hx - 3, hy + 2);
+      ctx.bezierCurveTo(hx - 3, hy + 4, hx, hy + 6, hx, hy + 7);
+      ctx.bezierCurveTo(hx, hy + 6, hx + 3, hy + 4, hx + 3, hy + 2);
+      ctx.bezierCurveTo(hx + 3, hy, hx, hy, hx, hy + 2);
+      ctx.fill();
+      // highlight
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(hx - 1.5, hy + 1.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      sprites.heart = canvas;
+    })();
+
+    // Death particle
+    (function(){
+      const S = 12;
+      const {canvas, ctx} = makeCanvas(S, S);
+      ctx.strokeStyle = '#ff5252';
+      ctx.shadowColor = '#ff5252';
+      ctx.shadowBlur = 2;
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(3, 3); ctx.lineTo(9, 9);
+      ctx.moveTo(9, 3); ctx.lineTo(3, 9);
+      ctx.stroke();
+      sprites.death = canvas;
+    })();
+
+    // Skull particle
+    (function(){
+      const S = 12;
+      const {canvas, ctx} = makeCanvas(S, S);
+      ctx.fillStyle = '#9C27B0';
+      ctx.shadowColor = '#9C27B0';
+      ctx.shadowBlur = 3;
+      // skull
+      ctx.beginPath();
+      ctx.arc(6, 5, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(4, 7, 4, 2);
+      // eyes
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath();
+      ctx.arc(4.8, 4.5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(7.2, 4.5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      // nose
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath();
+      ctx.moveTo(6, 6);
+      ctx.lineTo(5.3, 7);
+      ctx.lineTo(6.7, 7);
+      ctx.closePath();
+      ctx.fill();
+      // teeth
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(5, 7.5, 0.5, 1.5);
+      ctx.fillRect(6.5, 7.5, 0.5, 1.5);
+      sprites.skull = canvas;
+    })();
+  }
+
+  function init() {
+    buildGrassTiles();
+    buildFenceTile();
+    buildRabbitSprite();
+    buildRabbitTrail();
+    buildFoxSprite();
+    buildFoxTrail();
+    buildParticles();
+  }
+
+  function get(name) {
+    return sprites[name] || null;
+  }
+
+  // Draw a sprite centered at (x,y) on the given context
+  function draw(targetCtx, name, x, y) {
+    const s = sprites[name];
+    if (!s) return false;
+    const w = s.width / RES, h = s.height / RES;
+    targetCtx.drawImage(s, x - w/2, y - h/2, w, h);
+    return true;
+  }
+
+  // Draw a sprite at grid position (top-left corner)
+  function drawTile(targetCtx, name, gx, gy, cellSize) {
+    const s = sprites[name];
+    if (!s) return false;
+    targetCtx.drawImage(s, gx * cellSize, gy * cellSize, cellSize, cellSize);
+    return true;
+  }
+
+  return { init, get, draw, drawTile, RES };
+})();
+
 (function(){
 "use strict";
 
@@ -601,63 +1016,76 @@ const GRASS_COLORS = ['#8D6E63', '#81C784', '#4CAF50', '#2E7D32'];
 const FENCE_COLOR = '#5D4037';
 
 function render() {
-  // Grid
+  // Grid — use sprite tiles with flat-fill fallback
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
       const v = grid[y][x];
       if (v === -1) {
-        fieldCtx.fillStyle = '#4E342E';
-        fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
-        fieldCtx.fillStyle = '#3E2723';
-        fieldCtx.fillRect(x*CELL+1, y*CELL+1, CELL-2, CELL-2);
-        // brick pattern
-        fieldCtx.fillStyle = '#5D4037';
-        fieldCtx.fillRect(x*CELL+2, y*CELL+2, CELL-4, 3);
-        fieldCtx.fillRect(x*CELL+2, y*CELL+6, CELL-4, 3);
+        if (!GameSprites.drawTile(fieldCtx, 'fence', x, y, CELL)) {
+          fieldCtx.fillStyle = '#4E342E';
+          fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
+          fieldCtx.fillStyle = '#3E2723';
+          fieldCtx.fillRect(x*CELL+1, y*CELL+1, CELL-2, CELL-2);
+          fieldCtx.fillStyle = '#5D4037';
+          fieldCtx.fillRect(x*CELL+2, y*CELL+2, CELL-4, 3);
+          fieldCtx.fillRect(x*CELL+2, y*CELL+6, CELL-4, 3);
+        }
       } else {
-        fieldCtx.fillStyle = GRASS_COLORS[v];
-        fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
+        if (!GameSprites.drawTile(fieldCtx, 'grass' + v, x, y, CELL)) {
+          fieldCtx.fillStyle = GRASS_COLORS[v];
+          fieldCtx.fillRect(x*CELL, y*CELL, CELL, CELL);
+        }
       }
     }
   }
 
-  // Rabbits
-  fieldCtx.fillStyle = '#ffffff';
+  // Rabbits — sprite with trail, fallback to circle
   for (const r of rabbits) {
-    fieldCtx.beginPath();
-    fieldCtx.arc(r.x, r.y, 3, 0, Math.PI*2);
-    fieldCtx.fill();
     // trail
-    fieldCtx.fillStyle = 'rgba(255,255,255,0.2)';
-    fieldCtx.beginPath();
-    fieldCtx.arc(r.x - r.vx*2, r.y - r.vy*2, 2, 0, Math.PI*2);
-    fieldCtx.fill();
-    fieldCtx.fillStyle = '#ffffff';
+    if (!GameSprites.draw(fieldCtx, 'rabbitTrail', r.x - r.vx*2, r.y - r.vy*2)) {
+      fieldCtx.fillStyle = 'rgba(255,255,255,0.2)';
+      fieldCtx.beginPath();
+      fieldCtx.arc(r.x - r.vx*2, r.y - r.vy*2, 2, 0, Math.PI*2);
+      fieldCtx.fill();
+    }
+    if (!GameSprites.draw(fieldCtx, 'rabbit', r.x, r.y)) {
+      fieldCtx.fillStyle = '#ffffff';
+      fieldCtx.beginPath();
+      fieldCtx.arc(r.x, r.y, 3, 0, Math.PI*2);
+      fieldCtx.fill();
+    }
   }
 
-  // Foxes
-  fieldCtx.fillStyle = '#FF9800';
+  // Foxes — sprite with trail, fallback to circle
   for (const f of foxes) {
-    fieldCtx.beginPath();
-    fieldCtx.arc(f.x, f.y, 4, 0, Math.PI*2);
-    fieldCtx.fill();
     // trail
-    fieldCtx.fillStyle = 'rgba(255,152,0,0.2)';
-    fieldCtx.beginPath();
-    fieldCtx.arc(f.x - f.vx*2, f.y - f.vy*2, 3, 0, Math.PI*2);
-    fieldCtx.fill();
-    fieldCtx.fillStyle = '#FF9800';
+    if (!GameSprites.draw(fieldCtx, 'foxTrail', f.x - f.vx*2, f.y - f.vy*2)) {
+      fieldCtx.fillStyle = 'rgba(255,152,0,0.2)';
+      fieldCtx.beginPath();
+      fieldCtx.arc(f.x - f.vx*2, f.y - f.vy*2, 3, 0, Math.PI*2);
+      fieldCtx.fill();
+    }
+    if (!GameSprites.draw(fieldCtx, 'fox', f.x, f.y)) {
+      fieldCtx.fillStyle = '#FF9800';
+      fieldCtx.beginPath();
+      fieldCtx.arc(f.x, f.y, 4, 0, Math.PI*2);
+      fieldCtx.fill();
+    }
   }
 
-  // Particles
+  // Particles — sprite-based with fallback
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.life--;
     const alpha = p.life / 30;
     fieldCtx.globalAlpha = alpha;
-    fieldCtx.font = '10px sans-serif';
-    fieldCtx.fillStyle = p.text === '❤' ? '#ff4081' : (p.text === '☠' ? '#9C27B0' : '#ff5252');
-    fieldCtx.fillText(p.text, p.x - 5, p.y - 5 + (30-p.life)*0.5);
+    const py = p.y - 5 + (30 - p.life) * 0.5;
+    const spriteName = p.text === '❤' ? 'heart' : (p.text === '☠' ? 'skull' : 'death');
+    if (!GameSprites.draw(fieldCtx, spriteName, p.x, py)) {
+      fieldCtx.font = '10px sans-serif';
+      fieldCtx.fillStyle = p.text === '❤' ? '#ff4081' : (p.text === '☠' ? '#9C27B0' : '#ff5252');
+      fieldCtx.fillText(p.text, p.x - 5, py);
+    }
     fieldCtx.globalAlpha = 1;
     if (p.life <= 0) particles.splice(i, 1);
   }
@@ -904,6 +1332,8 @@ window.addEventListener('resize', resizeGraphCanvas);
 resizeGraphCanvas();
 
 // ========== START ==========
+GameSprites.init();
+
 if (!loadState()) {
   resetGame();
 } else {

@@ -87,6 +87,422 @@ const PHYSICS = { gravity: 0.48, moveSpeed: 2.9, jumpForce: -9, friction: 0.8 };
 const GHOST_COLORS = ['#ff00ff', '#ffff00', '#00ff00'];
 const SW_COLORS = ['#ff4444', '#44aaff', '#ffaa00', '#44ff44'];
 
+// ===================== SPRITE SYSTEM =====================
+const GameSprites = (function() {
+  const cache = {};
+  const T = TILE; // 32
+  const CW = CHAR_W; // 20
+  const CH = CHAR_H; // 24
+
+  function mkCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  function makeWall() {
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Base gradient
+    const g = x.createLinearGradient(0, 0, T, T);
+    g.addColorStop(0, '#2e2e42');
+    g.addColorStop(0.5, '#262638');
+    g.addColorStop(1, '#22222e');
+    x.fillStyle = g;
+    x.fillRect(0, 0, T, T);
+    // Brick lines
+    x.strokeStyle = 'rgba(70,70,110,0.5)';
+    x.lineWidth = 1;
+    x.strokeRect(0.5, 0.5, T - 1, T - 1);
+    // Inner bevel
+    const gi = x.createLinearGradient(2, 2, T - 2, T - 2);
+    gi.addColorStop(0, '#282840');
+    gi.addColorStop(1, '#1e1e30');
+    x.fillStyle = gi;
+    x.fillRect(3, 3, T - 6, T - 6);
+    // Top highlight
+    x.fillStyle = 'rgba(100,100,160,0.15)';
+    x.fillRect(1, 1, T - 2, 2);
+    // Bottom shadow
+    x.fillStyle = 'rgba(0,0,0,0.2)';
+    x.fillRect(1, T - 3, T - 2, 2);
+    // Corner rivets
+    x.fillStyle = 'rgba(80,80,130,0.4)';
+    [4, T - 6].forEach(rx => [4, T - 6].forEach(ry => {
+      x.beginPath(); x.arc(rx + 1, ry + 1, 1.5, 0, Math.PI * 2); x.fill();
+    }));
+    return c;
+  }
+
+  function makeSpike() {
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Spike triangles
+    const peaks = [T / 4, T / 2, T * 3 / 4];
+    // Shadow spikes
+    x.fillStyle = '#880808';
+    peaks.forEach(px => {
+      x.beginPath();
+      x.moveTo(px - T / 4 + 1, T);
+      x.lineTo(px, 6);
+      x.lineTo(px + T / 4 - 1, T);
+      x.closePath();
+      x.fill();
+    });
+    // Main spikes with gradient
+    peaks.forEach(px => {
+      const sg = x.createLinearGradient(px - 6, T, px, 8);
+      sg.addColorStop(0, '#cc2222');
+      sg.addColorStop(0.6, '#ee3333');
+      sg.addColorStop(1, '#ff6644');
+      x.fillStyle = sg;
+      x.beginPath();
+      x.moveTo(px - T / 4 + 2, T);
+      x.lineTo(px, 8);
+      x.lineTo(px + T / 4 - 2, T);
+      x.closePath();
+      x.fill();
+    });
+    // Highlight edge on left side
+    x.strokeStyle = 'rgba(255,180,120,0.5)';
+    x.lineWidth = 1;
+    peaks.forEach(px => {
+      x.beginPath();
+      x.moveTo(px - T / 4 + 4, T - 2);
+      x.lineTo(px, 10);
+      x.stroke();
+    });
+    // Glint at tips
+    x.fillStyle = '#ffcc88';
+    peaks.forEach(px => {
+      x.fillRect(px - 1, 8, 2, 3);
+    });
+    return c;
+  }
+
+  function makePlayer(facing) {
+    const c = mkCanvas(CW, CH);
+    const x = c.getContext('2d');
+    // Body gradient
+    const bg = x.createLinearGradient(0, 0, CW, CH);
+    bg.addColorStop(0, '#44ffff');
+    bg.addColorStop(0.4, '#00ddee');
+    bg.addColorStop(1, '#0099aa');
+    x.fillStyle = bg;
+    // Rounded body shape
+    x.beginPath();
+    x.roundRect(1, 1, CW - 2, CH - 2, 4);
+    x.fill();
+    // Visor / helmet top highlight
+    x.fillStyle = 'rgba(255,255,255,0.25)';
+    x.beginPath();
+    x.roundRect(2, 2, CW - 4, 8, [3, 3, 0, 0]);
+    x.fill();
+    // Face area (darker)
+    x.fillStyle = 'rgba(0,40,60,0.45)';
+    x.fillRect(3, 5, CW - 6, 14);
+    // Eyes
+    const ex1 = facing > 0 ? 5 : 3, ex2 = facing > 0 ? 13 : 11;
+    // Eye glow
+    x.shadowColor = '#aaffff';
+    x.shadowBlur = 4;
+    x.fillStyle = '#e0ffff';
+    x.fillRect(ex1, 7, 3, 4);
+    x.fillRect(ex2, 7, 3, 4);
+    x.shadowBlur = 0;
+    // Pupils
+    x.fillStyle = '#003040';
+    x.fillRect(ex1 + (facing > 0 ? 1 : 0), 8, 2, 2);
+    x.fillRect(ex2 + (facing > 0 ? 1 : 0), 8, 2, 2);
+    // Mouth
+    x.fillStyle = 'rgba(0,30,50,0.6)';
+    x.fillRect(6, 15, 8, 2);
+    // Belt / middle detail
+    x.fillStyle = 'rgba(0,200,220,0.5)';
+    x.fillRect(2, 19, CW - 4, 1);
+    // Outline
+    x.strokeStyle = 'rgba(0,180,200,0.7)';
+    x.lineWidth = 1;
+    x.beginPath();
+    x.roundRect(0.5, 0.5, CW - 1, CH - 1, 4);
+    x.stroke();
+    return c;
+  }
+
+  function makeGhost(color, num) {
+    const c = mkCanvas(CW, CH);
+    const x = c.getContext('2d');
+    // Parse color for gradient
+    x.globalAlpha = 0.85;
+    const bg = x.createLinearGradient(0, 0, CW, CH);
+    bg.addColorStop(0, color);
+    bg.addColorStop(1, shiftColor(color, -40));
+    x.fillStyle = bg;
+    // Ghost wavy bottom shape
+    x.beginPath();
+    x.moveTo(1, 4);
+    x.quadraticCurveTo(1, 1, 4, 1);
+    x.lineTo(CW - 4, 1);
+    x.quadraticCurveTo(CW - 1, 1, CW - 1, 4);
+    x.lineTo(CW - 1, CH - 4);
+    // wavy bottom
+    const waveW = CW / 4;
+    for (let i = 0; i < 4; i++) {
+      const bx = CW - 1 - i * waveW;
+      x.quadraticCurveTo(bx - waveW / 2, i % 2 === 0 ? CH + 2 : CH - 6, bx - waveW, CH - 4);
+    }
+    x.closePath();
+    x.fill();
+    x.globalAlpha = 1;
+    // Inner glow
+    x.fillStyle = 'rgba(255,255,255,0.12)';
+    x.fillRect(3, 3, CW - 6, 8);
+    // Number
+    x.fillStyle = 'rgba(0,0,0,0.7)';
+    x.font = 'bold 11px sans-serif';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillText(num, CW / 2, CH / 2 - 1);
+    // Ghostly eyes
+    x.fillStyle = 'rgba(255,255,255,0.6)';
+    x.fillRect(5, 7, 3, 3);
+    x.fillRect(12, 7, 3, 3);
+    x.fillStyle = 'rgba(0,0,0,0.5)';
+    x.fillRect(6, 8, 2, 2);
+    x.fillRect(13, 8, 2, 2);
+    return c;
+  }
+
+  function makeGhostDone(color, num) {
+    const c = makeGhost(color, num);
+    const x = c.getContext('2d');
+    // Dim overlay for "done" state
+    x.fillStyle = 'rgba(0,0,10,0.4)';
+    x.fillRect(0, 0, CW, CH);
+    return c;
+  }
+
+  function makeExit() {
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Glow background
+    const rg = x.createRadialGradient(T / 2, T / 2, 2, T / 2, T / 2, T / 2);
+    rg.addColorStop(0, 'rgba(220,240,255,0.35)');
+    rg.addColorStop(0.6, 'rgba(180,220,255,0.12)');
+    rg.addColorStop(1, 'rgba(100,160,255,0)');
+    x.fillStyle = rg;
+    x.fillRect(0, 0, T, T);
+    // Door frame with gradient
+    const fg = x.createLinearGradient(3, 3, T - 3, T - 3);
+    fg.addColorStop(0, '#ffffff');
+    fg.addColorStop(0.5, '#c8e8ff');
+    fg.addColorStop(1, '#88bbee');
+    x.strokeStyle = fg;
+    x.lineWidth = 2.5;
+    x.beginPath();
+    x.roundRect(3, 3, T - 6, T - 6, 3);
+    x.stroke();
+    // Inner fill
+    x.fillStyle = 'rgba(200,235,255,0.15)';
+    x.beginPath();
+    x.roundRect(5, 5, T - 10, T - 10, 2);
+    x.fill();
+    // Arrow icon
+    x.fillStyle = 'rgba(255,255,255,0.9)';
+    x.beginPath();
+    const cx = T / 2, cy = T / 2;
+    x.moveTo(cx - 4, cy - 5);
+    x.lineTo(cx + 4, cy);
+    x.lineTo(cx - 4, cy + 5);
+    x.closePath();
+    x.fill();
+    // "EXIT" text
+    x.fillStyle = 'rgba(255,255,255,0.7)';
+    x.font = 'bold 7px sans-serif';
+    x.textAlign = 'center';
+    x.textBaseline = 'bottom';
+    x.fillText('EXIT', T / 2, T - 4);
+    return c;
+  }
+
+  function makeSwitchOn(colorIdx) {
+    const col = SW_COLORS[colorIdx];
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Base platform
+    const pg = x.createLinearGradient(2, T - 8, T - 2, T);
+    pg.addColorStop(0, '#333');
+    pg.addColorStop(1, '#1a1a1a');
+    x.fillStyle = pg;
+    x.beginPath();
+    x.roundRect(2, T - 7, T - 4, 7, [0, 0, 2, 2]);
+    x.fill();
+    // Pressed button (short)
+    x.fillStyle = col;
+    x.shadowColor = col;
+    x.shadowBlur = 14;
+    x.fillRect(5, T - 10, T - 10, 4);
+    x.shadowBlur = 0;
+    // Button highlight
+    x.fillStyle = 'rgba(255,255,255,0.3)';
+    x.fillRect(5, T - 10, T - 10, 1);
+    // Color line at bottom
+    x.fillStyle = col;
+    x.fillRect(2, T - 2, T - 4, 2);
+    // Active indicator dots
+    x.fillStyle = col;
+    x.globalAlpha = 0.6;
+    x.beginPath(); x.arc(T / 2, T - 16, 2, 0, Math.PI * 2); x.fill();
+    x.globalAlpha = 1;
+    return c;
+  }
+
+  function makeSwitchOff(colorIdx) {
+    const col = SW_COLORS[colorIdx];
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Base platform
+    const pg = x.createLinearGradient(2, T - 8, T - 2, T);
+    pg.addColorStop(0, '#333');
+    pg.addColorStop(1, '#1a1a1a');
+    x.fillStyle = pg;
+    x.beginPath();
+    x.roundRect(2, T - 7, T - 4, 7, [0, 0, 2, 2]);
+    x.fill();
+    // Raised button (tall)
+    const bg = x.createLinearGradient(5, T - 17, T - 5, T - 7);
+    bg.addColorStop(0, '#666');
+    bg.addColorStop(0.5, '#555');
+    bg.addColorStop(1, '#444');
+    x.fillStyle = bg;
+    x.fillRect(5, T - 17, T - 10, 10);
+    // Button top highlight
+    x.fillStyle = 'rgba(255,255,255,0.15)';
+    x.fillRect(5, T - 17, T - 10, 2);
+    // Button side shadow
+    x.fillStyle = 'rgba(0,0,0,0.2)';
+    x.fillRect(T - 7, T - 15, 2, 8);
+    // Color line at bottom
+    x.fillStyle = col;
+    x.globalAlpha = 0.5;
+    x.fillRect(2, T - 2, T - 4, 2);
+    x.globalAlpha = 1;
+    return c;
+  }
+
+  function makeDoorClosed(colorIdx) {
+    const col = SW_COLORS[colorIdx];
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Fill with color
+    x.globalAlpha = 0.75;
+    const dg = x.createLinearGradient(2, 2, T - 2, T - 2);
+    dg.addColorStop(0, col);
+    dg.addColorStop(1, shiftColor(col, -30));
+    x.fillStyle = dg;
+    x.beginPath();
+    x.roundRect(2, 2, T - 4, T - 4, 2);
+    x.fill();
+    x.globalAlpha = 1;
+    // Border
+    x.strokeStyle = col;
+    x.lineWidth = 2;
+    x.beginPath();
+    x.roundRect(2, 2, T - 4, T - 4, 2);
+    x.stroke();
+    // X pattern
+    x.strokeStyle = 'rgba(255,255,255,0.25)';
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.moveTo(6, 6); x.lineTo(T - 6, T - 6);
+    x.moveTo(T - 6, 6); x.lineTo(6, T - 6);
+    x.stroke();
+    // Lock icon in center
+    x.fillStyle = 'rgba(255,255,255,0.35)';
+    x.fillRect(T / 2 - 3, T / 2 - 2, 6, 5);
+    x.strokeStyle = 'rgba(255,255,255,0.35)';
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.arc(T / 2, T / 2 - 3, 3, Math.PI, 0);
+    x.stroke();
+    // Top edge highlight
+    x.fillStyle = 'rgba(255,255,255,0.1)';
+    x.fillRect(3, 3, T - 6, 3);
+    return c;
+  }
+
+  function makeDoorOpen(colorIdx) {
+    const col = SW_COLORS[colorIdx];
+    const c = mkCanvas(T, T);
+    const x = c.getContext('2d');
+    // Just faint dashed outline
+    x.strokeStyle = col;
+    x.globalAlpha = 0.2;
+    x.setLineDash([3, 3]);
+    x.lineWidth = 1;
+    x.beginPath();
+    x.roundRect(4, 4, T - 8, T - 8, 2);
+    x.stroke();
+    x.setLineDash([]);
+    x.globalAlpha = 1;
+    return c;
+  }
+
+  function shiftColor(hex, amount) {
+    let r = parseInt(hex.slice(1, 3), 16);
+    let g = parseInt(hex.slice(3, 5), 16);
+    let b = parseInt(hex.slice(5, 7), 16);
+    r = Math.max(0, Math.min(255, r + amount));
+    g = Math.max(0, Math.min(255, g + amount));
+    b = Math.max(0, Math.min(255, b + amount));
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  return {
+    init() {
+      cache.wall = makeWall();
+      cache.spike = makeSpike();
+      cache.playerR = makePlayer(1);
+      cache.playerL = makePlayer(-1);
+      cache.exit = makeExit();
+      // Ghosts: 3 colors x 3 numbers x 2 states
+      cache.ghosts = {};
+      cache.ghostsDone = {};
+      for (let i = 0; i < 3; i++) {
+        cache.ghosts[i] = {};
+        cache.ghostsDone[i] = {};
+        for (let n = 1; n <= 3; n++) {
+          cache.ghosts[i][n] = makeGhost(GHOST_COLORS[i], n);
+          cache.ghostsDone[i][n] = makeGhostDone(GHOST_COLORS[i], n);
+        }
+      }
+      // Switches and doors: 4 colors x 2 states
+      cache.swOn = [];
+      cache.swOff = [];
+      cache.doorClosed = [];
+      cache.doorOpen = [];
+      for (let ci = 0; ci < 4; ci++) {
+        cache.swOn.push(makeSwitchOn(ci));
+        cache.swOff.push(makeSwitchOff(ci));
+        cache.doorClosed.push(makeDoorClosed(ci));
+        cache.doorOpen.push(makeDoorOpen(ci));
+      }
+    },
+    get(key) { return cache[key]; },
+    getGhost(colorIdx, num, done) {
+      const ci = colorIdx % 3;
+      const n = Math.min(3, Math.max(1, num));
+      return done ? cache.ghostsDone[ci][n] : cache.ghosts[ci][n];
+    },
+    getSwitchSprite(colorIdx, on) {
+      return on ? cache.swOn[colorIdx] : cache.swOff[colorIdx];
+    },
+    getDoorSprite(colorIdx, open) {
+      return open ? cache.doorOpen[colorIdx] : cache.doorClosed[colorIdx];
+    }
+  };
+})();
+
 // ===================== LEVEL BUILDER =====================
 function mkTiles(w, h, fn) {
   const t = [];
@@ -404,6 +820,7 @@ const game = {
 
   // ── Init ──
   init() {
+    GameSprites.init();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('keydown', e => {
@@ -930,46 +1347,42 @@ const game = {
     const sy = Math.max(0, Math.floor(this.camY / TILE));
     const ex = Math.min(lv.width, Math.ceil((this.camX + this.cw) / TILE) + 1);
     const ey = Math.min(lv.height, Math.ceil((this.camY + this.ch) / TILE) + 1);
+    const wallSpr = GameSprites.get('wall');
+    const spikeSpr = GameSprites.get('spike');
 
     for (let y = sy; y < ey; y++) {
       for (let x = sx; x < ex; x++) {
         const t = lv.tiles[y][x];
         if (t === 1) {
-          // Wall tile with subtle pattern
-          ctx.fillStyle = '#2a2a3a';
-          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-          ctx.strokeStyle = '#3a3a5a';
-          ctx.strokeRect(x * TILE + .5, y * TILE + .5, TILE - 1, TILE - 1);
-          // Inner detail
-          ctx.fillStyle = '#242434';
-          ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+          if (wallSpr) {
+            ctx.drawImage(wallSpr, x * TILE, y * TILE);
+          } else {
+            ctx.fillStyle = '#2a2a3a';
+            ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+            ctx.strokeStyle = '#3a3a5a';
+            ctx.strokeRect(x * TILE + .5, y * TILE + .5, TILE - 1, TILE - 1);
+            ctx.fillStyle = '#242434';
+            ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+          }
         } else if (t === 2) {
-          // Spike with vibration
           const bx = x * TILE, by = y * TILE;
           const bounce = Math.sin(this.frame * 0.12 + x * 2) * 1.5;
-          ctx.fillStyle = '#cc1111';
-          ctx.beginPath();
-          ctx.moveTo(bx + 2, by + TILE);
-          ctx.lineTo(bx + TILE / 4, by + 8 + bounce);
-          ctx.lineTo(bx + TILE / 2, by + TILE);
-          ctx.lineTo(bx + TILE * 3 / 4, by + 8 + bounce);
-          ctx.lineTo(bx + TILE - 2, by + TILE);
-          ctx.closePath();
-          ctx.fill();
-          // Highlight
-          ctx.fillStyle = '#ff4444';
-          ctx.beginPath();
-          ctx.moveTo(bx + 6, by + TILE);
-          ctx.lineTo(bx + TILE / 4, by + 14 + bounce);
-          ctx.lineTo(bx + TILE / 4 + 4, by + TILE);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(bx + TILE / 2 + 2, by + TILE);
-          ctx.lineTo(bx + TILE * 3 / 4, by + 14 + bounce);
-          ctx.lineTo(bx + TILE * 3 / 4 + 4, by + TILE);
-          ctx.closePath();
-          ctx.fill();
+          if (spikeSpr) {
+            ctx.save();
+            ctx.translate(bx, by + bounce);
+            ctx.drawImage(spikeSpr, 0, 0);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = '#cc1111';
+            ctx.beginPath();
+            ctx.moveTo(bx + 2, by + TILE);
+            ctx.lineTo(bx + TILE / 4, by + 8 + bounce);
+            ctx.lineTo(bx + TILE / 2, by + TILE);
+            ctx.lineTo(bx + TILE * 3 / 4, by + 8 + bounce);
+            ctx.lineTo(bx + TILE - 2, by + TILE);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       }
     }
@@ -979,22 +1392,24 @@ const game = {
     this.lv.switches.forEach((sw, i) => {
       const x = sw.x * TILE, y = sw.y * TILE;
       const on = this.swState[i];
-      const col = SW_COLORS[sw.color];
-      // Base
-      ctx.fillStyle = '#222';
-      ctx.fillRect(x + 2, y + TILE - 6, TILE - 4, 6);
-      // Button
-      ctx.fillStyle = on ? col : '#555';
-      const bh = on ? 3 : 8;
-      ctx.fillRect(x + 4, y + TILE - 6 - bh, TILE - 8, bh + 2);
-      if (on) {
-        ctx.shadowColor = col; ctx.shadowBlur = 12;
+      const spr = GameSprites.getSwitchSprite(sw.color, on);
+      if (spr) {
+        ctx.drawImage(spr, x, y);
+        if (on) {
+          ctx.shadowColor = SW_COLORS[sw.color]; ctx.shadowBlur = 12;
+          ctx.drawImage(spr, x, y);
+          ctx.shadowBlur = 0;
+        }
+      } else {
+        const col = SW_COLORS[sw.color];
+        ctx.fillStyle = '#222';
+        ctx.fillRect(x + 2, y + TILE - 6, TILE - 4, 6);
+        ctx.fillStyle = on ? col : '#555';
+        const bh = on ? 3 : 8;
         ctx.fillRect(x + 4, y + TILE - 6 - bh, TILE - 8, bh + 2);
-        ctx.shadowBlur = 0;
+        ctx.fillStyle = col;
+        ctx.fillRect(x + 2, y + TILE - 2, TILE - 4, 2);
       }
-      // Color indicator line
-      ctx.fillStyle = col;
-      ctx.fillRect(x + 2, y + TILE - 2, TILE - 4, 2);
     });
   },
 
@@ -1002,31 +1417,28 @@ const game = {
     this.lv.doors.forEach((d, i) => {
       const x = d.x * TILE, y = d.y * TILE;
       const open = this.drState[i];
-      const col = SW_COLORS[d.color];
-      if (!open) {
-        // Solid door
-        ctx.globalAlpha = 0.8;
-        ctx.fillStyle = col;
-        ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
-        ctx.lineWidth = 1;
-        // X pattern
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.moveTo(x + 6, y + 6); ctx.lineTo(x + TILE - 6, y + TILE - 6);
-        ctx.moveTo(x + TILE - 6, y + 6); ctx.lineTo(x + 6, y + TILE - 6);
-        ctx.stroke();
+      const spr = GameSprites.getDoorSprite(d.color, open);
+      if (spr) {
+        ctx.drawImage(spr, x, y);
       } else {
-        // Open door outline
-        ctx.strokeStyle = col;
-        ctx.globalAlpha = 0.25;
-        ctx.setLineDash([3, 3]);
-        ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
+        const col = SW_COLORS[d.color];
+        if (!open) {
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = col;
+          ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 2, y + 2, TILE - 4, TILE - 4);
+          ctx.lineWidth = 1;
+        } else {
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = 0.25;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
       }
     });
   },
@@ -1034,67 +1446,91 @@ const game = {
   drawExit() {
     const x = this.lv.exit.x * TILE, y = this.lv.exit.y * TILE;
     const glow = Math.sin(this.frame * 0.06) * 0.3 + 0.7;
-    // Outer glow
-    ctx.shadowColor = '#fff';
-    ctx.shadowBlur = 20 * glow;
-    ctx.fillStyle = `rgba(255,255,255,${glow * 0.15})`;
-    ctx.fillRect(x, y, TILE, TILE);
-    ctx.shadowBlur = 0;
-    // Door frame
-    ctx.strokeStyle = `rgba(255,255,255,${glow * 0.9})`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 3, y + 3, TILE - 6, TILE - 6);
-    ctx.lineWidth = 1;
-    // Inner light
-    ctx.fillStyle = `rgba(200,240,255,${glow * 0.25})`;
-    ctx.fillRect(x + 5, y + 5, TILE - 10, TILE - 10);
-    // Arrow
-    ctx.fillStyle = `rgba(255,255,255,${glow})`;
-    ctx.font = '14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('EXIT', x + TILE / 2, y + TILE / 2);
-    ctx.textBaseline = 'alphabetic';
+    const exitSpr = GameSprites.get('exit');
+    if (exitSpr) {
+      // Animated glow around sprite
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 20 * glow;
+      ctx.globalAlpha = glow * 0.6 + 0.4;
+      ctx.drawImage(exitSpr, x, y);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 20 * glow;
+      ctx.fillStyle = `rgba(255,255,255,${glow * 0.15})`;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = `rgba(255,255,255,${glow * 0.9})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 3, y + 3, TILE - 6, TILE - 6);
+      ctx.lineWidth = 1;
+      ctx.fillStyle = `rgba(200,240,255,${glow * 0.25})`;
+      ctx.fillRect(x + 5, y + 5, TILE - 10, TILE - 10);
+      ctx.fillStyle = `rgba(255,255,255,${glow})`;
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('EXIT', x + TILE / 2, y + TILE / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
   },
 
   drawPlayer() {
     const p = this.player;
-    ctx.save();
-    // Glow
-    ctx.shadowColor = '#0ff'; ctx.shadowBlur = 14;
-    ctx.fillStyle = '#00ffff';
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    ctx.shadowBlur = 0;
-    // Eyes
-    const ex1 = p.facing > 0 ? 5 : 3, ex2 = p.facing > 0 ? 13 : 11;
-    ctx.fillStyle = '#003';
-    ctx.fillRect(p.x + ex1, p.y + 7, 3, 3);
-    ctx.fillRect(p.x + ex2, p.y + 7, 3, 3);
-    // Mouth
-    ctx.fillRect(p.x + 6, p.y + 15, 8, 2);
-    // Border
-    ctx.strokeStyle = '#088';
-    ctx.strokeRect(p.x + .5, p.y + .5, p.w - 1, p.h - 1);
-    ctx.restore();
+    const spr = GameSprites.get(p.facing > 0 ? 'playerR' : 'playerL');
+    if (spr) {
+      ctx.save();
+      ctx.shadowColor = '#0ff'; ctx.shadowBlur = 14;
+      ctx.drawImage(spr, Math.round(p.x), Math.round(p.y));
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.shadowColor = '#0ff'; ctx.shadowBlur = 14;
+      ctx.fillStyle = '#00ffff';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.shadowBlur = 0;
+      const ex1 = p.facing > 0 ? 5 : 3, ex2 = p.facing > 0 ? 13 : 11;
+      ctx.fillStyle = '#003';
+      ctx.fillRect(p.x + ex1, p.y + 7, 3, 3);
+      ctx.fillRect(p.x + ex2, p.y + 7, 3, 3);
+      ctx.fillRect(p.x + 6, p.y + 15, 8, 2);
+      ctx.strokeStyle = '#088';
+      ctx.strokeRect(p.x + .5, p.y + .5, p.w - 1, p.h - 1);
+      ctx.restore();
+    }
   },
 
   drawGhosts() {
     for (let i = 0; i < this.ghosts.length; i++) {
       const g = this.ghosts[i];
-      ctx.globalAlpha = g.done ? 0.35 : 0.5;
-      ctx.save();
-      ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 6 : 10;
-      ctx.fillStyle = g.color;
-      ctx.fillRect(g.x, g.y, g.w, g.h);
-      ctx.shadowBlur = 0;
-      // Number label
-      ctx.globalAlpha = g.done ? 0.5 : 0.7;
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(i + 1, g.x + g.w / 2, g.y + g.h / 2 + 4);
-      ctx.restore();
-      ctx.globalAlpha = 1;
+      const colorIdx = i % 3;
+      const num = i + 1;
+      const spr = GameSprites.getGhost(colorIdx, num, g.done);
+      if (spr) {
+        ctx.globalAlpha = g.done ? 0.4 : 0.6;
+        ctx.save();
+        ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 6 : 10;
+        ctx.drawImage(spr, Math.round(g.x), Math.round(g.y));
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.globalAlpha = g.done ? 0.35 : 0.5;
+        ctx.save();
+        ctx.shadowColor = g.color; ctx.shadowBlur = g.done ? 6 : 10;
+        ctx.fillStyle = g.color;
+        ctx.fillRect(g.x, g.y, g.w, g.h);
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = g.done ? 0.5 : 0.7;
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(i + 1, g.x + g.w / 2, g.y + g.h / 2 + 4);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
     }
   },
 

@@ -601,6 +601,204 @@ function shakeScreen(){
   setTimeout(()=>el.classList.remove('shake'),300);
 }
 
+// ===== GameSprites - Visual Enhancement =====
+const GameSprites = (function() {
+  function init() {
+    const style = document.createElement('style');
+    style.textContent = `
+      /* --- Card metallic gradient borders --- */
+      .card, .reward-card {
+        position: relative;
+        overflow: hidden;
+      }
+      .card::before, .reward-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        z-index: 1;
+      }
+      .card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 40%, rgba(0,0,0,0.2) 100%);
+        pointer-events: none;
+        border-radius: 8px;
+      }
+
+      /* --- Card type enhanced borders with glow --- */
+      .card-attack {
+        box-shadow: inset 0 0 15px rgba(231,76,60,0.15), 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .card-attack:hover {
+        box-shadow: 0 0 20px rgba(231,76,60,0.4), 0 10px 30px rgba(0,0,0,0.6);
+        border-color: #ff6b5a;
+      }
+      .card-defense {
+        box-shadow: inset 0 0 15px rgba(52,152,219,0.15), 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .card-defense:hover {
+        box-shadow: 0 0 20px rgba(52,152,219,0.4), 0 10px 30px rgba(0,0,0,0.6);
+        border-color: #5dade2;
+      }
+      .card-skill {
+        box-shadow: inset 0 0 15px rgba(46,204,113,0.15), 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .card-skill:hover {
+        box-shadow: 0 0 20px rgba(46,204,113,0.4), 0 10px 30px rgba(0,0,0,0.6);
+        border-color: #58d68d;
+      }
+      .card-power {
+        box-shadow: inset 0 0 15px rgba(155,89,182,0.15), 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .card-power:hover {
+        box-shadow: 0 0 20px rgba(155,89,182,0.4), 0 10px 30px rgba(0,0,0,0.6);
+        border-color: #bb8fce;
+      }
+
+      /* --- Mana cost badge glow --- */
+      .card-cost {
+        box-shadow: 0 0 8px rgba(241,196,15,0.5), inset 0 -2px 4px rgba(0,0,0,0.2);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      }
+
+      /* --- Card art area gradient --- */
+      .card-name {
+        background: linear-gradient(180deg, transparent, rgba(0,0,0,0.3));
+        border-radius: 4px;
+        padding: 4px 2px;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      }
+
+      /* --- Card desc area --- */
+      .card-desc {
+        background: rgba(0,0,0,0.25);
+        border-radius: 4px;
+        border-top: 1px solid rgba(255,255,255,0.05);
+      }
+
+      /* --- Hand fan layout enhancement --- */
+      .hand-area .card:nth-child(1) { transform: rotate(-6deg) translateY(8px); }
+      .hand-area .card:nth-child(2) { transform: rotate(-3deg) translateY(3px); }
+      .hand-area .card:nth-child(3) { transform: rotate(0deg) translateY(0); }
+      .hand-area .card:nth-child(4) { transform: rotate(3deg) translateY(3px); }
+      .hand-area .card:nth-child(5) { transform: rotate(6deg) translateY(8px); }
+      .hand-area .card:nth-child(6) { transform: rotate(9deg) translateY(14px); }
+      .hand-area .card:nth-child(7) { transform: rotate(12deg) translateY(22px); }
+      .hand-area .card:hover {
+        transform: translateY(-20px) scale(1.08) rotate(0deg) !important;
+      }
+      .hand-area .card.disabled:hover {
+        transform: none !important;
+      }
+
+      /* --- Enemy sprite enhancement --- */
+      .enemy-sprite {
+        text-shadow: 0 0 25px rgba(255,50,50,0.4);
+      }
+      .enemy-sprite.hit {
+        filter: drop-shadow(0 0 30px rgba(255,0,0,0.6)) brightness(1.8) !important;
+      }
+
+      /* --- HP bar shine effect --- */
+      .enemy-hp-fill, .player-hp-fill {
+        position: relative;
+        overflow: hidden;
+      }
+      .enemy-hp-fill::after, .player-hp-fill::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 50%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        animation: hpShine 2.5s ease-in-out infinite;
+      }
+      @keyframes hpShine {
+        0% { left: -100%; }
+        100% { left: 250%; }
+      }
+      .enemy-hp-bar, .player-hp-bar {
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+      }
+
+      /* --- Energy orb pulse --- */
+      .energy-orb {
+        animation: orbPulse 2s ease-in-out infinite;
+      }
+      @keyframes orbPulse {
+        0%,100% { box-shadow: 0 0 12px rgba(241,196,15,0.4); }
+        50% { box-shadow: 0 0 22px rgba(241,196,15,0.7); }
+      }
+
+      /* --- Enemy intent glow --- */
+      .enemy-intent {
+        text-shadow: 0 0 4px rgba(255,255,255,0.2);
+        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      }
+
+      /* --- End turn button 3D --- */
+      .btn-end-turn {
+        box-shadow: 0 3px 0 #2a1505, 0 4px 10px rgba(0,0,0,0.4);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      }
+      .btn-end-turn:active {
+        transform: translateY(3px);
+        box-shadow: 0 0 0 #2a1505;
+      }
+
+      /* --- Float damage enhancement --- */
+      .float-dmg {
+        text-shadow: 0 0 8px currentColor, 0 2px 4px rgba(0,0,0,0.8) !important;
+        font-size: 1.8em !important;
+      }
+
+      /* --- Reward card hover glow --- */
+      .reward-card:hover {
+        box-shadow: 0 0 25px rgba(201,168,76,0.3), 0 8px 25px rgba(0,0,0,0.5);
+      }
+
+      /* --- Screen transitions --- */
+      #screen-title h1 {
+        animation: titleGlow 3s ease-in-out infinite;
+      }
+      @keyframes titleGlow {
+        0%,100% { text-shadow: 0 0 30px rgba(201,168,76,0.4); }
+        50% { text-shadow: 0 0 50px rgba(201,168,76,0.7), 0 0 80px rgba(201,168,76,0.3); }
+      }
+
+      /* --- Top bar subtle separator --- */
+      .top-bar {
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      }
+
+      /* --- Mid bar enhancement --- */
+      .mid-bar {
+        border-top: 1px solid #222;
+        border-bottom: 1px solid #222;
+      }
+
+      /* --- Victory/Gameover text glow --- */
+      #screen-victory h2, #screen-gameover h2 {
+        animation: titleGlow 3s ease-in-out infinite;
+      }
+
+      /* --- Button 3D press --- */
+      .btn {
+        box-shadow: 0 3px 0 rgba(0,0,0,0.4);
+        transition: all 0.15s;
+      }
+      .btn:active {
+        transform: translateY(3px) scale(1);
+        box-shadow: 0 0 0 rgba(0,0,0,0.4);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  return { init };
+})();
+GameSprites.init();
+
 // === INIT ===
 showTitle();
 </script>

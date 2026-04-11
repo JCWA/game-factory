@@ -240,6 +240,346 @@ canvas {
 <div id="toast"></div>
 
 <script>
+// ===== Sprite Assets =====
+const GameSprites = (function() {
+  const cache = {};
+  const RES = 2; // resolution multiplier for crisp sprites
+
+  function createCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w * RES;
+    c.height = h * RES;
+    const x = c.getContext('2d');
+    x.scale(RES, RES);
+    return { canvas: c, ctx: x, size: w };
+  }
+
+  function makeStar(radius, color) {
+    const pad = radius * 2.2;
+    const sz = (radius + pad) * 2;
+    const { canvas, ctx, size } = createCanvas(sz, sz);
+    const cx = sz / 2, cy = sz / 2;
+
+    // Outer glow halo
+    const g3 = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius + pad);
+    g3.addColorStop(0, 'rgba(255,200,50,0.15)');
+    g3.addColorStop(0.4, 'rgba(255,150,0,0.07)');
+    g3.addColorStop(1, 'rgba(255,100,0,0)');
+    ctx.fillStyle = g3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + pad, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Corona / atmospheric glow
+    const g2 = ctx.createRadialGradient(cx, cy, radius * 0.7, cx, cy, radius * 1.8);
+    g2.addColorStop(0, 'rgba(255,220,100,0.4)');
+    g2.addColorStop(0.5, 'rgba(255,160,30,0.15)');
+    g2.addColorStop(1, 'rgba(255,100,0,0)');
+    ctx.fillStyle = g2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main body gradient
+    const g1 = ctx.createRadialGradient(cx - radius * 0.25, cy - radius * 0.25, radius * 0.1, cx, cy, radius);
+    g1.addColorStop(0, '#FFFBE0');
+    g1.addColorStop(0.3, '#FFE566');
+    g1.addColorStop(0.6, color);
+    g1.addColorStop(1, '#CC8800');
+    ctx.fillStyle = g1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Surface detail - sunspots
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#AA6600';
+    const spots = [
+      { dx: 0.3, dy: -0.2, r: 0.15 },
+      { dx: -0.2, dy: 0.35, r: 0.12 },
+      { dx: 0.1, dy: 0.15, r: 0.08 }
+    ];
+    for (const s of spots) {
+      ctx.beginPath();
+      ctx.arc(cx + radius * s.dx, cy + radius * s.dy, radius * s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Specular highlight
+    const hl = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.3, 0, cx - radius * 0.2, cy - radius * 0.2, radius * 0.6);
+    hl.addColorStop(0, 'rgba(255,255,255,0.5)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    return { canvas, drawRadius: sz / 2 };
+  }
+
+  function makePlanet(radius, color) {
+    const pad = radius * 1.0;
+    const sz = (radius + pad) * 2;
+    const { canvas, ctx } = createCanvas(sz, sz);
+    const cx = sz / 2, cy = sz / 2;
+
+    // Atmospheric glow
+    const ga = ctx.createRadialGradient(cx, cy, radius * 0.8, cx, cy, radius + pad * 0.7);
+    ga.addColorStop(0, colorAlpha(color, 0.2));
+    ga.addColorStop(1, colorAlpha(color, 0));
+    ctx.fillStyle = ga;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + pad * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main body - rich gradient
+    const baseHSL = hexToHSL(color);
+    const lightColor = hslToHex(baseHSL.h, baseHSL.s, Math.min(baseHSL.l + 20, 85));
+    const darkColor = hslToHex(baseHSL.h, baseHSL.s, Math.max(baseHSL.l - 20, 10));
+    const g1 = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.3, 0, cx, cy, radius);
+    g1.addColorStop(0, lightColor);
+    g1.addColorStop(0.5, color);
+    g1.addColorStop(1, darkColor);
+    ctx.fillStyle = g1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Surface bands (horizontal stripes typical of gas giants)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.globalAlpha = 0.12;
+    const bandColor = hslToHex(baseHSL.h, baseHSL.s + 10, baseHSL.l - 10);
+    ctx.fillStyle = bandColor;
+    for (let i = -3; i <= 3; i++) {
+      const by = cy + i * radius * 0.35;
+      ctx.fillRect(cx - radius, by - radius * 0.08, radius * 2, radius * 0.16);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Surface detail - a subtle crater / marking
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = darkColor;
+    ctx.beginPath();
+    ctx.arc(cx + radius * 0.2, cy + radius * 0.1, radius * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Specular highlight
+    const hl = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.35, 0, cx - radius * 0.15, cy - radius * 0.15, radius * 0.7);
+    hl.addColorStop(0, 'rgba(255,255,255,0.35)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Rim light (edge lit from behind)
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    return { canvas, drawRadius: sz / 2 };
+  }
+
+  function makeAsteroid(radius) {
+    const pad = radius * 0.8;
+    const sz = (radius + pad) * 2;
+    const { canvas, ctx } = createCanvas(sz, sz);
+    const cx = sz / 2, cy = sz / 2;
+
+    // Irregular shape via multiple overlapping circles
+    const g1 = ctx.createRadialGradient(cx - radius * 0.2, cy - radius * 0.2, 0, cx, cy, radius);
+    g1.addColorStop(0, '#AAAAAA');
+    g1.addColorStop(0.5, '#888888');
+    g1.addColorStop(1, '#555555');
+    ctx.fillStyle = g1;
+
+    // Draw slightly jagged shape
+    ctx.beginPath();
+    const pts = 8;
+    for (let i = 0; i <= pts; i++) {
+      const angle = (i / pts) * Math.PI * 2;
+      const jitter = 0.7 + [0.3, 0.15, 0.25, 0.1, 0.2, 0.3, 0.05, 0.2][i % 8];
+      const r = radius * jitter;
+      const px = cx + Math.cos(angle) * r;
+      const py = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Crater details
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#444';
+    ctx.beginPath();
+    ctx.arc(cx + radius * 0.15, cy - radius * 0.1, radius * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx - radius * 0.2, cy + radius * 0.2, radius * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Highlight
+    const hl = ctx.createRadialGradient(cx - radius * 0.25, cy - radius * 0.25, 0, cx, cy, radius * 0.8);
+    hl.addColorStop(0, 'rgba(255,255,255,0.25)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    return { canvas, drawRadius: sz / 2 };
+  }
+
+  function makeBlackhole(radius) {
+    const pad = radius * 3.5;
+    const sz = (radius + pad) * 2;
+    const { canvas, ctx } = createCanvas(sz, sz);
+    const cx = sz / 2, cy = sz / 2;
+
+    // Outer accretion disc glow
+    const g3 = ctx.createRadialGradient(cx, cy, radius * 2, cx, cy, radius * 3.5);
+    g3.addColorStop(0, 'rgba(139,0,255,0.12)');
+    g3.addColorStop(0.5, 'rgba(100,0,200,0.05)');
+    g3.addColorStop(1, 'rgba(80,0,160,0)');
+    ctx.fillStyle = g3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Accretion ring (outer)
+    ctx.strokeStyle = 'rgba(139,0,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 2.8, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Event horizon ring
+    ctx.strokeStyle = '#8B00FF';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#8B00FF';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Inner glow ring
+    const g2 = ctx.createRadialGradient(cx, cy, radius, cx, cy, radius * 1.8);
+    g2.addColorStop(0, 'rgba(60,0,120,0.5)');
+    g2.addColorStop(1, 'rgba(139,0,255,0)');
+    ctx.fillStyle = g2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Black center with gradient
+    const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    g1.addColorStop(0, '#000000');
+    g1.addColorStop(0.7, '#050010');
+    g1.addColorStop(1, '#100020');
+    ctx.fillStyle = g1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    return { canvas, drawRadius: sz / 2 };
+  }
+
+  function makeBgStar() {
+    const sz = 8;
+    const { canvas, ctx } = createCanvas(sz, sz);
+    const cx = sz / 2, cy = sz / 2;
+
+    // Soft glow
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, sz / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.3, 'rgba(220,230,255,0.6)');
+    g.addColorStop(1, 'rgba(200,210,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, sz / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    return { canvas, drawRadius: sz / 2 };
+  }
+
+  // Color helpers
+  function colorAlpha(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  function hexToHSL(hex) {
+    let r = parseInt(hex.slice(1, 3), 16) / 255;
+    let g = parseInt(hex.slice(3, 5), 16) / 255;
+    let b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (max === g) h = ((b - r) / d + 2) / 6;
+      else h = ((r - g) / d + 4) / 6;
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); };
+    const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+  }
+
+  // Cache key helper
+  function getKey(type, color, radius) {
+    return `${type}_${color}_${Math.round(radius)}`;
+  }
+
+  return {
+    init() {
+      // Pre-generate default sprites
+      cache['star_#FFD700_20'] = makeStar(20, '#FFD700');
+      cache['asteroid_#888888_4'] = makeAsteroid(4);
+      cache['blackhole_#000000_15'] = makeBlackhole(15);
+      cache['bgstar'] = makeBgStar();
+      for (const c of ['#4A90D9','#D94A4A','#4AD97A','#D9A64A','#9B59B6','#1ABC9C','#E67E22']) {
+        cache[`planet_${c}_10`] = makePlanet(10, c);
+      }
+    },
+
+    get(type, color, radius) {
+      const key = getKey(type, color, Math.round(radius));
+      if (cache[key]) return cache[key];
+      // Generate on demand (for merged bodies with new radii)
+      if (type === 'star') cache[key] = makeStar(radius, color);
+      else if (type === 'planet') cache[key] = makePlanet(radius, color);
+      else if (type === 'asteroid') cache[key] = makeAsteroid(radius);
+      else if (type === 'blackhole') cache[key] = makeBlackhole(radius);
+      else return null;
+      return cache[key];
+    },
+
+    getBgStar() {
+      return cache['bgstar'];
+    }
+  };
+})();
+
 // ===== Constants & State =====
 const G = 0.5;
 const BODY_TYPES = {
@@ -530,6 +870,7 @@ function render() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Background stars with parallax
+  const bgSprite = GameSprites.getBgStar();
   for (const s of bgStars) {
     const parallax = s.speed;
     const sx = (s.x - cam.x * parallax) * cam.zoom + canvas.width/2;
@@ -538,10 +879,17 @@ function render() {
     const wx = ((sx % canvas.width) + canvas.width) % canvas.width;
     const wy = ((sy % canvas.height) + canvas.height) % canvas.height;
     const alpha = 0.4 + 0.4 * Math.sin(s.twinkle + frameCount * 0.03);
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(wx, wy, s.size, 0, Math.PI*2);
-    ctx.fill();
+    if (bgSprite) {
+      ctx.globalAlpha = alpha;
+      const drawSz = s.size * 3;
+      ctx.drawImage(bgSprite.canvas, wx - drawSz, wy - drawSz, drawSz * 2, drawSz * 2);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.beginPath();
+      ctx.arc(wx, wy, s.size, 0, Math.PI*2);
+      ctx.fill();
+    }
   }
 
   ctx.save();
@@ -653,52 +1001,55 @@ function render() {
 }
 
 function drawBody(b) {
-  ctx.save();
-  if (b.glow && b.type !== 'blackhole') {
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = b.color;
-  }
-
-  if (b.type === 'blackhole') {
-    // Event horizon ring
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = '#8B00FF';
-    ctx.strokeStyle = '#8B00FF';
-    ctx.lineWidth = 3 / cam.zoom;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius * 2, 0, Math.PI*2);
-    ctx.stroke();
-    // Inner ring
-    ctx.strokeStyle = 'rgba(139,0,255,0.4)';
-    ctx.lineWidth = 2 / cam.zoom;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius * 2.8, 0, Math.PI*2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    // Black center
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
-    ctx.fill();
+  const sprite = GameSprites.get(b.type, b.color, b.radius);
+  if (sprite) {
+    const dr = sprite.drawRadius;
+    ctx.drawImage(sprite.canvas, b.x - dr, b.y - dr, dr * 2, dr * 2);
   } else {
-    ctx.fillStyle = b.color;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
-    ctx.fill();
-
-    if (b.type === 'star') {
-      // Corona effect
-      ctx.shadowBlur = 0;
-      const grad = ctx.createRadialGradient(b.x, b.y, b.radius * 0.8, b.x, b.y, b.radius * 1.6);
-      grad.addColorStop(0, 'rgba(255,215,0,0.3)');
-      grad.addColorStop(1, 'rgba(255,150,0,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.radius * 1.6, 0, Math.PI*2);
-      ctx.fill();
+    // Fallback: original procedural rendering
+    ctx.save();
+    if (b.glow && b.type !== 'blackhole') {
+      ctx.shadowBlur = 30;
+      ctx.shadowColor = b.color;
     }
+
+    if (b.type === 'blackhole') {
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#8B00FF';
+      ctx.strokeStyle = '#8B00FF';
+      ctx.lineWidth = 3 / cam.zoom;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius * 2, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(139,0,255,0.4)';
+      ctx.lineWidth = 2 / cam.zoom;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius * 2.8, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+      ctx.fill();
+
+      if (b.type === 'star') {
+        ctx.shadowBlur = 0;
+        const grad = ctx.createRadialGradient(b.x, b.y, b.radius * 0.8, b.x, b.y, b.radius * 1.6);
+        grad.addColorStop(0, 'rgba(255,215,0,0.3)');
+        grad.addColorStop(1, 'rgba(255,150,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius * 1.6, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 // ===== Resize =====
@@ -1067,6 +1418,7 @@ function init() {
   doResize();
   window.addEventListener('resize', doResize);
 
+  GameSprites.init();
   initBgStars();
 
   // Set trail button active

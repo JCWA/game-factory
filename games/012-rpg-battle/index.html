@@ -567,6 +567,187 @@ function hideSubMenu() {
   document.getElementById('sub-menu').classList.remove('show');
 }
 
+// ===== GameSprites - Visual Enhancement =====
+const GameSprites = (function() {
+  function init() {
+    const style = document.createElement('style');
+    style.textContent = `
+      /* --- Enemy portrait glow & gradient border --- */
+      #enemy-sprite {
+        text-shadow: 0 0 20px rgba(255,100,100,0.5), 0 0 40px rgba(255,50,50,0.3);
+        transition: transform 0.2s, filter 0.3s, text-shadow 0.3s;
+      }
+      #enemy-sprite:not(.dead):not(.shake) {
+        animation: enemyIdle 3s ease-in-out infinite;
+      }
+      @keyframes enemyIdle {
+        0%,100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+
+      /* --- HP bar gradient shine --- */
+      .hp-bar {
+        background: linear-gradient(90deg, #ff4444, #ff6b6b) !important;
+        position: relative;
+        overflow: hidden;
+      }
+      .hp-bar::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 60%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+        animation: barShine 2.5s ease-in-out infinite;
+      }
+      @keyframes barShine {
+        0% { left: -100%; }
+        100% { left: 200%; }
+      }
+      .mp-bar {
+        position: relative;
+        overflow: hidden;
+      }
+      .mp-bar::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 60%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        animation: barShine 3s ease-in-out infinite;
+      }
+      .exp-bar {
+        position: relative;
+        overflow: hidden;
+      }
+      .exp-bar::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 60%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+        animation: barShine 3.5s ease-in-out infinite;
+      }
+      .hp-bar-container {
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.5), 0 0 6px rgba(255,68,68,0.15);
+        border: 1px solid #444;
+      }
+
+      /* --- Player area gradient border & glow --- */
+      #player-area {
+        border: 1px solid #2a4a2a;
+        box-shadow: 0 0 12px rgba(74,222,128,0.1), inset 0 0 20px rgba(0,0,0,0.3);
+        background: linear-gradient(135deg, #16213e, #1a2940);
+      }
+      .player-name {
+        text-shadow: 0 0 8px rgba(74,222,128,0.4);
+      }
+
+      /* --- Skill/action buttons 3D press effect --- */
+      .action-btn {
+        box-shadow: 0 3px 0 #111, 0 4px 8px rgba(0,0,0,0.3);
+        transition: all 0.15s;
+        position: relative;
+        overflow: hidden;
+      }
+      .action-btn::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      }
+      .action-btn:active:not(:disabled) {
+        transform: translateY(3px);
+        box-shadow: 0 0 0 #111, 0 1px 4px rgba(0,0,0,0.3);
+      }
+      .action-btn:hover:not(:disabled) {
+        border-color: #4ade80;
+        box-shadow: 0 3px 0 #111, 0 0 15px rgba(74,222,128,0.2);
+      }
+
+      .sub-btn {
+        box-shadow: 0 2px 0 #060d17, 0 3px 6px rgba(0,0,0,0.3);
+        transition: all 0.15s;
+        position: relative;
+      }
+      .sub-btn:active:not(:disabled) {
+        transform: translateY(2px);
+        box-shadow: 0 0 0 #060d17;
+      }
+      .sub-btn:hover:not(:disabled) {
+        box-shadow: 0 2px 0 #060d17, 0 0 12px rgba(74,222,128,0.15);
+      }
+
+      /* --- Damage number text-shadow enhancement --- */
+      .damage-text {
+        text-shadow: 0 0 6px currentColor, 0 2px 4px rgba(0,0,0,0.8), 0 0 20px currentColor;
+        font-size: 28px;
+        letter-spacing: 1px;
+      }
+
+      /* --- Hit flash on enemy --- */
+      #enemy-sprite.shake {
+        filter: drop-shadow(0 0 15px rgba(255,255,255,0.8)) brightness(1.5);
+      }
+
+      /* --- Battle scene ambient particles --- */
+      #battle-scene::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 20%, rgba(100,50,200,0.08), transparent 70%);
+        pointer-events: none;
+      }
+      #battle-scene::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 40px;
+        background: linear-gradient(transparent, rgba(26,58,26,0.4));
+        pointer-events: none;
+      }
+
+      /* --- Battle log styling --- */
+      #battle-log {
+        border: 1px solid #222;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        background: linear-gradient(180deg, #0d0d0d, #111);
+      }
+      #battle-log div {
+        padding: 1px 4px;
+        border-bottom: 1px solid #1a1a1a;
+      }
+
+      /* --- Stage info glow --- */
+      #stage-info span {
+        text-shadow: 0 0 10px rgba(255,215,0,0.5);
+      }
+
+      /* --- Overlay enhancement --- */
+      #overlay {
+        backdrop-filter: blur(4px);
+      }
+      #overlay h2 {
+        text-shadow: 0 0 20px currentColor;
+      }
+      .obtn {
+        box-shadow: 0 3px 0 #1a6e3a, 0 0 15px rgba(74,222,128,0.2);
+        transition: all 0.2s;
+      }
+      .obtn:active {
+        transform: translateY(3px);
+        box-shadow: 0 0 0 #1a6e3a;
+      }
+
+      /* --- Enemy death effect --- */
+      #enemy-sprite.dead {
+        filter: grayscale(1) drop-shadow(0 0 8px rgba(255,0,0,0.3));
+        transition: all 0.8s;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  return { init };
+})();
+GameSprites.init();
+
 // 시작
 initGame();
 </script>
