@@ -1089,11 +1089,13 @@ const game = {
   isSolid(tx, ty) {
     const lv = this.lv;
     if (tx < 0 || ty < 0 || tx >= lv.width || ty >= lv.height) return true;
-    if (lv.tiles[ty][tx] === 1) return true;
-    // Closed doors are solid
+    // Doors override tiles — open doors are passable, closed doors are solid
     for (let i = 0; i < lv.doors.length; i++) {
-      if (lv.doors[i].x === tx && lv.doors[i].y === ty && !this.drState[i]) return true;
+      if (lv.doors[i].x === tx && lv.doors[i].y === ty) {
+        return !this.drState[i];
+      }
     }
+    if (lv.tiles[ty][tx] === 1) return true;
     return false;
   },
 
