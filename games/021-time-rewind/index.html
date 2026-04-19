@@ -53,7 +53,7 @@ canvas{display:block;background:#0f0f1a}
     </div>
     <div class="right">
       <button class="hud-btn" id="btnRestart" onclick="game.restartLevel()">↻ 재시작</button>
-      <button class="hud-btn rec" id="btnRec" onclick="game.toggleRecording()">● 녹화</button>
+      <button class="hud-btn rec" id="btnRec" onclick="game.toggleRec()">● 녹화</button>
       <button class="hud-btn" id="btnRewind" onclick="game.doRewind()">⏪ 되감기</button>
     </div>
   </div>
@@ -66,7 +66,7 @@ canvas{display:block;background:#0f0f1a}
         <button class="ctrl-btn" id="mr" data-key="right">▶</button>
       </div>
       <div class="action-btns">
-        <button class="ctrl-btn" style="font-size:12px;color:#f88;width:48px;height:48px" onclick="game.toggleRecording()">●R</button>
+        <button class="ctrl-btn" style="font-size:12px;color:#f88;width:48px;height:48px" onclick="game.toggleRec()">●R</button>
         <button class="ctrl-btn" style="font-size:12px;width:48px;height:48px" onclick="game.doRewind()">⏪T</button>
         <button class="ctrl-btn" data-key="jump" style="background:#152535;border-color:#0af;font-size:16px;font-weight:bold">A</button>
       </div>

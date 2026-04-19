@@ -1126,7 +1126,8 @@ window.UI = (() => {
 
       const foodToGrow = city.population * 15;
       const turnsToGrow = city.foodPerTurn > 0
-        ? Math.ceil((foodToGrow - city.food) / city.foodPerTurn) : '∞';
+        ? `${Math.ceil((foodToGrow - city.food) / city.foodPerTurn)}턴`
+        : '성장 불가';
 
       // 생산 중인 항목
       let prodHtml = '<div class="city-production"><strong>생산 대기열 없음</strong></div>';
@@ -1141,11 +1142,12 @@ window.UI = (() => {
         const progress = totalCost - (item.remaining || 0);
         const pct = Math.min(100, Math.floor((progress / totalCost) * 100));
         const turnsLeft = city.productionPerTurn > 0
-          ? Math.ceil(item.remaining / city.productionPerTurn) : '∞';
+          ? `${Math.ceil(item.remaining / city.productionPerTurn)}턴`
+          : '생산 불가';
 
         prodHtml = `
           <div class="city-production">
-            생산 중: <strong>${itemName}</strong> (${progress}/${totalCost}) — ${turnsLeft}턴
+            생산 중: <strong>${itemName}</strong> (${progress}/${totalCost}) — ${turnsLeft}
             <div class="prod-bar"><div class="prod-fill" style="width:${pct}%"></div></div>
           </div>
         `;
@@ -1192,7 +1194,7 @@ window.UI = (() => {
         <h2>${city.name} (인구 ${city.population}) &nbsp; HP: ${city.hp}/${cityMaxHp}</h2>
         <div class="hp-bar" style="margin-bottom:10px"><div class="hp-fill" style="width:${hpRatio*100}%;background:${_hpColor(hpRatio)}"></div></div>
         <div class="city-stats-grid">
-          <div>식량: <span>${city.foodPerTurn}/턴</span> (성장까지 ${turnsToGrow}턴)</div>
+          <div>식량: <span>${city.foodPerTurn}/턴</span> (성장까지 ${turnsToGrow})</div>
           <div>생산: <span>${city.productionPerTurn}/턴</span></div>
           <div>금: <span>${city.goldPerTurn}/턴</span></div>
           <div>연구: <span>${city.researchPerTurn || 0}/턴</span></div>

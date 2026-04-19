@@ -1604,6 +1604,7 @@ canvas.addEventListener('touchmove', () => {
 
 // Keyboard
 document.addEventListener('keydown', (e) => {
+  if (document.querySelector('.overlay:not(.hidden)')) return;
   if (e.code === 'Space') {
     e.preventDefault();
     endTurn();

@@ -73,7 +73,7 @@ input[type=color]{width:28px;height:28px;border:none;background:none;cursor:poin
 
 /* Mobile */
 @media(max-width:700px){
-  #main{grid-template-columns:1fr;grid-template-rows:1fr;}
+  #main{grid-template-columns:1fr;grid-template-rows:auto 1fr;}
   #toolbar{flex-direction:row;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--border);padding:4px 6px;order:-1;}
   #right-panel{display:none;}
   #right-panel.show{display:flex;position:absolute;right:0;top:0;bottom:0;width:180px;z-index:10;}
@@ -441,14 +441,11 @@ const GameSprites = (function() {
   };
 
   function getToolIcon(toolName, size) {
-    const key = toolName + '_' + size;
-    if (cache[key]) return cache[key];
     const c = createCanvas(size, size);
     const ctx = c.getContext('2d');
     if (TOOL_DRAWERS[toolName]) {
       TOOL_DRAWERS[toolName](ctx, size);
     }
-    cache[key] = c;
     return c;
   }
 
@@ -464,9 +461,8 @@ const GameSprites = (function() {
       // Check if already has a canvas icon
       if (btn.querySelector('canvas')) return;
       const size = btn.offsetWidth <= 32 ? 22 : 26;
-      const icon = getToolIcon(tool, size);
+      const iconEl = getToolIcon(tool, size);
       btn.textContent = '';
-      const iconEl = icon.cloneNode(true);
       iconEl.style.display = 'block';
       iconEl.style.imageRendering = 'auto';
       btn.appendChild(iconEl);
